@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { interpretFortune, sendChat } from '@/api/divinationApi'
 import { toUserMessage } from '@/api/client'
+import MarkdownText from '@/components/common/MarkdownText.vue'
 import StatusMessage from '@/components/common/StatusMessage.vue'
 import { useDivinationStore } from '@/stores/divinationStore'
 
@@ -64,22 +65,26 @@ function restart() {
     <template v-if="divination.interpretation">
       <article class="poem-block">
         <h2>整體含義</h2>
-        <p>{{ divination.interpretation.overall_meaning }}</p>
+        <MarkdownText :source="divination.interpretation.overall_meaning" />
       </article>
       <article class="poem-block">
         <h2>與問題的關聯</h2>
-        <p>{{ divination.interpretation.relation_to_question }}</p>
+        <MarkdownText :source="divination.interpretation.relation_to_question" />
       </article>
       <article class="poem-block">
         <h2>可採取的行動</h2>
         <ul>
-          <li v-for="action in divination.interpretation.suggested_actions" :key="action">{{ action }}</li>
+          <li v-for="action in divination.interpretation.suggested_actions" :key="action">
+            <MarkdownText :source="action" />
+          </li>
         </ul>
       </article>
       <article class="poem-block">
         <h2>應注意事項</h2>
         <ul>
-          <li v-for="warning in divination.interpretation.warnings" :key="warning">{{ warning }}</li>
+          <li v-for="warning in divination.interpretation.warnings" :key="warning">
+            <MarkdownText :source="warning" />
+          </li>
         </ul>
       </article>
 
@@ -96,7 +101,7 @@ function restart() {
         <button class="ghost-button" type="button" @click="restart">重新求籤</button>
       </div>
       <div v-if="chatReplies.length" class="reply-list">
-        <p v-for="reply in chatReplies" :key="reply">{{ reply }}</p>
+        <MarkdownText v-for="reply in chatReplies" :key="reply" :source="reply" />
       </div>
     </template>
   </section>

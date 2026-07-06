@@ -18,8 +18,11 @@ const { videoRef, errorMessage, isActive, statusText, start, stop } = useActionD
 </script>
 
 <template>
-  <section class="motion-panel" aria-label="動作辨識">
-    <video ref="videoRef" class="camera-preview" playsinline muted></video>
+  <Teleport to="body">
+    <video ref="videoRef" class="camera-preview" :class="{ active: isActive }" playsinline muted></video>
+    <div class="camera-vignette" :class="{ active: isActive }" aria-hidden="true"></div>
+  </Teleport>
+  <section class="motion-panel" :class="{ active: isActive }" aria-label="動作辨識">
     <div class="motion-controls">
       <strong>{{ label }}</strong>
       <span>{{ statusText }}</span>

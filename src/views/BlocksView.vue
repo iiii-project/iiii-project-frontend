@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { castBlocks } from '@/api/divinationApi'
+import { castBlocks, completePrayer, createDivination } from '@/api/divinationApi'
 import { toUserMessage } from '@/api/client'
 import BlockCups from '@/components/blocks/BlockCups.vue'
 import CameraActionPanel from '@/components/camera/CameraActionPanel.vue'
 import StatusMessage from '@/components/common/StatusMessage.vue'
 import { useDivinationStore } from '@/stores/divinationStore'
+import { useHistoryStore } from '@/stores/historyStore'
 
 const router = useRouter()
 const divination = useDivinationStore()
+const history = useHistoryStore()
 const isLoading = ref(false)
 const errorMessage = ref('')
 const lastCast = computed(() => divination.blockCasts[divination.blockCasts.length - 1] || null)
@@ -25,6 +27,7 @@ async function cast() {
     divination.blockCasts.push(result)
     divination.confirmed = result.confirmed
     if (result.confirmed) divination.status = 'confirmed'
+    if (!result.confirmed && result.remaining_attempts <= 0) divination.status = 'rejected'
   } catch (error) {
     errorMessage.value = toUserMessage(error)
   } finally {
@@ -32,9 +35,37 @@ async function cast() {
   }
 }
 
-function restart() {
-  divination.reset()
-  router.push('/mode')
+async function redraw() {
+  if (isLoading.value) return
+  if (!divination.question || !divination.fortuneSet) {
+    await router.push('/question')
+    return
+  }
+
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    const session = await createDivination({
+      fortune_set_code: divination.fortuneSet.code,
+      question: divination.question,
+      category: divination.category,
+      interaction_mode: divination.interactionMode,
+      anonymous_user_id: history.anonymousUserId
+    })
+    const drawingSession = await completePrayer(session.session_id)
+    divination.sessionId = drawingSession.session_id
+    divination.status = drawingSession.status
+    divination.fortuneSet = drawingSession.fortune_set
+    divination.fortune = null
+    divination.blockCasts = []
+    divination.confirmed = false
+    divination.interpretation = null
+    await router.push('/draw')
+  } catch (error) {
+    errorMessage.value = toUserMessage(error)
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 
@@ -49,8 +80,8 @@ function restart() {
           {{ isLoading ? '擲筊中' : '擲筊' }}
         </button>
         <RouterLink v-if="divination.confirmed" class="secondary-button" to="/interpretation">查看 AI 解籤</RouterLink>
-        <button v-if="remainingAttempts <= 0 && !divination.confirmed" class="secondary-button" type="button" @click="restart">
-          重新求籤
+        <button v-if="remainingAttempts <= 0 && !divination.confirmed" class="secondary-button" type="button" @click="redraw">
+          回到抽籤
         </button>
       </div>
       <StatusMessage

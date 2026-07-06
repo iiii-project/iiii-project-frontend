@@ -1,8 +1,13 @@
 <template>
   <section class="hero">
-    <div class="hero-copy">
-      <p class="eyebrow">目前使用：六十甲子籤</p>
+    <div class="hero-copy glass-panel">
+      <div class="ornament-row">
+        <span></span>
+        <p class="eyebrow">TAIWAN TEMPLE ORACLE · 六十甲子籤</p>
+        <span></span>
+      </div>
       <h1>AI 求籤互動系統</h1>
+      <div class="hairline"></div>
       <p>
         以網頁互動、動作辨識與 AI 解說重現求籤流程，作為傳統文化展示、教育與娛樂參考。
       </p>
@@ -14,8 +19,12 @@
     <div class="ritual-mark" aria-hidden="true">籤</div>
   </section>
 
-  <section class="content-band">
-    <h2>流程</h2>
+  <section class="content-band glass-panel">
+    <div class="ornament-row">
+      <span></span>
+      <h2>流程</h2>
+      <span></span>
+    </div>
     <ol class="flow-list">
       <li>選擇模式</li>
       <li>輸入問題</li>

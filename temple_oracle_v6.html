@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>好命籤 · 台灣廟宇 AI 互動解籤系統（六十甲子籤）</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<style>
+  :root{
+    --jiang-hong: #6b1d24;
+    --jiang-hong-deep: #3a1216;
+    --wu-mu-hei: #14100e;
+    --morandi-stone: #4a4038;
+    --morandi-dust: #8d7b6c;
+    --gold: #d4af37;
+    --gold-soft: #f2e2b3;
+    --gold-line: rgba(255,215,0,0.5);
+  }
+
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--wu-mu-hei);
+    font-family:"Noto Serif TC", serif;
+    color:var(--gold-soft);
+    font-weight:300;
+  }
+
+  @keyframes screenShake{
+    0%{ transform:translate(0,0); } 20%{ transform:translate(-7px,4px) rotate(-0.3deg); }
+    40%{ transform:translate(6px,-5px) rotate(0.3deg); } 60%{ transform:translate(-5px,3px) rotate(-0.2deg); }
+    80%{ transform:translate(3px,-2px) rotate(0.15deg); } 100%{ transform:translate(0,0); }
+  }
+  body.screen-shake{ animation: screenShake 0.45s ease; }
+
+  #output_canvas{ position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; z-index:1; filter:saturate(0.7) contrast(1.02) brightness(0.72); }
+  #vignette{
+    position:fixed; inset:0; z-index:2; pointer-events:none;
+    background:
+      radial-gradient(ellipse at center, rgba(0,0,0,0) 32%, rgba(15,11,10,0.5) 70%, rgba(10,7,6,0.88) 100%),
+      linear-gradient(to bottom, rgba(10,7,6,0.5) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 76%, rgba(10,7,6,0.55) 100%);
+  }
+
+  #ar-decoration{ position:fixed; inset:0; z-index:3; pointer-events:none; overflow:hidden; mix-blend-mode: screen; }
+  #ar-decoration svg{ position:absolute; filter: drop-shadow(0 0 6px rgba(212,175,55,0.25)); }
+  .ar-cloud-tl{ top:3vh; left:2vw; width:min(16vw,150px); opacity:0.4; animation: arFloat 9s ease-in-out infinite; }
+  .ar-cloud-tr{ top:4vh; right:2vw; width:min(14vw,130px); opacity:0.35; animation: arFloat 11s ease-in-out infinite 1s; transform:scaleX(-1); }
+  .ar-coins-bl{ bottom:4vh; left:3vw; width:min(9vw,90px); opacity:0.3; animation: arFloat 8s ease-in-out infinite 0.5s; }
+  .ar-scroll-br{ bottom:3vh; right:3vw; width:min(7vw,70px); opacity:0.3; animation: arFloat 10s ease-in-out infinite 1.5s; }
+  .ar-dragon-l{ top:14vh; left:0.5vw; height:72vh; opacity:0.14; animation: arDrift 16s ease-in-out infinite; }
+  .ar-dragon-r{ top:14vh; right:0.5vw; height:72vh; opacity:0.14; transform:scaleX(-1); animation: arDrift 16s ease-in-out infinite 2s; }
+  @keyframes arFloat{ 0%,100%{ transform: translateY(0) rotate(0deg);} 50%{ transform: translateY(-10px) rotate(2deg);} }
+  @keyframes arDrift{ 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(14px);} }
+
+  #particle_canvas{ position:fixed; inset:0; z-index:4; pointer-events:none; width:100vw; height:100vh; }
+
+  .glass-card{
+    position:relative; border-radius: 28px; border: 1px solid var(--gold-line);
+    background: linear-gradient(180deg, rgba(74,64,56,0.28), rgba(20,16,14,0.42));
+    backdrop-filter: blur(22px) saturate(1.1);
+    box-shadow: 0 24px 70px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .ornament-row{ display:flex; align-items:center; justify-content:center; gap:10px; }
+  .ornament-row svg{ opacity:0.8; }
+  .hairline{ height:1px; width:36px; margin:0 auto; background: var(--gold); opacity:0.75; }
+  .eyebrow{ font-size:11px; letter-spacing:0.5em; color:var(--morandi-dust); text-transform:uppercase; font-weight:400; }
+  .gold-text{ background:linear-gradient(180deg, #fbf1d8 0%, var(--gold) 55%, #b8933f 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .vertical-rl{ writing-mode: vertical-rl; text-orientation: mixed; }
+  .scene{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; pointer-events:none; }
+  .hidden{ display:none !important; }
+
+  /* ===================== 新手示意圖教學層 ===================== */
+  #tutorial-overlay{ position:fixed; inset:0; z-index:90; background: rgba(10,7,6,0.86); backdrop-filter: blur(6px); display:flex; align-items:center; justify-content:center; pointer-events:auto; }
+  #tutorial-overlay.hidden{ display:none !important; }
+  .tutorial-card{ max-width: 960px; width:92vw; padding: 2.4rem 2rem; text-align:center; }
+  .tutorial-steps{ display:flex; flex-wrap:wrap; justify-content:center; gap: 2rem; margin: 1.8rem 0; }
+  .tutorial-step{ width:210px; }
+  .tutorial-step svg{ width:96px; height:96px; }
+  .tutorial-step h4{ margin:0.6rem 0 0.3rem; font-size:13px; letter-spacing:0.2em; font-weight:500; color:var(--gold-soft); }
+  .tutorial-step p{ font-size:12px; opacity:0.75; line-height:1.6; font-weight:300; letter-spacing:0.03em; margin:0; }
+  .tutorial-arrow{ animation: arrowPulse 1.4s ease-in-out infinite; }
+  @keyframes arrowPulse{ 0%,100%{ opacity:0.4; transform:translateY(0);} 50%{ opacity:1; transform:translateY(-4px);} }
+  #btn-help{
+    position:fixed; top:20px; left:20px; z-index:20; pointer-events:auto; width:38px; height:38px; border-radius:50%;
+    border:1px solid var(--gold-line); background: rgba(20,16,14,0.5); color:var(--gold-soft); font-size:14px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter: blur(10px);
+  }
+
+  /* ===================== 畫面一：電子籤筒 ===================== */
+  #qian-tong-zone{ position:relative; width:min(24vw, 210px); height:min(46vh, 380px); margin-bottom: 4vh; filter: drop-shadow(0 18px 30px rgba(0,0,0,0.55)); }
+  #qian-tong-zone.shaking{ animation: tongJitter 0.14s ease-in-out infinite; }
+  @keyframes tongJitter{
+    0%{ transform: translateX(0) rotate(0deg);} 25%{ transform: translateX(-3px) rotate(-1.2deg);}
+    50%{ transform: translateX(2px) rotate(1deg);} 75%{ transform: translateX(-2px) rotate(-0.6deg);} 100%{ transform: translateX(0) rotate(0deg);}
+  }
+  #shake-progress-ring{
+    position:absolute; inset:-14px; border-radius:50%;
+    background: conic-gradient(var(--gold) calc(var(--p,0)*1%), rgba(212,175,55,0.12) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+    opacity:0; transition: opacity 0.3s ease;
+  }
+  #shake-progress-ring.on{ opacity:1; }
+  #qian-tong{ position:absolute; bottom:0; left:0; right:0; top:0; transition: filter 0.5s ease; }
+  #qian-tong svg{ width:100%; height:100%; overflow:visible; }
+  #qian-tong.aligned{ animation: breatheGlow 1.8s ease-in-out infinite; }
+  @keyframes breatheGlow{ 0%,100%{ filter: drop-shadow(0 0 0px rgba(255,207,122,0)); } 50%{ filter: drop-shadow(0 0 26px rgba(255,207,122,0.85)); } }
+
+  .stick{ transform-box: fill-box; transform-origin: bottom center; }
+  #sticks.is-shaking .stick{ animation: stickShake 0.16s ease-in-out infinite; }
+  #sticks.is-shaking .stick:nth-child(2){ animation-delay: 0.02s; }
+  #sticks.is-shaking .stick:nth-child(3){ animation-delay: 0.04s; }
+  #sticks.is-shaking .stick:nth-child(4){ animation-delay: 0.01s; }
+  #sticks.is-shaking .stick:nth-child(5){ animation-delay: 0.03s; }
+  @keyframes stickShake{ 0%,100%{ transform: rotate(0deg) translateY(0);} 50%{ transform: rotate(3deg) translateY(-2px);} }
+  .stick.selected{ animation: stickSelectedPulse 1s ease-in-out infinite !important; filter: drop-shadow(0 0 14px rgba(255,207,122,0.95)); }
+  @keyframes stickSelectedPulse{ 0%,100%{ transform: translateY(-10px) rotate(0deg);} 50%{ transform: translateY(-16px) rotate(0deg);} }
+
+  .qian-stick{ position:absolute; bottom:52%; width:16px; height:168px; transform-origin:bottom center; }
+  .qian-stick svg{ width:100%; height:100%; overflow:visible; }
+  .qian-stick .stick-tip{
+    position:absolute; top:-16px; left:50%; transform:translateX(-50%); width:24px; height:24px; border-radius:50%;
+    background: radial-gradient(circle, var(--gold-soft) 0%, var(--gold) 45%, transparent 75%); opacity:0; filter: blur(1px);
+  }
+  .qian-stick.pinched .stick-tip{ animation: burstGlow 0.6s ease-out infinite; }
+  @keyframes burstGlow{ 0%{ opacity:0.4; transform:translateX(-50%) scale(0.8);} 50%{ opacity:1; transform:translateX(-50%) scale(1.6);} 100%{ opacity:0.4; transform:translateX(-50%) scale(0.8);} }
+  .qian-stick.punch{ animation: punchScale 0.25s ease-out; }
+  @keyframes punchScale{ 0%{ filter:brightness(1);} 40%{ filter:brightness(1.8) drop-shadow(0 0 20px #fff4dc);} 100%{ filter:brightness(1);} }
+
+  .light-burst{ position:fixed; width:240px; height:240px; transform:translate(-50%,-50%) scale(0.2); opacity:0; pointer-events:none; z-index:60; }
+  .light-burst.play{ animation: burstRay 0.75s cubic-bezier(.2,.8,.3,1) forwards; }
+  @keyframes burstRay{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(0.2) rotate(0deg);} 22%{ opacity:1;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(2) rotate(20deg);} }
+
+  .fingertip-marker{
+    position:fixed; z-index:15; width:14px; height:14px; border-radius:50%;
+    background:radial-gradient(circle, var(--gold-soft), var(--gold)); box-shadow:0 0 10px 3px rgba(255,207,122,0.7);
+    pointer-events:none; transform:translate(-50%,-50%); transition: opacity 0.15s ease;
+  }
+  .pinch-line{ position:fixed; z-index:14; height:1px; background:var(--gold-soft); box-shadow:0 0 6px rgba(255,207,122,0.8); pointer-events:none; transform-origin:0 0; }
+  .fist-indicator{
+    position:fixed; z-index:15; width:34px; height:34px; border-radius:50%; border:2px solid var(--gold-soft);
+    opacity:0; pointer-events:none; transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(255,207,122,0.6); transition: opacity 0.15s ease;
+  }
+  .cup-indicator{
+    position:fixed; z-index:15; width:46px; height:46px; border-radius:50%; border:2px dashed var(--gold-soft);
+    opacity:0; pointer-events:none; transform:translate(-50%,-50%); transition: opacity 0.15s ease, border-color 0.15s ease;
+  }
+
+  /* ===================== 畫面二：捧筊與拋擲 ===================== */
+  #bwa-pair{
+    position:fixed; z-index:11; left:50vw; top:50vh; transform:translate(-50%,-50%);
+    perspective: 1000px; pointer-events:none;
+  }
+  #bwa-pair.idle-float{ animation: pairIdleFloat 3.2s ease-in-out infinite; }
+  @keyframes pairIdleFloat{ 0%,100%{ margin-top:0px; } 50%{ margin-top:-10px; } }
+  .bwa-cup{
+    position:absolute; top:-79px; width:96px; height:120px; transform-style:preserve-3d;
+    transition: transform 0.05s linear;
+  }
+  #cup-a{ left:-98px; }
+  #cup-b{ left:8px; }
+  .bwa-face{ position:absolute; inset:0; backface-visibility:hidden; }
+  .bwa-face svg{ width:100%; height:100%; filter: drop-shadow(0 10px 16px rgba(0,0,0,0.5)); }
+  .bwa-face-back{ transform: rotateX(180deg); }
+
+  .divider-gold{ height:1px; width:44px; margin:1rem auto; background: var(--gold); opacity:0.7; }
+
+  #loading-screen{
+    position:fixed; inset:0; z-index:100; background: radial-gradient(ellipse at center, var(--morandi-stone) 0%, var(--wu-mu-hei) 85%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.2rem;
+  }
+  .loading-ring{ width:56px; height:56px; border-radius:50%; border:1.5px solid rgba(212,175,55,0.2); border-top-color:var(--gold); animation: spin 1.2s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .fade-in{ animation: fadeIn 0.7s ease both; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+
+  .btn-line{
+    pointer-events:auto; padding:0.65rem 2.2rem; border-radius:999px; cursor:pointer; background: transparent;
+    color:var(--gold-soft); font-weight:400; letter-spacing:0.35em; font-size:13px; border:1px solid var(--gold-line);
+    transition: background 0.25s ease, color 0.25s ease;
+  }
+  .btn-line:hover{ background: rgba(212,175,55,0.1); }
+  .btn-line:active{ transform:scale(0.97); }
+
+  .grade-badge{ display:inline-flex; align-items:center; gap:8px; font-size:13px; letter-spacing:0.3em; color:var(--gold-soft); padding:4px 18px; border:1px solid var(--gold-line); border-radius:999px; }
+
+  .flash-white{ position:fixed; inset:0; z-index:50; background:#fff4dc; opacity:0; pointer-events:none; }
+  @keyframes flashOnce{ 0%{opacity:0;} 15%{opacity:0.85;} 100%{opacity:0;} }
+  .flash-white.play{ animation: flashOnce 0.55s ease-out; }
+  .screen-darken{ position:fixed; inset:0; z-index:49; background:#000; opacity:0; pointer-events:none; transition: opacity 0.8s ease; }
+  .screen-darken.on{ opacity:0.72; }
+</style>
+</head>
+<body>
+
+  <div id="loading-screen">
+    <div class="loading-ring"></div>
+    <p class="gold-text text-base tracking-[0.4em]">正在請示神明</p>
+  </div>
+
+  <!-- ===================== 新手示意圖教學層 ===================== -->
+  <div id="tutorial-overlay" class="hidden">
+    <div class="glass-card tutorial-card fade-in">
+      <p class="eyebrow">HOW TO PLAY · 六十甲子籤</p>
+      <h2 class="gold-text text-xl md:text-2xl tracking-[0.4em] mt-2">手 勢 操 作 說 明</h2>
+      <div class="hairline mt-3"></div>
+      <div class="tutorial-steps">
+        <div class="tutorial-step">
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="var(--gold-soft)" stroke-width="2.2" stroke-linecap="round">
+            <path class="tutorial-arrow" d="M50,8 L50,20 M44,14 L50,8 L56,14"/>
+            <path class="tutorial-arrow" d="M50,92 L50,80 M44,86 L50,92 L56,86" style="animation-delay:0.3s"/>
+            <circle cx="50" cy="52" r="20" fill="rgba(212,175,55,0.12)"/>
+            <path d="M36,44 q0,-10 8,-10 M46,42 q0,-11 8,-9 M56,42 q0,-10 8,-8"/>
+            <path d="M32,50 q-4,10 6,18 q10,8 24,4 q10,-4 8,-16 q-2,-8 -8,-8"/>
+          </g></svg>
+          <h4>握拳搖籤</h4>
+          <p>對著籤筒握拳，上下來回搖晃 2～3 秒</p>
+        </div>
+        <div class="tutorial-step">
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="var(--gold-soft)" stroke-width="2.2" stroke-linecap="round">
+            <path class="tutorial-arrow" d="M50,10 L50,26 M44,16 L50,10 L56,16"/>
+            <path d="M40,70 C36,50 40,40 46,36"/><path d="M60,70 C64,52 60,44 50,38"/>
+            <circle cx="48" cy="36" r="4" fill="var(--gold-soft)" stroke="none"/>
+            <path d="M40,70 q10,10 20,0"/>
+          </g></svg>
+          <h4>捏合抽出</h4>
+          <p>食指與拇指捏住發光籤條，向上提起</p>
+        </div>
+        <div class="tutorial-step">
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="var(--gold-soft)" stroke-width="2.2" stroke-linecap="round">
+            <path d="M30,55 q20,-14 40,0" />
+            <path d="M32,55 q18,10 36,0"/>
+            <ellipse cx="42" cy="50" rx="9" ry="12" fill="rgba(212,175,55,0.15)"/>
+            <ellipse cx="58" cy="50" rx="9" ry="12" fill="rgba(212,175,55,0.15)"/>
+            <path d="M40,74 q-6,6 -2,12 M60,74 q6,6 2,12"/>
+          </g></svg>
+          <h4>捧筊跟隨</h4>
+          <p>單手微握，筊杯會浮起並跟著手移動</p>
+        </div>
+        <div class="tutorial-step">
+          <svg viewBox="0 0 100 100"><g fill="none" stroke="var(--gold-soft)" stroke-width="2.2" stroke-linecap="round">
+            <path d="M28,40 L30,60 M40,34 L40,60 M50,34 L50,60 M60,36 L58,60 M70,42 L66,60" />
+            <path class="tutorial-arrow" d="M50,68 L50,86 M44,80 L50,86 L56,80"/>
+          </g></svg>
+          <h4>張手拋擲</h4>
+          <p>瞬間張開手掌並向下一送，擲出筊杯</p>
+        </div>
+      </div>
+      <button id="btn-tutorial-start" class="btn-line mt-2">開 始 祈 福</button>
+    </div>
+  </div>
+  <button id="btn-help" title="操作說明">?</button>
+
+  <video id="input_video" style="display:none;" playsinline></video>
+  <canvas id="output_canvas"></canvas>
+  <div id="vignette"></div>
+
+  <div id="ar-decoration">
+    <svg class="ar-cloud-tl" viewBox="0 0 110 80" xmlns="http://www.w3.org/2000/svg"><path d="M12,45 C10,30 25,20 38,24 C42,12 62,10 68,22 C82,16 98,26 92,42 C98,52 88,62 76,58 C72,68 52,70 46,60 C34,68 14,60 16,48 C8,50 6,46 12,45 Z" fill="none" stroke="var(--gold-soft)" stroke-width="1.3"/></svg>
+    <svg class="ar-cloud-tr" viewBox="0 0 110 80" xmlns="http://www.w3.org/2000/svg"><path d="M12,45 C10,30 25,20 38,24 C42,12 62,10 68,22 C82,16 98,26 92,42 C98,52 88,62 76,58 C72,68 52,70 46,60 C34,68 14,60 16,48 C8,50 6,46 12,45 Z" fill="none" stroke="var(--gold-soft)" stroke-width="1.3"/></svg>
+    <svg class="ar-coins-bl" viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(30,30)"><circle r="26" fill="none" stroke="var(--gold-soft)" stroke-width="1.5"/><circle r="20" fill="none" stroke="var(--gold-soft)" stroke-width="1"/><rect x="-9" y="-9" width="18" height="18" fill="none" stroke="var(--gold-soft)" stroke-width="1.5" transform="rotate(45)"/></g>
+      <g transform="translate(70,34)" opacity="0.75"><circle r="20" fill="none" stroke="var(--gold-soft)" stroke-width="1.5"/><circle r="15" fill="none" stroke="var(--gold-soft)" stroke-width="1"/><rect x="-7" y="-7" width="14" height="14" fill="none" stroke="var(--gold-soft)" stroke-width="1.5" transform="rotate(45)"/></g>
+    </svg>
+    <svg class="ar-scroll-br" viewBox="0 0 60 110" xmlns="http://www.w3.org/2000/svg">
+      <rect x="15" y="10" width="30" height="90" rx="8" fill="none" stroke="var(--gold-soft)" stroke-width="1.4"/>
+      <ellipse cx="30" cy="10" rx="15" ry="8" fill="none" stroke="var(--gold-soft)" stroke-width="1.4"/>
+      <ellipse cx="30" cy="100" rx="15" ry="8" fill="none" stroke="var(--gold-soft)" stroke-width="1.4"/>
+      <line x1="21" y1="35" x2="39" y2="35" stroke="var(--gold-soft)" stroke-width="1" opacity="0.7"/>
+      <line x1="21" y1="55" x2="39" y2="55" stroke="var(--gold-soft)" stroke-width="1" opacity="0.7"/>
+      <line x1="21" y1="75" x2="39" y2="75" stroke="var(--gold-soft)" stroke-width="1" opacity="0.7"/>
+    </svg>
+    <svg class="ar-dragon-l" viewBox="0 0 100 800" xmlns="http://www.w3.org/2000/svg">
+      <path d="M50,20 C20,60 80,110 40,160 C10,200 85,250 45,300 C15,340 80,390 42,440 C12,480 82,530 44,580 C16,620 78,670 48,720 C30,745 55,765 50,780" fill="none" stroke="var(--gold-soft)" stroke-width="2"/>
+      <path d="M50,20 C58,8 70,6 74,14 C78,6 88,10 84,20 C90,18 92,26 86,30" fill="none" stroke="var(--gold-soft)" stroke-width="1.5"/>
+      <circle cx="60" cy="22" r="2" fill="var(--gold-soft)"/>
+      <path d="M40,160 q-14,4 -22,-2 M45,300 q-14,4 -22,-2 M42,440 q-14,4 -22,-2 M44,580 q-14,4 -22,-2" stroke="var(--gold-soft)" stroke-width="1.2" fill="none" opacity="0.8"/>
+    </svg>
+    <svg class="ar-dragon-r" viewBox="0 0 100 800" xmlns="http://www.w3.org/2000/svg">
+      <path d="M50,20 C20,60 80,110 40,160 C10,200 85,250 45,300 C15,340 80,390 42,440 C12,480 82,530 44,580 C16,620 78,670 48,720 C30,745 55,765 50,780" fill="none" stroke="var(--gold-soft)" stroke-width="2"/>
+      <path d="M50,20 C58,8 70,6 74,14 C78,6 88,10 84,20 C90,18 92,26 86,30" fill="none" stroke="var(--gold-soft)" stroke-width="1.5"/>
+      <circle cx="60" cy="22" r="2" fill="var(--gold-soft)"/>
+      <path d="M40,160 q-14,4 -22,-2 M45,300 q-14,4 -22,-2 M42,440 q-14,4 -22,-2 M44,580 q-14,4 -22,-2" stroke="var(--gold-soft)" stroke-width="1.2" fill="none" opacity="0.8"/>
+    </svg>
+  </div>
+
+  <canvas id="particle_canvas"></canvas>
+  <div class="flash-white" id="flash"></div>
+  <div class="screen-darken" id="darken"></div>
+
+  <!-- ============ 畫面一：線上抽籤 ============ -->
+  <div id="scene-draw" class="scene justify-between py-[8vh]">
+    <div class="glass-card px-14 py-6 text-center fade-in">
+      <div class="ornament-row">
+        <svg width="26" height="10" viewBox="0 0 26 10"><path d="M0,5 Q13,-4 26,5" stroke="var(--gold)" stroke-width="1" fill="none" opacity="0.7"/></svg>
+        <p class="eyebrow">TAIWAN TEMPLE ORACLE · 六十甲子籤</p>
+        <svg width="26" height="10" viewBox="0 0 26 10"><path d="M0,5 Q13,-4 26,5" stroke="var(--gold)" stroke-width="1" fill="none" opacity="0.7" transform="scale(-1,1) translate(-26,0)"/></svg>
+      </div>
+      <h1 class="gold-text text-2xl md:text-3xl font-normal tracking-[0.5em] mt-2">祈　願　抽　籤</h1>
+      <div class="hairline mt-4"></div>
+      <p id="draw-hint" class="text-[13px] md:text-sm mt-4 opacity-80 tracking-[0.15em] font-light">請對著籤筒握拳，上下搖晃</p>
+    </div>
+
+    <div id="qian-tong-zone">
+      <div id="shake-progress-ring"></div>
+      <div id="qian-tong">
+        <svg viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f2e2b3"/><stop offset="45%" stop-color="#d4af37"/><stop offset="100%" stop-color="#8a6a24"/></linearGradient>
+            <linearGradient id="lacquerGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3a1216"/><stop offset="38%" stop-color="#8a2b32"/><stop offset="52%" stop-color="#7a2229"/><stop offset="100%" stop-color="#2c0e11"/></linearGradient>
+            <linearGradient id="bambooGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#f0dca0"/><stop offset="50%" stop-color="#c99a5f"/><stop offset="100%" stop-color="#8a5a30"/></linearGradient>
+          </defs>
+          <g opacity="0.9">
+            <path d="M100,304 C96,318 96,330 100,344" stroke="#8a2b32" stroke-width="3" fill="none"/>
+            <path d="M92,306 L92,338 M100,308 L100,344 M108,306 L108,338" stroke="#7a2229" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="100" cy="304" r="6" fill="url(#goldGrad)"/>
+          </g>
+          <ellipse cx="100" cy="300" rx="66" ry="13" fill="url(#lacquerGrad)" stroke="var(--gold)" stroke-width="1.5"/>
+          <ellipse cx="100" cy="296" rx="58" ry="10" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" opacity="0.8"/>
+          <path d="M38,96 C38,78 162,78 162,96 L167,288 C167,302 33,302 33,288 Z" fill="url(#lacquerGrad)" stroke="rgba(212,175,55,0.55)" stroke-width="1.5"/>
+          <ellipse cx="100" cy="152" rx="61" ry="7" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-dasharray="3 6" opacity="0.85"/>
+          <ellipse cx="100" cy="232" rx="63" ry="7" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-dasharray="3 6" opacity="0.85"/>
+          <text x="100" y="196" text-anchor="middle" font-size="26" fill="url(#goldGrad)" opacity="0.5" font-family="'Noto Serif TC', serif">籤</text>
+          <ellipse cx="100" cy="96" rx="62" ry="14" fill="url(#goldGrad)" stroke="rgba(0,0,0,0.35)" stroke-width="1"/>
+          <ellipse cx="100" cy="94" rx="52" ry="10" fill="#241a12"/>
+          <g id="sticks">
+            <g class="stick" data-idx="0" data-cx="73.5"><rect x="70" y="8" width="7" height="92" rx="3" fill="url(#bambooGrad)" transform="rotate(-9 70 100)"/><circle cx="73.5" cy="10" r="4" fill="var(--gold)"/></g>
+            <g class="stick" data-idx="1" data-cx="87.5"><rect x="84" y="0" width="7" height="98" rx="3" fill="url(#bambooGrad)" transform="rotate(-3 84 98)"/><circle cx="87.5" cy="2" r="4" fill="#c94b40"/></g>
+            <g class="stick" data-idx="2" data-cx="103.5"><rect x="100" y="4" width="7" height="94" rx="3" fill="url(#bambooGrad)" transform="rotate(4 100 98)"/><circle cx="103.5" cy="6" r="4" fill="var(--gold)"/></g>
+            <g class="stick" data-idx="3" data-cx="119.5"><rect x="116" y="10" width="7" height="90" rx="3" fill="url(#bambooGrad)" transform="rotate(10 116 100)"/><circle cx="119.5" cy="12" r="4" fill="#c94b40"/></g>
+            <g class="stick" data-idx="4" data-cx="131.5"><rect x="128" y="18" width="7" height="82" rx="3" fill="url(#bambooGrad)" transform="rotate(15 128 100)"/><circle cx="131.5" cy="20" r="4" fill="var(--gold)"/></g>
+          </g>
+        </svg>
+      </div>
+      <div id="qian-stick" class="qian-stick hidden">
+        <svg viewBox="0 0 16 168" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="activeBambooGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fbf1d8"/><stop offset="50%" stop-color="#e9c46a"/><stop offset="100%" stop-color="#8a6a24"/></linearGradient></defs>
+          <rect x="3" y="0" width="10" height="168" rx="4" fill="url(#activeBambooGrad)"/>
+          <circle cx="8" cy="6" r="7" fill="#c94b40" stroke="var(--gold)" stroke-width="1.5"/>
+        </svg>
+        <div class="stick-tip"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 畫面二：捧筊與拋擲 ============ -->
+  <div id="scene-bwa" class="scene hidden justify-center items-center">
+    <div class="glass-card px-14 py-6 absolute top-[7vh] text-center fade-in">
+      <div class="ornament-row">
+        <svg width="26" height="10" viewBox="0 0 26 10"><path d="M0,5 Q13,-4 26,5" stroke="var(--gold)" stroke-width="1" fill="none" opacity="0.7"/></svg>
+        <p class="eyebrow">BWA BWEI · MOON BLOCKS</p>
+        <svg width="26" height="10" viewBox="0 0 26 10"><path d="M0,5 Q13,-4 26,5" stroke="var(--gold)" stroke-width="1" fill="none" opacity="0.7" transform="scale(-1,1) translate(-26,0)"/></svg>
+      </div>
+      <h2 class="gold-text text-xl md:text-2xl font-normal tracking-[0.5em] mt-2">擲　筊　請　示</h2>
+      <div class="hairline mt-4"></div>
+      <p id="bwa-hint" class="text-[13px] md:text-sm mt-4 opacity-80 tracking-[0.15em] font-light">單手微握，捧起筊杯</p>
+    </div>
+
+    <!-- 筊杯定義：兩個各自獨立、可翻面的半月牙筊杯 -->
+    <div id="bwa-pair">
+      <div id="cup-a" class="bwa-cup">
+        <div class="bwa-face bwa-face-front">
+          <svg viewBox="0 0 126 158" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="roughGradA" cx="38%" cy="28%" r="85%"><stop offset="0%" stop-color="#e8794f"/><stop offset="55%" stop-color="#cf5a35"/><stop offset="100%" stop-color="#93341c"/></radialGradient>
+              <filter id="grainFilterA" x="-20%" y="-20%" width="140%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" result="noise"/><feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0"/></filter>
+              <clipPath id="crescentClipA"><path d="M61,8 C28,8 13,46 13,82 C13,118 28,155 61,155 C70,155 65,138 52,121 C39,105 35,92 35,82 C35,71 39,58 52,42 C65,25 70,8 61,8 Z"/></clipPath>
+            </defs>
+            <path d="M61,8 C28,8 13,46 13,82 C13,118 28,155 61,155 C70,155 65,138 52,121 C39,105 35,92 35,82 C35,71 39,58 52,42 C65,25 70,8 61,8 Z" fill="url(#roughGradA)" stroke="#5c2210" stroke-width="1.5"/>
+            <rect x="0" y="0" width="126" height="158" filter="url(#grainFilterA)" clip-path="url(#crescentClipA)" opacity="0.5" style="mix-blend-mode:overlay"/>
+          </svg>
+        </div>
+        <div class="bwa-face bwa-face-back">
+          <svg viewBox="0 0 126 158" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="smoothGradA" x1="0.15" y1="0.1" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#f6d2b4"/><stop offset="40%" stop-color="#e88a5c"/><stop offset="100%" stop-color="#b8482a"/></linearGradient>
+              <radialGradient id="glossA" cx="35%" cy="25%" r="55%"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+            </defs>
+            <path d="M61,8 C28,8 13,46 13,82 C13,118 28,155 61,155 C70,155 65,138 52,121 C39,105 35,92 35,82 C35,71 39,58 52,42 C65,25 70,8 61,8 Z" fill="url(#smoothGradA)" stroke="#7a2c16" stroke-width="1.5"/>
+            <path d="M61,8 C28,8 13,46 13,82 C13,118 28,155 61,155 C70,155 65,138 52,121 C39,105 35,92 35,82 C35,71 39,58 52,42 C65,25 70,8 61,8 Z" fill="url(#glossA)"/>
+            <path d="M28,52 C34,64 40,72 33,88 C28,100 30,112 40,124" fill="none" stroke="#5c2210" stroke-width="1.6" stroke-linecap="round" opacity="0.75"/>
+          </svg>
+        </div>
+      </div>
+      <div id="cup-b" class="bwa-cup">
+        <div class="bwa-face bwa-face-front">
+          <svg viewBox="0 0 126 158" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="roughGradB" cx="38%" cy="28%" r="85%"><stop offset="0%" stop-color="#e8794f"/><stop offset="55%" stop-color="#cf5a35"/><stop offset="100%" stop-color="#93341c"/></radialGradient>
+              <filter id="grainFilterB" x="-20%" y="-20%" width="140%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="21" result="noise"/><feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0"/></filter>
+              <clipPath id="crescentClipB"><path d="M61,8 C28,8 13,46 13,82 C13,118 28,155 61,155 C70,155 65,138 52,121 C39,105 35,92 35,82 C35,71 39,58 52,42 C65,25 70,8 61,8 Z"/></clipPath>
+            </defs>
+            <path d="M61,8 C28,8 13,46 13,82 C13,118 28,155 61,155 C70,155 65,138 52,121 C39,105 35,92 35,82 C35,71 39,58 52,42 C65,25 70,8 61,8 Z" fill="url(#roughGradB)" stroke="#5c2210" stroke-width="1.5"/>
+            <rect x="0" y="0" width="126" height="158" filter="url(#grainFilterB)" clip-path="url(#crescentClipB)" opacity="0.5" style="mix-blend-mode:overlay"/>
+          </svg>
+        </div>
+        <div class="bwa-face bwa-face-back">
+          <svg viewBox="0 0 126 158" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="smoothGradB" x1="0.15" y1="0.1" x2="0.9" y2="0.95"><stop offset="0%" stop-color="#f6d2b4"/><stop offset="40%" stop-color="#e88a5c"/><stop offset="100%" stop-color="#b8482a"/></linearGradient>
+              <radialGradient id="glossB" cx="35%" cy="25%" r="55%"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+            </defs>
+            <path d="M61,8 C28,8 13,46 13,82 C13,118 28,155 61,155 C70,155 65,138 52,121 C39,105 35,92 35,82 C35,71 39,58 52,42 C65,25 70,8 61,8 Z" fill="url(#smoothGradB)" stroke="#7a2c16" stroke-width="1.5"/>
+            <path d="M61,8 C28,8 13,46 13,82 C13,118 28,155 61,155 C70,155 65,138 52,121 C39,105 35,92 35,82 C35,71 39,58 52,42 C65,25 70,8 61,8 Z" fill="url(#glossB)"/>
+            <path d="M28,52 C34,64 40,72 33,88 C28,100 30,112 40,124" fill="none" stroke="#5c2210" stroke-width="1.6" stroke-linecap="round" opacity="0.75"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div id="bwa-result-panel" class="glass-card hidden absolute bottom-[9vh] px-14 py-8 text-center fade-in max-w-md">
+      <p id="bwa-result-title" class="gold-text text-xl font-normal tracking-[0.3em]"></p>
+      <div class="divider-gold"></div>
+      <p id="bwa-result-desc" class="text-[13px] opacity-80 leading-relaxed font-light tracking-wide"></p>
+    </div>
+  </div>
+
+  <!-- ============ 畫面三：解籤結果 ============ -->
+  <div id="scene-result" class="scene hidden justify-center items-center">
+    <div class="glass-card px-10 md:px-20 py-10 md:py-14 flex flex-col md:flex-row items-center gap-10 md:gap-16 fade-in max-w-4xl mx-6">
+      <div class="text-center">
+        <p class="eyebrow mb-2">六十甲子籤 · THE ORACLE SAYS</p>
+        <p id="result-number" class="gold-text text-base tracking-[0.4em] mb-1">第　　首</p>
+        <p id="result-ganzhi" class="text-xs opacity-70 tracking-[0.3em] mb-3"></p>
+        <span id="result-grade" class="grade-badge mb-4"></span>
+        <div class="hairline my-4"></div>
+        <p id="result-poem" class="vertical-rl gold-text text-lg md:text-xl leading-loose h-[38vh] md:h-[42vh] tracking-[0.3em] font-light"></p>
+      </div>
+      <div class="text-left max-w-xs">
+        <div class="ornament-row !justify-start mb-2">
+          <svg width="14" height="14" viewBox="0 0 14 14"><path d="M7,0 L9,5 L14,7 L9,9 L7,14 L5,9 L0,7 L5,5 Z" fill="var(--gold)" opacity="0.8"/></svg>
+          <h3 class="gold-text text-lg font-normal tracking-[0.3em]">籤　語　解　說</h3>
+        </div>
+        <div class="divider-gold !mx-0"></div>
+        <p id="result-explain" class="text-[13px] md:text-sm leading-loose font-light opacity-90 tracking-wide"></p>
+        <button id="btn-restart" class="btn-line mt-8">再 求 一 籤</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* =========================================================================
+   台灣廟宇 AI 互動解籤系統（v6 · 六十甲子籤 + 捧筊拋擲）
+
+   ※ 資料說明：以下 FORTUNES 僅收錄「六十甲子籤」編號系統中前 5 首（甲子～戊辰）
+     作為 Demo，籤詩內文為配合本系統原創撰寫之示意文字，非逐字引用任一宮廟
+     現行籤本或出版品之版權內容；干支編號與吉凶等級之呈現方式則依循傳統
+     六十甲子籤的慣例格式。
+
+   模組劃分：
+   1. CONFIG            — 手勢判定閾值與系統常數
+   2. ParticleSystem     — 金色香灰粒子 / 裊裊香煙 Canvas 特效
+   3. GestureEngine      — MediaPipe 手部座標處理與狀態判定
+   4. AppState + UIActions — 場景切換與流程狀態機
+   ========================================================================= */
+
+const CONFIG = {
+  FIST_CURL_RATIO: 1.15,
+  FIST_MIN_CURLED: 3,
+  SHAKE_VELOCITY_DEADZONE: 0.0035,
+  SHAKE_REQUIRED_OSCILLATIONS: 3,
+  SHAKE_MIN_DURATION_MS: 1400,
+  SHAKE_TARGET_DURATION_MS: 2400,
+  SHAKE_RESET_GRACE_MS: 500,
+
+  PINCH_THRESHOLD_RATIO: 0.35,
+  DRAW_UP_DELTA_RATIO: 0.09,
+
+  // ---- 捧筊與拋擲 ----
+  // 手指彎曲量（指尖/指根 對 手腕 的距離比值）：數值越小代表握得越緊
+  CUP_CURL_MAX: 0.95,     // 低於此值視為「微握捧筊」
+  OPEN_CURL_MIN: 1.05,    // 高於此值視為「手掌張開」
+  OPEN_CONFIRM_FRAMES: 2, // 需連續幾影格偵測到「張開」才確認拋擲，避免單影格雜訊誤判
+  SMOOTHING: 0.5,
+};
+
+/* 六十甲子籤 Demo 資料（前五首：甲子／乙丑／丙寅／丁卯／戊辰） */
+const FORTUNES = [
+  { no: 1, ganzhi: "甲子", grade: "上　上", poem: "旭日初昇照遠山\n雲開霧散路漸寬\n心誠所向終有得\n莫因暫困意闌珊",
+    explain: "此籤主「漸入佳境」。眼前雖有阻礙，然如晨霧終將散去，只要堅定初心、不因一時受挫而灰心，前路將逐漸明朗，所求之事可望順遂。" },
+  { no: 2, ganzhi: "乙丑", grade: "中　平", poem: "舟行逆水且徐徐\n風浪雖急莫躁急\n穩舵持篙待時至\n自有順風送歸期",
+    explain: "此籤示「以靜制動」。當前處境如逆水行舟，急躁反而壞事。建議沉住氣、按部就班，靜待時機成熟，屆時自然水到渠成，不宜貿然躁進。" },
+  { no: 3, ganzhi: "丙寅", grade: "上　籤", poem: "庭前古木歷寒霜\n根深葉茂待春陽\n莫嫌今歲花開晚\n來歲繁華勝往常",
+    explain: "此籤主「厚積薄發」。過去的努力並未白費，如深根之樹禁得起考驗，眼下看似平淡，實則正在累積實力，來日必有更豐盛的收穫，凡事不宜心急。" },
+  { no: 4, ganzhi: "丁卯", grade: "中　平", poem: "十字街頭且駐足\n左右思量莫倉促\n問心無愧循正道\n自有貴人指前途",
+    explain: "此籤示「謹慎抉擇」。目前面臨重要選擇，切莫倉促決定；只要問心無愧、依循正道而行，途中自有貴人相助指點，宜多與長輩或有經驗者商量。" },
+  { no: 5, ganzhi: "戊辰", grade: "中　下", poem: "寶劍出鞘鋒未展\n磨礪三載始能觀\n今朝小試心莫躁\n他日必當展鋒芒",
+    explain: "此籤主「養精蓄銳」。實力尚在磨練階段，此刻略顯不足乃屬正常，切莫因一時受挫而否定自己。持續精進、耐心累積，未來必有嶄露頭角之時。" }
+];
+
+const els = {
+  video: document.getElementById('input_video'),
+  outputCanvas: document.getElementById('output_canvas'),
+  particleCanvas: document.getElementById('particle_canvas'),
+  loading: document.getElementById('loading-screen'),
+  tutorial: document.getElementById('tutorial-overlay'),
+  btnHelp: document.getElementById('btn-help'),
+  btnTutorialStart: document.getElementById('btn-tutorial-start'),
+  flash: document.getElementById('flash'),
+  darken: document.getElementById('darken'),
+
+  sceneDraw: document.getElementById('scene-draw'),
+  sceneBwa: document.getElementById('scene-bwa'),
+  sceneResult: document.getElementById('scene-result'),
+
+  drawHint: document.getElementById('draw-hint'),
+  qianTongZone: document.getElementById('qian-tong-zone'),
+  qianTong: document.getElementById('qian-tong'),
+  sticksGroup: document.getElementById('sticks'),
+  shakeRing: document.getElementById('shake-progress-ring'),
+  qianStick: document.getElementById('qian-stick'),
+
+  bwaHint: document.getElementById('bwa-hint'),
+  bwaPair: document.getElementById('bwa-pair'),
+  cupA: document.getElementById('cup-a'),
+  cupB: document.getElementById('cup-b'),
+  bwaResultPanel: document.getElementById('bwa-result-panel'),
+  bwaResultTitle: document.getElementById('bwa-result-title'),
+  bwaResultDesc: document.getElementById('bwa-result-desc'),
+
+  resultNumber: document.getElementById('result-number'),
+  resultGanzhi: document.getElementById('result-ganzhi'),
+  resultGrade: document.getElementById('result-grade'),
+  resultPoem: document.getElementById('result-poem'),
+  resultExplain: document.getElementById('result-explain'),
+  btnRestart: document.getElementById('btn-restart'),
+};
+
+const outCtx = els.outputCanvas.getContext('2d');
+const stickEls = Array.from(els.sticksGroup.querySelectorAll('.stick'));
+
+/* ========================================================================= 2. ParticleSystem ========================================================================= */
+const ParticleSystem = (() => {
+  const canvas = els.particleCanvas; const ctx = canvas.getContext('2d');
+  let ash = [], smoke = [];
+  function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  window.addEventListener('resize', resize); resize();
+  function spawnAsh(){ return { x: Math.random()*canvas.width, y: Math.random()*canvas.height + canvas.height*0.2, r: 0.7+Math.random()*1.8, speedY: 0.12+Math.random()*0.28, drift:(Math.random()-0.5)*0.35, phase: Math.random()*Math.PI*2, alpha: 0.18+Math.random()*0.35 }; }
+  function spawnSmoke(){ return { x: canvas.width*(0.3+Math.random()*0.4), y: canvas.height*(0.9+Math.random()*0.1), r: 30+Math.random()*50, speedY: 0.22+Math.random()*0.25, drift:(Math.random()-0.5)*0.25, alpha: 0.04+Math.random()*0.05, growth: 0.04+Math.random()*0.06 }; }
+  ash = Array.from({length:55}, spawnAsh); smoke = Array.from({length:8}, spawnSmoke);
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    smoke.forEach(p=>{
+      const grad = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);
+      grad.addColorStop(0,`rgba(220,195,150,${p.alpha})`); grad.addColorStop(1,`rgba(220,195,150,0)`);
+      ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      p.y-=p.speedY; p.x+=p.drift; p.r+=p.growth; p.alpha*=0.997;
+      if (p.r>140||p.alpha<0.004) Object.assign(p, spawnSmoke());
+    });
+    ctx.restore();
+    ash.forEach(p=>{
+      p.phase+=0.02; const flicker=0.6+0.4*Math.sin(p.phase);
+      ctx.beginPath(); ctx.fillStyle=`rgba(242,226,179,${p.alpha*flicker})`;
+      ctx.shadowColor='rgba(255,207,122,0.7)'; ctx.shadowBlur=3;
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      p.y-=p.speedY; p.x+=p.drift+Math.sin(p.phase)*0.12;
+      if (p.y<-10) Object.assign(p, spawnAsh(), {y:canvas.height+10});
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+  return { burst(x,y,count=16){ for(let i=0;i<count;i++){ ash.push({ x,y, r:1+Math.random()*2, speedY:0.5+Math.random()*1.2, drift:(Math.random()-0.5)*2, phase:Math.random()*Math.PI*2, alpha:0.6+Math.random()*0.3 }); } } };
+})();
+
+function spawnLightBurst(x, y){
+  const wrap = document.createElement('div'); wrap.className = 'light-burst';
+  wrap.style.left = x + 'px'; wrap.style.top = y + 'px';
+  wrap.innerHTML = `<svg viewBox="0 0 200 200" width="100%" height="100%">
+    <circle cx="100" cy="100" r="14" fill="#fff8e6"/>
+    <g stroke="var(--gold-soft)" stroke-width="4" stroke-linecap="round">
+      ${Array.from({length:12}).map((_,i)=>{
+        const ang=(i/12)*Math.PI*2; const x1=100+Math.cos(ang)*22, y1=100+Math.sin(ang)*22;
+        const x2=100+Math.cos(ang)*(70+(i%2===0?20:0)), y2=100+Math.sin(ang)*(70+(i%2===0?20:0));
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" opacity="${i%2===0?0.95:0.6}"/>`;
+      }).join('')}
+    </g></svg>`;
+  document.body.appendChild(wrap);
+  requestAnimationFrame(() => wrap.classList.add('play'));
+  setTimeout(() => wrap.remove(), 800);
+}
+function screenShakeOnce(){
+  document.body.classList.remove('screen-shake'); void document.body.offsetWidth;
+  document.body.classList.add('screen-shake');
+  setTimeout(() => document.body.classList.remove('screen-shake'), 460);
+}
+
+/* ========================================================================= 3. GestureEngine ========================================================================= */
+const GestureEngine = (() => {
+  let smoothed = null;
+  let pinchActive = false;
+  let pinchStartWristY = null;
+
+  const shake = { active:false, startTime:0, lastY:0, lastVelocitySign:0, oscillations:0, lastFistTime:0 };
+
+  // ---- 捧筊 / 拋擲 狀態 ----
+  const cup = {
+    holding: false,      // 是否正處於「捧筊跟隨」狀態
+    openFrames: 0,       // 連續偵測到「手掌張開」的影格數（用於防抖動誤判）
+    posHistory: [],       // {t,x,y} 手腕螢幕座標歷史，用於估計拋擲瞬間的移動速度/方向
+  };
+
+  function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+  function smoothLandmarks(landmarks){
+    if (!smoothed){ smoothed = landmarks.map(p=>({...p})); return smoothed; }
+    const s = CONFIG.SMOOTHING;
+    smoothed = landmarks.map((p,i)=>({ x: smoothed[i].x*s + p.x*(1-s), y: smoothed[i].y*s + p.y*(1-s), z:p.z }));
+    return smoothed;
+  }
+
+  // ============================================================
+  // 手指彎曲量計算：對食指/中指/無名指/小指，分別計算「指尖到手腕距離」
+  // 除以「指根(MCP)到手腕距離」。此比值越小代表手指越彎曲收攏（握拳/捧狀），
+  // 越大代表手指越伸直張開。回傳四指平均值，作為「捧」與「張開」判定基準。
+  // ============================================================
+  function curlAmount(lm){
+    const wrist = lm[0];
+    const fingers = [ {tip:lm[8],mcp:lm[5]}, {tip:lm[12],mcp:lm[9]}, {tip:lm[16],mcp:lm[13]}, {tip:lm[20],mcp:lm[17]} ];
+    const ratios = fingers.map(f => dist(f.tip,wrist) / (dist(f.mcp,wrist) || 0.0001));
+    return ratios.reduce((a,b)=>a+b,0) / ratios.length;
+  }
+  function isFist(lm){
+    const wrist = lm[0];
+    const fingers = [ {tip:lm[8],mcp:lm[5]}, {tip:lm[12],mcp:lm[9]}, {tip:lm[16],mcp:lm[13]}, {tip:lm[20],mcp:lm[17]} ];
+    let curled = 0;
+    fingers.forEach(f => { if (dist(f.tip,wrist) < dist(f.mcp,wrist) * CONFIG.FIST_CURL_RATIO) curled++; });
+    return curled >= CONFIG.FIST_MIN_CURLED;
+  }
+
+  function onResults(results){
+    outCtx.save();
+    outCtx.clearRect(0,0,els.outputCanvas.width, els.outputCanvas.height);
+    outCtx.scale(-1,1);
+    outCtx.drawImage(results.image, -els.outputCanvas.width, 0, els.outputCanvas.width, els.outputCanvas.height);
+    outCtx.restore();
+
+    const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
+
+    if (!hasHand){
+      smoothed = null; pinchActive = false; pinchStartWristY = null;
+      hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
+      return;
+    }
+
+    let rawLm = results.multiHandLandmarks[0];
+    rawLm = rawLm.map(p => ({ x: 1-p.x, y: p.y, z: p.z }));
+
+    if (AppState.current === 'bwa'){
+      // 捧筊／拋擲階段使用未經重度平滑的座標，確保「張手瞬間」判定即時
+      hideFingertipUI(); hideFistIndicator();
+      handleBwaGesture(rawLm);
+      return;
+    }
+
+    const lm = smoothLandmarks(rawLm);
+    const wrist = lm[0], middleMcp = lm[9], thumbTip = lm[4], indexTip = lm[8];
+    const handScale = dist(wrist, middleMcp) || 0.0001;
+    const pinchDist = dist(thumbTip, indexTip) / handScale;
+
+    if (AppState.current === 'draw'){
+      if (AppState.drawSubState === 'shake'){
+        updateFistIndicator(wrist, isFist(lm)); hideFingertipUI();
+        handleShakeGesture(wrist, isFist(lm));
+      } else {
+        hideFistIndicator(); updateFingertipUI(thumbTip, indexTip);
+        handlePinchGesture(wrist, pinchDist);
+      }
+    } else {
+      hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
+    }
+  }
+
+  function handleShakeGesture(wrist, fistNow){
+    const now = performance.now();
+    if (!fistNow){
+      if (shake.active && now - shake.lastFistTime > CONFIG.SHAKE_RESET_GRACE_MS){
+        resetShakeProgress(); els.drawHint.textContent = '請對著籤筒握拳，上下搖晃';
+      }
+      return;
+    }
+    shake.lastFistTime = now;
+    if (!shake.active){
+      shake.active = true; shake.startTime = now; shake.lastY = wrist.y;
+      shake.lastVelocitySign = 0; shake.oscillations = 0;
+      els.qianTongZone.classList.add('shaking'); els.sticksGroup.classList.add('is-shaking'); els.shakeRing.classList.add('on');
+      return;
+    }
+    const velocity = wrist.y - shake.lastY;
+    let sign = 0;
+    if (velocity > CONFIG.SHAKE_VELOCITY_DEADZONE) sign = 1; else if (velocity < -CONFIG.SHAKE_VELOCITY_DEADZONE) sign = -1;
+    if (sign !== 0){ if (shake.lastVelocitySign !== 0 && sign !== shake.lastVelocitySign) shake.oscillations++; shake.lastVelocitySign = sign; }
+    shake.lastY = wrist.y;
+    const elapsed = now - shake.startTime;
+    const progress = Math.min(1, Math.max(elapsed/CONFIG.SHAKE_TARGET_DURATION_MS, shake.oscillations/CONFIG.SHAKE_REQUIRED_OSCILLATIONS));
+    els.shakeRing.style.setProperty('--p', Math.round(progress*100));
+    els.drawHint.textContent = `神明降臨中… ${Math.round(progress*100)}%`;
+    if (shake.oscillations >= CONFIG.SHAKE_REQUIRED_OSCILLATIONS && elapsed >= CONFIG.SHAKE_MIN_DURATION_MS){ completeShakeStage(); }
+  }
+  function resetShakeProgress(){
+    shake.active = false; shake.oscillations = 0;
+    els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
+    els.shakeRing.style.setProperty('--p', 0);
+  }
+  function completeShakeStage(){
+    els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
+    const idx = Math.floor(Math.random()*stickEls.length);
+    stickEls.forEach(s => s.classList.remove('selected'));
+    const chosen = stickEls[idx]; chosen.classList.add('selected');
+    AppState.selectedStickCx = parseFloat(chosen.dataset.cx);
+    const xRatio = AppState.selectedStickCx / 200;
+    els.qianStick.style.left = `${xRatio*100}%`;
+    els.qianStick.style.transform = 'translate(-50%, 0)';
+    AppState.drawSubState = 'pinch';
+    els.drawHint.textContent = '神明已選定！請捏住發光籤條，向上抽出';
+  }
+
+  function handlePinchGesture(wrist, pinchDist){
+    const zoneRect = els.qianTong.getBoundingClientRect();
+    const zoneCenterX = (zoneRect.left+zoneRect.width/2)/window.innerWidth;
+    const zoneCenterY = (zoneRect.top+zoneRect.height/2)/window.innerHeight;
+    const aligned = Math.hypot(wrist.x-zoneCenterX, wrist.y-zoneCenterY) < 0.16;
+    els.qianTong.classList.toggle('aligned', aligned);
+    const isPinchingNow = pinchDist < CONFIG.PINCH_THRESHOLD_RATIO;
+    if (aligned && isPinchingNow && !pinchActive){
+      pinchActive = true; pinchStartWristY = wrist.y;
+      els.qianStick.classList.remove('hidden'); els.qianStick.classList.add('pinched');
+      els.drawHint.textContent = '已捏住籤條，請維持捏合並向上提起';
+    }
+    if (pinchActive){
+      if (!isPinchingNow){ resetPinch(); return; }
+      const deltaY = pinchStartWristY - wrist.y;
+      const followPx = Math.max(0, deltaY) * window.innerHeight;
+      els.qianStick.style.transform = `translate(-50%, ${-followPx}px) rotate(${(wrist.x-0.5)*8}deg)`;
+      if (deltaY > CONFIG.DRAW_UP_DELTA_RATIO){ UIActions.completeDraw(); }
+    }
+  }
+  function resetPinch(){
+    pinchActive = false; pinchStartWristY = null;
+    els.qianStick.classList.add('hidden'); els.qianStick.classList.remove('pinched');
+    els.qianStick.style.transform = 'translate(-50%, 0)';
+    els.drawHint.textContent = '請捏住發光籤條，向上抽出';
+  }
+
+  // ============================================================
+  // 捧筊與拋擲判定：
+  // 1. 「捧」：curlAmount 低於 CUP_CURL_MAX（手指微微收攏）即視為捧起筊杯，
+  //    筊杯即時跟隨手腕螢幕座標移動，並記錄位置歷史供後續估算拋擲速度。
+  // 2. 「拋」：捧筊狀態下，若 curlAmount 連續數影格超過 OPEN_CURL_MIN
+  //    （手指瞬間伸直張開），判定為「拋擲」，取最近的位置歷史估算
+  //    拋出的方向與力道，交給物理動畫落下。
+  // ============================================================
+  function handleBwaGesture(lm){
+    const wrist = lm[0];
+    const c = curlAmount(lm);
+    const sx = wrist.x * window.innerWidth, sy = wrist.y * window.innerHeight;
+
+    updateCupIndicator(sx, sy, cup.holding);
+
+    if (!cup.holding){
+      if (c < CONFIG.CUP_CURL_MAX){
+        cup.holding = true; cup.openFrames = 0; cup.posHistory = [];
+        els.bwaPair.classList.remove('idle-float');
+        els.bwaHint.textContent = '已捧起筊杯，向下一送即可擲出';
+      }
+      return;
+    }
+
+    // 更新位置歷史（約 200ms 窗口），並讓筊杯跟隨手腕移動
+    const now = performance.now();
+    cup.posHistory.push({t:now, x:sx, y:sy});
+    while (cup.posHistory.length && now - cup.posHistory[0].t > 200) cup.posHistory.shift();
+
+    els.bwaPair.style.left = sx + 'px';
+    els.bwaPair.style.top = sy + 'px';
+
+    if (c > CONFIG.OPEN_CURL_MIN){
+      cup.openFrames++;
+      if (cup.openFrames >= CONFIG.OPEN_CONFIRM_FRAMES && !AppState.bwaTossing){
+        const first = cup.posHistory[0] || {x:sx,y:sy,t:now};
+        const dt = Math.max(now - first.t, 16);
+        const vx = (sx-first.x)/dt, vy = (sy-first.y)/dt; // px/ms
+        UIActions.tossBwa(sx, sy, vx, vy);
+        cup.holding = false;
+      }
+    } else {
+      cup.openFrames = 0;
+    }
+  }
+
+  let markerA, markerB, line, fistDot, cupDot;
+  function ensureMarkers(){
+    if (!markerA){
+      markerA = document.createElement('div'); markerA.className='fingertip-marker';
+      markerB = document.createElement('div'); markerB.className='fingertip-marker';
+      line = document.createElement('div'); line.className='pinch-line';
+      fistDot = document.createElement('div'); fistDot.className='fist-indicator';
+      cupDot = document.createElement('div'); cupDot.className='cup-indicator';
+      document.body.appendChild(markerA); document.body.appendChild(markerB);
+      document.body.appendChild(line); document.body.appendChild(fistDot); document.body.appendChild(cupDot);
+    }
+  }
+  function updateFingertipUI(thumbTip, indexTip){
+    ensureMarkers();
+    const ax=thumbTip.x*window.innerWidth, ay=thumbTip.y*window.innerHeight;
+    const bx=indexTip.x*window.innerWidth, by=indexTip.y*window.innerHeight;
+    markerA.style.left=ax+'px'; markerA.style.top=ay+'px'; markerA.style.opacity=1;
+    markerB.style.left=bx+'px'; markerB.style.top=by+'px'; markerB.style.opacity=1;
+    const len=Math.hypot(bx-ax,by-ay), angle=Math.atan2(by-ay,bx-ax)*180/Math.PI;
+    line.style.width=len+'px'; line.style.left=ax+'px'; line.style.top=ay+'px';
+    line.style.transform=`rotate(${angle}deg)`; line.style.opacity=0.8;
+  }
+  function hideFingertipUI(){ if (markerA){ markerA.style.opacity=0; markerB.style.opacity=0; line.style.opacity=0; } }
+  function updateFistIndicator(wrist, fistNow){
+    ensureMarkers();
+    fistDot.style.left=(wrist.x*window.innerWidth)+'px'; fistDot.style.top=(wrist.y*window.innerHeight)+'px';
+    fistDot.style.opacity = fistNow?1:0.35; fistDot.style.borderColor = fistNow ? 'var(--gold-soft)' : 'rgba(255,255,255,0.4)';
+  }
+  function hideFistIndicator(){ if (fistDot) fistDot.style.opacity=0; }
+  function updateCupIndicator(sx, sy, holding){
+    ensureMarkers();
+    cupDot.style.left = sx+'px'; cupDot.style.top = sy+'px'; cupDot.style.opacity = 0.9;
+    cupDot.style.borderColor = holding ? 'var(--gold-soft)' : 'rgba(255,255,255,0.45)';
+  }
+  function hideCupIndicator(){ if (cupDot) cupDot.style.opacity = 0; }
+
+  return {
+    onResults, resetPinch, resetShakeProgress,
+    resetBwaTracking(){ cup.holding=false; cup.openFrames=0; cup.posHistory=[]; }
+  };
+})();
+
+/* ========================================================================= 4. AppState + UIActions ========================================================================= */
+const AppState = { current:'draw', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, currentFortune:null };
+
+const UIActions = (() => {
+
+  function showScene(name){
+    [els.sceneDraw, els.sceneBwa, els.sceneResult].forEach(s => s.classList.add('hidden'));
+    AppState.current = name;
+
+    if (name === 'draw'){
+      els.sceneDraw.classList.remove('hidden');
+      AppState.drawSubState = 'shake';
+      stickEls.forEach(s => s.classList.remove('selected'));
+      GestureEngine.resetShakeProgress(); GestureEngine.resetPinch();
+      els.drawHint.textContent = '請對著籤筒握拳，上下搖晃';
+    }
+    if (name === 'bwa'){
+      els.sceneBwa.classList.remove('hidden');
+      els.bwaResultPanel.classList.add('hidden');
+      els.bwaHint.textContent = '單手微握，捧起筊杯';
+      resetBwaVisual();
+      GestureEngine.resetBwaTracking();
+      AppState.bwaTossing = false;
+    }
+    if (name === 'result'){ els.sceneResult.classList.remove('hidden'); }
+  }
+
+  function flashOnce(){ els.flash.classList.remove('play'); void els.flash.offsetWidth; els.flash.classList.add('play'); }
+  function darken(on){ els.darken.classList.toggle('on', on); }
+
+  function completeDraw(){
+    if (AppState.current !== 'draw') return;
+    AppState.current = 'transition';
+    const rect = els.qianStick.getBoundingClientRect();
+    const cx = rect.left+rect.width/2, cy = rect.top;
+    els.qianStick.classList.add('punch');
+    spawnLightBurst(cx, cy); screenShakeOnce();
+    ParticleSystem.burst(cx, cy, 26); flashOnce();
+    AppState.currentFortune = FORTUNES[Math.floor(Math.random()*FORTUNES.length)];
+    setTimeout(() => showScene('bwa'), 700);
+  }
+
+  function resetBwaVisual(){
+    els.bwaPair.style.left = '50vw'; els.bwaPair.style.top = '50vh';
+    els.bwaPair.style.transform = 'translate(-50%,-50%)';
+    els.bwaPair.classList.add('idle-float');
+    [els.cupA, els.cupB].forEach(cup => {
+      cup.style.transition = 'none';
+      cup.style.transform = 'rotateX(0deg) rotateZ(0deg)';
+      void cup.offsetWidth;
+      cup.style.transition = '';
+    });
+  }
+
+  // ============================================================
+  // 拋擲物理動畫：
+  // 依「聖筊／笑筊／陰筊」機率先隨機決定本次結果（coinA, coinB 分別代表
+  // 兩顆筊杯落地後是「凸面朝上」或「平面朝上」），再分別計算每顆筊杯
+  // 需要翻轉到的最終角度（多轉幾圈製造真實感，最後停在對應面），
+  // 使動畫呈現的結果與訊息文字保證一致，不會「演」出跟結果矛盾的畫面。
+  // ============================================================
+  function tossBwa(sx, sy, vx, vy){
+    AppState.bwaTossing = true;
+    els.bwaHint.textContent = '筊杯擲出中…';
+
+    const coinA = Math.random() < 0.5 ? 'flat' : 'domed';
+    const coinB = Math.random() < 0.5 ? 'flat' : 'domed';
+    AppState.pendingBwaResult = { coinA, coinB };
+
+    const speed = Math.min(1.6, Math.hypot(vx,vy) * 6 + 0.4); // 依甩動力道微調動畫幅度
+    const restX = window.innerWidth * 0.5, restY = window.innerHeight * 0.62;
+
+    els.bwaPair.style.transition = `left 0.6s cubic-bezier(.2,.7,.25,1.1), top 0.6s cubic-bezier(.2,.7,.25,1.1)`;
+    els.bwaPair.style.left = restX + 'px';
+    els.bwaPair.style.top = restY + 'px';
+
+    [ {el: els.cupA, coin: coinA, spins: 3}, {el: els.cupB, coin: coinB, spins: 4} ].forEach(({el, coin, spins}) => {
+      const faceOffset = coin === 'domed' ? 0 : 180; // domed 面朝上 = 0deg(前面)；flat 面朝上 = 180deg(背面)
+      const rotX = spins*360 + faceOffset;
+      const rotZ = (Math.random()>0.5?1:-1) * (20 + Math.random()*40);
+      el.style.transition = `transform ${0.55 + speed*0.15}s cubic-bezier(.25,.65,.3,1.15)`;
+      el.style.transform = `rotateX(${rotX}deg) rotateZ(${rotZ}deg)`;
+    });
+
+    setTimeout(() => { resolveBwaResult(); }, 700 + speed*120);
+  }
+
+  function resolveBwaResult(){
+    const { coinA, coinB } = AppState.pendingBwaResult || {coinA:'flat', coinB:'domed'};
+    let type;
+    if (coinA !== coinB) type='sheng'; else if (coinA==='flat') type='xiao'; else type='yin';
+
+    els.bwaResultPanel.classList.remove('hidden');
+    AppState.bwaTossing = false;
+
+    if (type==='sheng'){
+      const rect = els.bwaPair.getBoundingClientRect();
+      ParticleSystem.burst(rect.left+rect.width/2, rect.top+rect.height/2);
+      spawnLightBurst(rect.left+rect.width/2, rect.top+rect.height/2);
+      flashOnce();
+      els.bwaResultTitle.textContent = '聖筊 · 神明賜籤';
+      els.bwaResultDesc.textContent = '一平一凸，神明允准，賜籤生效。';
+      setTimeout(() => showResultScene(), 1100);
+    } else if (type==='xiao'){
+      els.bwaResultTitle.textContent = '笑筊 · 請重新誠心默念';
+      els.bwaResultDesc.textContent = '兩面皆平，神明含笑不語，請再誠心默念問題後重新捧筊拋擲。';
+      setTimeout(() => {
+        els.bwaResultPanel.classList.add('hidden');
+        resetBwaVisual();
+        GestureEngine.resetBwaTracking();
+        els.bwaHint.textContent = '單手微握，捧起筊杯';
+      }, 2200);
+    } else {
+      els.bwaResultTitle.textContent = '陰筊 · 神明不賜此籤';
+      els.bwaResultDesc.textContent = '兩面皆凸，神明否定此籤，請重新調整問題後再搖籤。';
+      darken(true);
+      setTimeout(() => { darken(false); showScene('draw'); }, 2000);
+    }
+  }
+
+  function showResultScene(){
+    const f = AppState.currentFortune || FORTUNES[0];
+    els.resultNumber.textContent = `第　${f.no}　首`;
+    els.resultGanzhi.textContent = `【${f.ganzhi}籤】`;
+    els.resultGrade.textContent = f.grade;
+    els.resultPoem.textContent = f.poem;
+    els.resultExplain.textContent = f.explain;
+    showScene('result');
+  }
+
+  els.btnRestart.addEventListener('click', () => showScene('draw'));
+
+  return { showScene, completeDraw, tossBwa };
+})();
+
+els.btnTutorialStart.addEventListener('click', () => els.tutorial.classList.add('hidden'));
+els.btnHelp.addEventListener('click', () => els.tutorial.classList.remove('hidden'));
+
+function resizeOutputCanvas(){ els.outputCanvas.width = window.innerWidth; els.outputCanvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeOutputCanvas);
+resizeOutputCanvas();
+
+const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
+hands.onResults(GestureEngine.onResults);
+
+const camera = new Camera(els.video, { onFrame: async () => { await hands.send({image: els.video}); }, width: 1280, height: 720 });
+
+camera.start().then(() => {
+  setTimeout(() => { els.loading.style.display = 'none'; els.tutorial.classList.remove('hidden'); }, 600);
+}).catch(err => {
+  els.loading.innerHTML = `
+    <div class="glass-card px-10 py-8 text-center">
+      <p class="gold-text text-lg font-normal tracking-widest mb-2">無法啟動攝影機</p>
+      <p class="text-sm opacity-70 font-light">請確認已允許瀏覽器存取鏡頭權限，並重新整理頁面。</p>
+    </div>`;
+  console.error(err);
+});
+</script>
+</body>
+</html>
