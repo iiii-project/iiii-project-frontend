@@ -3,7 +3,7 @@ import type { ApiErrorBody } from '@/types/divination'
 
 export const apiClient = axios.create({
   baseURL: '/api/v1',
-  timeout: 10000
+  timeout: 120000
 })
 
 export function toUserMessage(error: unknown): string {
