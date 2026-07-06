@@ -10,6 +10,7 @@ export default defineConfig({
     }
   },
   server: {
+    allowedHosts: ['iii.dev-serve.me'],
     proxy: {
       '/api': 'http://127.0.0.1:8000'
     }
