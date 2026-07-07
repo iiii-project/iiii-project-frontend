@@ -163,6 +163,130 @@ main {
   padding: 34px 0 64px;
 }
 
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.ritual-gate-enter-active,
+.ritual-gate-leave-active {
+  transition: opacity 0.55s ease;
+}
+
+.ritual-gate-enter-from,
+.ritual-gate-leave-to {
+  opacity: 0;
+}
+
+.ritual-effect {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ritual-effect::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at center, rgba(255, 244, 220, 0.18), transparent 28%),
+    radial-gradient(ellipse at center, transparent 36%, rgba(8, 5, 4, 0.58) 82%);
+}
+
+.ritual-effect.is-reject::before {
+  background:
+    radial-gradient(circle at center, rgba(107, 29, 36, 0.3), transparent 30%),
+    rgba(0, 0, 0, 0.72);
+}
+
+.ritual-effect p {
+  position: relative;
+  z-index: 4;
+  margin: 0;
+  color: var(--gold-soft);
+  font-size: clamp(1.15rem, 4vw, 2.6rem);
+  letter-spacing: 0.46em;
+  text-indent: 0.46em;
+  text-shadow: 0 0 30px rgba(255, 207, 122, 0.9);
+  animation: effectText 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.effect-flash,
+.effect-ring,
+.effect-rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.effect-flash {
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+  background: #fff4dc;
+  animation: effectFlash 1.15s ease-out both;
+}
+
+.is-retry .effect-flash,
+.is-reject .effect-flash {
+  background: #0b0807;
+  animation-duration: 1.25s;
+}
+
+.effect-ring {
+  z-index: 2;
+  width: min(52vw, 520px);
+  aspect-ratio: 1;
+  border: 1px solid var(--gold-line);
+  box-shadow:
+    0 0 38px rgba(255, 207, 122, 0.52),
+    inset 0 0 56px rgba(212, 175, 55, 0.2);
+  animation: effectRing 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.effect-rays {
+  z-index: 2;
+  width: min(46vw, 460px);
+  aspect-ratio: 1;
+  background: repeating-conic-gradient(from 8deg, rgba(255, 207, 122, 0.5) 0 4deg, transparent 4deg 22deg);
+  mask: radial-gradient(circle, transparent 0 18%, #000 19% 64%, transparent 65%);
+  animation: effectRays 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.effect-ash {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 3;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  box-shadow: 0 0 10px rgba(255, 207, 122, 0.8);
+  transform: translate(-50%, -50%) rotate(calc(var(--i) * 20deg)) translateY(0);
+  animation: effectAsh 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i) * 28ms);
+}
+
 .app-header {
   position: sticky;
   top: 0;
@@ -267,10 +391,10 @@ h2 {
 
 h1,
 .gold-text {
-  background: linear-gradient(180deg, #fbf1d8 0%, var(--gold) 55%, #b8933f 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--gold-soft);
+  text-shadow:
+    0 0 18px rgba(212, 175, 55, 0.28),
+    0 2px 0 rgba(0, 0, 0, 0.38);
 }
 
 h1 {
@@ -325,10 +449,8 @@ p {
 
 .ritual-mark::before {
   content: "籤";
-  background: linear-gradient(180deg, #fbf1d8, var(--gold), #9f7b2c);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--gold-soft);
+  text-shadow: 0 0 34px rgba(255, 207, 122, 0.42);
 }
 
 .content-band,
@@ -613,7 +735,7 @@ button:disabled {
 }
 
 .qian-tong-zone.shaking {
-  animation: tongJitter 0.14s ease-in-out infinite;
+  animation: tongJitter 0.22s ease-in-out infinite;
 }
 
 .shake-progress-ring {
@@ -622,7 +744,7 @@ button:disabled {
   border-radius: 50%;
   background: conic-gradient(var(--gold) calc(var(--p, 0) * 1%), rgba(212, 175, 55, 0.12) 0);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.45s ease;
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
 }
@@ -634,7 +756,7 @@ button:disabled {
 .qian-tong {
   position: absolute;
   inset: 0;
-  transition: filter 0.5s ease;
+  transition: filter 0.8s ease;
 }
 
 .qian-tong svg {
@@ -644,7 +766,7 @@ button:disabled {
 }
 
 .qian-tong.aligned {
-  animation: breatheGlow 1.2s ease-in-out infinite;
+  animation: breatheGlow 1.8s ease-in-out infinite;
 }
 
 .temple-stick {
@@ -653,27 +775,27 @@ button:disabled {
 }
 
 .temple-sticks.is-shaking .temple-stick {
-  animation: stickShake 0.16s ease-in-out infinite;
+  animation: stickShake 0.24s ease-in-out infinite;
 }
 
 .temple-sticks.is-shaking .temple-stick:nth-child(2) {
-  animation-delay: 0.02s;
-}
-
-.temple-sticks.is-shaking .temple-stick:nth-child(3) {
-  animation-delay: 0.04s;
-}
-
-.temple-sticks.is-shaking .temple-stick:nth-child(4) {
-  animation-delay: 0.01s;
-}
-
-.temple-sticks.is-shaking .temple-stick:nth-child(5) {
   animation-delay: 0.03s;
 }
 
+.temple-sticks.is-shaking .temple-stick:nth-child(3) {
+  animation-delay: 0.06s;
+}
+
+.temple-sticks.is-shaking .temple-stick:nth-child(4) {
+  animation-delay: 0.015s;
+}
+
+.temple-sticks.is-shaking .temple-stick:nth-child(5) {
+  animation-delay: 0.045s;
+}
+
 .qian-tong-zone.selected .temple-selected-stick {
-  animation: stickSelectedPulse 1s ease-in-out infinite !important;
+  animation: stickSelectedPulse 1.5s ease-in-out infinite !important;
   filter: drop-shadow(0 0 14px rgba(255, 207, 122, 0.95));
 }
 
@@ -698,7 +820,7 @@ button:disabled {
 .qian-stick.revealed {
   opacity: 1;
   transform: translate(-50%, -38px) rotate(2deg);
-  transition: opacity 0.2s ease, transform 0.55s cubic-bezier(0.2, 0.8, 0.3, 1);
+  transition: opacity 0.35s ease, transform 0.85s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
 .qian-stick .stick-tip {
@@ -715,11 +837,11 @@ button:disabled {
 }
 
 .qian-stick.revealed .stick-tip {
-  animation: burstGlow 0.6s ease-out infinite;
+  animation: burstGlow 0.9s ease-out infinite;
 }
 
 .qian-stick.punch {
-  animation: punchScale 0.25s ease-out;
+  animation: punchScale 0.38s ease-out;
 }
 
 .blocks-scene {
@@ -739,6 +861,7 @@ button:disabled {
   background: radial-gradient(circle at 38% 28%, #e8794f, #cf5a35 55%, #93341c);
   font-weight: 700;
   box-shadow: 0 14px 26px rgba(0, 0, 0, 0.5);
+  transform-style: preserve-3d;
 }
 
 .block-cup.round {
@@ -750,7 +873,26 @@ button:disabled {
 }
 
 .casting .block-cup {
-  animation: shake 0.25s linear infinite;
+  animation: blockToss 0.9s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.blocks-scene:not(.casting) .block-cup {
+  animation: blockSettle 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.blocks-scene:not(.casting) .block-cup:nth-child(2) {
+  animation-delay: 140ms;
+}
+
+.blocks-scene.result-sheng .block-cup {
+  box-shadow:
+    0 0 24px rgba(255, 207, 122, 0.34),
+    0 16px 30px rgba(0, 0, 0, 0.56);
+}
+
+.blocks-scene.result-yin .block-cup,
+.blocks-scene.result-xiao .block-cup {
+  filter: saturate(0.82) brightness(0.86);
 }
 
 .motion-panel {
@@ -765,7 +907,7 @@ button:disabled {
   inset: 0;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.6s ease;
 }
 
 .camera-preview {
@@ -789,6 +931,45 @@ button:disabled {
 .camera-preview.active,
 .camera-vignette.active {
   opacity: 1;
+}
+
+.gesture-target,
+.fingertip-marker,
+.pinch-line {
+  position: fixed;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.gesture-target {
+  width: 72px;
+  height: 72px;
+  border: 2px dashed rgba(242, 226, 179, 0.72);
+  border-radius: 999px;
+  box-shadow: 0 0 18px rgba(212, 175, 55, 0.24);
+  transform: translate(-50%, -50%);
+}
+
+.gesture-target.aligned {
+  border-style: solid;
+  border-color: var(--gold-soft);
+  box-shadow: 0 0 30px rgba(255, 207, 122, 0.68);
+}
+
+.fingertip-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--gold-soft), var(--gold));
+  box-shadow: 0 0 12px 4px rgba(255, 207, 122, 0.68);
+  transform: translate(-50%, -50%);
+}
+
+.pinch-line {
+  height: 1px;
+  background: var(--gold-soft);
+  box-shadow: 0 0 8px rgba(255, 207, 122, 0.8);
+  transform-origin: 0 0;
 }
 
 .motion-controls {
@@ -920,6 +1101,93 @@ dd {
   }
 }
 
+@keyframes ritualRing {
+  from {
+    opacity: 0;
+    transform: scale(0.55) rotate(0deg);
+  }
+
+  35% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.28) rotate(18deg);
+  }
+}
+
+@keyframes effectFlash {
+  0% {
+    opacity: 0;
+  }
+  14% {
+    opacity: 0.86;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes effectRing {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.38) rotate(0deg);
+  }
+  34% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.34) rotate(18deg);
+  }
+}
+
+@keyframes effectRays {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.42) rotate(0deg);
+  }
+  28% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.48) rotate(28deg);
+  }
+}
+
+@keyframes effectText {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(12px) scale(0.96);
+  }
+  26% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(2px);
+    transform: translateY(-8px) scale(1.02);
+  }
+}
+
+@keyframes effectAsh {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(calc(var(--i) * 20deg)) translateY(0) scale(0.6);
+  }
+  22% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(calc(var(--i) * 20deg)) translateY(-34vh) scale(1.25);
+  }
+}
+
 @keyframes smoke {
   from {
     opacity: 0.7;
@@ -928,6 +1196,29 @@ dd {
   to {
     opacity: 0;
     transform: translateY(-60px) scale(1.4);
+  }
+}
+
+@keyframes blockToss {
+  0%,
+  100% {
+    transform: translateY(0) rotateZ(0deg) rotateX(0deg);
+  }
+  45% {
+    transform: translateY(-34px) rotateZ(18deg) rotateX(140deg);
+  }
+}
+
+@keyframes blockSettle {
+  0% {
+    opacity: 0.58;
+    translate: 0 -22px;
+    scale: 0.94;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
   }
 }
 
@@ -1016,6 +1307,26 @@ dd {
   }
   75% {
     transform: translateX(6px) rotate(3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .ritual-effect {
+    background: rgba(8, 5, 4, 0.72);
+  }
+
+  .effect-rays,
+  .effect-ash {
+    display: none;
   }
 }
 

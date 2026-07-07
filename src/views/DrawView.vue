@@ -7,6 +7,7 @@ import CameraActionPanel from '@/components/camera/CameraActionPanel.vue'
 import FortuneTube from '@/components/fortune-stick/FortuneTube.vue'
 import StatusMessage from '@/components/common/StatusMessage.vue'
 import { useDivinationStore } from '@/stores/divinationStore'
+import { triggerRitualEffect } from '@/utils/ritualEffect'
 
 const router = useRouter()
 const divination = useDivinationStore()
@@ -22,11 +23,12 @@ async function draw() {
   errorMessage.value = ''
   selected.value = true
   try {
-    await new Promise((resolve) => window.setTimeout(resolve, 650))
+    await new Promise((resolve) => window.setTimeout(resolve, 900))
     const session = await drawFortune(divination.sessionId)
     divination.status = session.status
     divination.fortune = session.fortune || null
-    await router.push('/fortune')
+    await triggerRitualEffect('draw', '神明賜籤')
+    await router.push('/blocks')
   } catch (error) {
     errorMessage.value = toUserMessage(error)
   } finally {
@@ -77,6 +79,7 @@ function motionDraw() {
         v-if="divination.interactionMode === 'motion'"
         mode="shake"
         label="搖籤動作辨識"
+        @armed="selected = true; progress = 100"
         @detected="motionDraw"
         @fallback="divination.interactionMode = 'click'"
       />

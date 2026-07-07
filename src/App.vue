@@ -1,3 +1,31 @@
+<script setup lang="ts">
+import { onBeforeUnmount, ref } from 'vue'
+import { RITUAL_EFFECT_MS, type RitualEffectKind } from '@/utils/ritualEffect'
+
+const effectKind = ref<RitualEffectKind>('draw')
+const effectText = ref('')
+const showingEffect = ref(false)
+let effectTimer = 0
+
+function onRitualEffect(event: Event) {
+  const detail = (event as CustomEvent<{ kind: RitualEffectKind; text: string }>).detail
+  effectKind.value = detail.kind
+  effectText.value = detail.text
+  showingEffect.value = true
+  window.clearTimeout(effectTimer)
+  effectTimer = window.setTimeout(() => {
+    showingEffect.value = false
+  }, RITUAL_EFFECT_MS[detail.kind])
+}
+
+window.addEventListener('ritual-effect', onRitualEffect)
+
+onBeforeUnmount(() => {
+  window.clearTimeout(effectTimer)
+  window.removeEventListener('ritual-effect', onRitualEffect)
+})
+</script>
+
 <template>
   <div class="temple-backdrop" aria-hidden="true">
     <div class="temple-vignette"></div>
@@ -9,11 +37,24 @@
   <header class="app-header">
     <RouterLink class="brand" to="/">AI 求籤互動系統</RouterLink>
     <nav>
-      <RouterLink to="/mode">求籤</RouterLink>
+      <RouterLink to="/question">求籤</RouterLink>
       <RouterLink to="/history">歷史</RouterLink>
     </nav>
   </header>
   <main>
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <Transition name="page-fade" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </RouterView>
   </main>
+  <Transition name="ritual-gate">
+    <div v-if="showingEffect" class="ritual-effect" :class="`is-${effectKind}`" aria-hidden="true">
+      <div class="effect-flash"></div>
+      <div class="effect-ring"></div>
+      <div class="effect-rays"></div>
+      <span v-for="i in 18" :key="i" class="effect-ash" :style="{ '--i': i }"></span>
+      <p>{{ effectText }}</p>
+    </div>
+  </Transition>
 </template>

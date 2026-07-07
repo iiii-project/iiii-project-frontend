@@ -6,7 +6,7 @@ export const useDivinationStore = defineStore('divination', {
     sessionId: '',
     question: '',
     category: 'career' as Category,
-    interactionMode: 'click' as InteractionMode,
+    interactionMode: 'motion' as InteractionMode,
     fortuneSet: null as FortuneSet | null,
     status: 'created',
     fortune: null as Fortune | null,
@@ -19,7 +19,7 @@ export const useDivinationStore = defineStore('divination', {
       this.sessionId = ''
       this.question = ''
       this.category = 'career'
-      this.interactionMode = 'click'
+      this.interactionMode = 'motion'
       this.fortuneSet = null
       this.status = 'created'
       this.fortune = null

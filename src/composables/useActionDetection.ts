@@ -2,6 +2,7 @@ import { onBeforeUnmount, ref } from 'vue'
 import { Camera } from '@mediapipe/camera_utils'
 import { Hands } from '@mediapipe/hands'
 import { Pose } from '@mediapipe/pose'
+import { useCameraStore } from '@/stores/cameraStore'
 import type { ActionEvent } from '@/types/divination'
 
 type DetectorMode = 'prayer' | 'shake' | 'blocks'
@@ -14,6 +15,8 @@ interface Landmark {
 
 const HOLD_MS = 2000
 const SHAKE_TURNS = 3
+const PINCH_RATIO = 0.38
+const DRAW_UP_DELTA = 0.08
 const POSE = {
   leftShoulder: 11,
   rightShoulder: 12,
@@ -24,14 +27,25 @@ const POSE = {
 }
 
 export function useActionDetection(mode: DetectorMode, onDetected: (event: ActionEvent) => void) {
+  const cameraStore = useCameraStore()
   const videoRef = ref<HTMLVideoElement | null>(null)
   const errorMessage = ref('')
   const isActive = ref(false)
   const statusText = ref('尚未啟動')
+  const marker = ref({
+    visible: false,
+    targetVisible: false,
+    aligned: false,
+    thumb: { x: 0, y: 0 },
+    index: { x: 0, y: 0 },
+    target: { x: 50, y: 50 }
+  })
   let camera: Camera | null = null
   let hands: Hands | null = null
   let pose: Pose | null = null
   let detected = false
+  let drawStage: 'shake' | 'pinch' = 'shake'
+  let pinchStartedAtY = 0
   let holdStartedAt = 0
   let lastY = 0
   let direction = 0
@@ -44,6 +58,8 @@ export function useActionDetection(mode: DetectorMode, onDetected: (event: Actio
 
     try {
       detected = false
+      drawStage = 'shake'
+      pinchStartedAtY = 0
       holdStartedAt = 0
       resetShake()
       errorMessage.value = ''
@@ -84,9 +100,15 @@ export function useActionDetection(mode: DetectorMode, onDetected: (event: Actio
       })
       await camera.start()
       isActive.value = true
+      cameraStore.permissionStatus = 'granted'
+      cameraStore.isActive = true
+      cameraStore.detectionStatus = 'detecting'
       statusText.value = '辨識中'
     } catch {
       errorMessage.value = '無法啟動攝影機，請允許權限或改用點擊模式。'
+      cameraStore.permissionStatus = 'denied'
+      cameraStore.detectionStatus = 'failed'
+      cameraStore.errorMessage = errorMessage.value
       statusText.value = '啟動失敗'
     }
   }
@@ -99,14 +121,31 @@ export function useActionDetection(mode: DetectorMode, onDetected: (event: Actio
     hands = null
     pose = null
     isActive.value = false
+    cameraStore.isActive = false
+    if (cameraStore.detectionStatus !== 'failed') cameraStore.detectionStatus = 'idle'
     statusText.value = '已停止'
+    marker.value.visible = false
+    marker.value.targetVisible = false
   }
 
   function handleHands(results: { multiHandLandmarks?: Landmark[][] }) {
     const handsLandmarks = results.multiHandLandmarks || []
     if (mode === 'prayer' && !latestPose.length) detectPrayerFromHands(handsLandmarks)
-    if (mode === 'shake') detectShake(handsLandmarks, 'SHAKE_DETECTED')
+    if (mode === 'shake') detectDraw(handsLandmarks)
     if (mode === 'blocks') detectShake(handsLandmarks, 'BLOCK_CAST_DETECTED')
+  }
+
+  function detectDraw(handsLandmarks: Landmark[][]) {
+    if (drawStage === 'shake') {
+      if (detectShake(handsLandmarks, 'SHAKE_DETECTED', false)) {
+        drawStage = 'pinch'
+        marker.value.targetVisible = true
+        statusText.value = '已選定籤，請用拇指與食指捏住目標後向上抽'
+      }
+      return
+    }
+
+    detectPinchDraw(handsLandmarks)
   }
 
   function detectPrayerFromPose(landmarks: Landmark[]) {
@@ -162,12 +201,12 @@ export function useActionDetection(mode: DetectorMode, onDetected: (event: Actio
     if (performance.now() - holdStartedAt >= HOLD_MS) trigger('PRAYER_DETECTED')
   }
 
-  function detectShake(handsLandmarks: Landmark[][], event: ActionEvent) {
+  function detectShake(handsLandmarks: Landmark[][], event: ActionEvent, shouldTrigger = true) {
     const wristY = getTrackedWristY(handsLandmarks)
     if (wristY === null) {
       resetShake()
       statusText.value = '請讓手或上半身進入畫面'
-      return
+      return false
     }
 
     const delta = wristY - lastY
@@ -178,7 +217,63 @@ export function useActionDetection(mode: DetectorMode, onDetected: (event: Actio
     lastY = wristY
     statusText.value = `動作進度 ${Math.min(100, turns * 34)}%`
 
-    if (turns >= SHAKE_TURNS && performance.now() - shakeStartedAt >= HOLD_MS) trigger(event)
+    const done = turns >= SHAKE_TURNS && performance.now() - shakeStartedAt >= HOLD_MS
+    if (done && shouldTrigger) trigger(event)
+    return done
+  }
+
+  function detectPinchDraw(handsLandmarks: Landmark[][]) {
+    const hand = handsLandmarks[0]
+    const wrist = hand?.[0]
+    const thumb = hand?.[4]
+    const index = hand?.[8]
+    const middle = hand?.[9]
+    if (!wrist || !thumb || !index || !middle) {
+      marker.value.visible = false
+      statusText.value = '請讓拇指與食指進入畫面'
+      return
+    }
+
+    const target = getTargetPoint()
+    const mirroredThumb = { x: 1 - thumb.x, y: thumb.y }
+    const mirroredIndex = { x: 1 - index.x, y: index.y }
+    const mirroredWrist = { x: 1 - wrist.x, y: wrist.y }
+    const pinchCenter = {
+      x: (mirroredThumb.x + mirroredIndex.x) / 2,
+      y: (mirroredThumb.y + mirroredIndex.y) / 2
+    }
+    const handScale = Math.hypot(wrist.x - middle.x, wrist.y - middle.y) || 0.0001
+    const pinching = Math.hypot(thumb.x - index.x, thumb.y - index.y) / handScale < PINCH_RATIO
+    const aligned = Math.hypot(pinchCenter.x - target.x, pinchCenter.y - target.y) < 0.14
+
+    marker.value = {
+      visible: true,
+      targetVisible: true,
+      aligned,
+      thumb: { x: mirroredThumb.x * 100, y: mirroredThumb.y * 100 },
+      index: { x: mirroredIndex.x * 100, y: mirroredIndex.y * 100 },
+      target: { x: target.x * 100, y: target.y * 100 }
+    }
+
+    if (!pinching || !aligned) {
+      pinchStartedAtY = 0
+      statusText.value = aligned ? '請捏合拇指與食指' : '請將手指移到發光目標'
+      return
+    }
+
+    pinchStartedAtY ||= mirroredWrist.y
+    statusText.value = '已捏住籤，請向上抽出'
+    if (pinchStartedAtY - mirroredWrist.y > DRAW_UP_DELTA) trigger('SHAKE_DETECTED')
+  }
+
+  function getTargetPoint() {
+    const el = document.querySelector('.qian-stick') || document.querySelector('.qian-tong-zone')
+    const rect = el?.getBoundingClientRect()
+    if (!rect) return { x: 0.5, y: 0.5 }
+    return {
+      x: (rect.left + rect.width / 2) / window.innerWidth,
+      y: (rect.top + rect.height * 0.22) / window.innerHeight
+    }
   }
 
   function getTrackedWristY(handsLandmarks: Landmark[][]): number | null {
@@ -204,6 +299,8 @@ export function useActionDetection(mode: DetectorMode, onDetected: (event: Actio
     if (detected) return
     detected = true
     statusText.value = '已偵測完成'
+    cameraStore.detectionStatus = 'detected'
+    cameraStore.lastDetectedAction = event
     onDetected(event)
     stop()
   }
@@ -215,6 +312,7 @@ export function useActionDetection(mode: DetectorMode, onDetected: (event: Actio
     errorMessage,
     isActive,
     statusText,
+    marker,
     start,
     stop
   }

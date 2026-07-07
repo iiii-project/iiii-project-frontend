@@ -7,6 +7,7 @@ import CameraActionPanel from '@/components/camera/CameraActionPanel.vue'
 import IncenseRitual from '@/components/incense/IncenseRitual.vue'
 import StatusMessage from '@/components/common/StatusMessage.vue'
 import { useDivinationStore } from '@/stores/divinationStore'
+import { triggerRitualEffect } from '@/utils/ritualEffect'
 
 const router = useRouter()
 const divination = useDivinationStore()
@@ -26,6 +27,7 @@ async function finishPrayer() {
   try {
     const session = await completePrayer(divination.sessionId)
     divination.status = session.status
+    await triggerRitualEffect('prayer', '香火已成')
     await router.push('/draw')
   } catch (error) {
     errorMessage.value = toUserMessage(error)
