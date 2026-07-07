@@ -11,6 +11,7 @@ const router = createRouter({
     { path: '/fortune', name: 'fortune', component: () => import('@/views/FortuneView.vue') },
     { path: '/blocks', name: 'blocks', component: () => import('@/views/BlocksView.vue') },
     { path: '/interpretation', name: 'interpretation', component: () => import('@/views/InterpretationView.vue') },
+    { path: '/donation', name: 'donation', component: () => import('@/views/DonationView.vue') },
     { path: '/history', name: 'history', component: () => import('@/views/HistoryView.vue') }
   ]
 })

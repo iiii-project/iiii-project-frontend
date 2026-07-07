@@ -616,6 +616,212 @@ textarea {
   background-color: rgba(212, 175, 55, 0.12);
 }
 
+.donation-page {
+  display: grid;
+  gap: 28px;
+}
+
+.donation-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  align-items: center;
+  gap: 34px;
+  padding: clamp(26px, 5vw, 56px);
+}
+
+.donation-hero h1 {
+  margin: 0 auto;
+  text-align: center;
+}
+
+.donation-hero p:not(.eyebrow) {
+  max-width: 640px;
+  margin: 0 auto 22px;
+  color: rgba(242, 226, 179, 0.82);
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+
+.donation-hero .button-row {
+  justify-content: center;
+}
+
+.donation-seal {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: min(220px, 54vw);
+  aspect-ratio: 1;
+  border: 1px solid var(--gold-line);
+  border-radius: 50%;
+  color: var(--gold-soft);
+  background:
+    radial-gradient(circle at 36% 28%, rgba(251, 241, 216, 0.22), transparent 34%),
+    radial-gradient(circle, rgba(107, 29, 36, 0.82), rgba(20, 16, 14, 0.94));
+  box-shadow:
+    0 0 42px rgba(212, 175, 55, 0.22),
+    inset 0 0 46px rgba(212, 175, 55, 0.12);
+  font-size: clamp(4rem, 11vw, 7rem);
+  font-weight: 900;
+  text-shadow: 0 0 30px rgba(255, 207, 122, 0.4);
+}
+
+.donation-details {
+  display: grid;
+  gap: 22px;
+}
+
+.donation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.donation-grid article {
+  min-height: 150px;
+  padding: 22px;
+  border: 1px solid rgba(255, 215, 0, 0.32);
+  border-radius: 24px;
+  background: rgba(20, 16, 14, 0.35);
+}
+
+.donation-grid strong {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--gold-soft);
+  font-size: 1.18rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+}
+
+.donation-grid p {
+  margin: 0;
+  color: rgba(242, 226, 179, 0.72);
+}
+
+.donation-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 5, 4, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.donation-dialog {
+  position: relative;
+  width: min(520px, 100%);
+  padding: clamp(24px, 5vw, 38px);
+  border: 1px solid var(--gold-line);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 0, rgba(212, 175, 55, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(74, 64, 56, 0.92), rgba(20, 16, 14, 0.96));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.62);
+}
+
+.dialog-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(242, 226, 179, 0.34);
+  border-radius: 999px;
+  color: var(--gold-soft);
+  background: rgba(20, 16, 14, 0.48);
+  cursor: pointer;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.donation-dialog h2 {
+  margin-right: 44px;
+  font-size: 1.55rem;
+  letter-spacing: 0.18em;
+}
+
+.dialog-copy {
+  margin: 14px 0 20px;
+  color: rgba(242, 226, 179, 0.74);
+}
+
+.amount-grid,
+.payment-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.amount-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.amount-button,
+.pay-button {
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 215, 0, 0.32);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.amount-button {
+  color: var(--gold-soft);
+  background: rgba(20, 16, 14, 0.42);
+  letter-spacing: 0.08em;
+}
+
+.amount-button.is-selected {
+  border-color: rgba(242, 226, 179, 0.82);
+  background: rgba(107, 29, 36, 0.72);
+  box-shadow: inset 0 0 24px rgba(212, 175, 55, 0.12);
+}
+
+.payment-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px 0;
+  padding: 14px 0;
+  border-top: 1px solid rgba(255, 215, 0, 0.26);
+  border-bottom: 1px solid rgba(255, 215, 0, 0.26);
+  color: rgba(242, 226, 179, 0.74);
+}
+
+.payment-total strong {
+  color: var(--gold-soft);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.payment-actions {
+  grid-template-columns: 1fr;
+}
+
+.pay-button {
+  color: #fff;
+  letter-spacing: 0.08em;
+}
+
+.apple-pay-button {
+  background: #050505;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.line-pay-button {
+  background: #06c755;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.donation-payment-message {
+  margin: 16px 0 0;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -1353,7 +1559,9 @@ dd {
   .page-shell.split,
   .choice-grid,
   .flow-list,
-  .fortune-meta {
+  .fortune-meta,
+  .donation-hero,
+  .donation-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1374,6 +1582,15 @@ dd {
   .ritual-mark {
     width: min(220px, 72vw);
     font-size: 6rem;
+  }
+
+  .donation-hero {
+    gap: 24px;
+  }
+
+  .donation-seal {
+    width: min(190px, 62vw);
+    order: -1;
   }
 
   .flow-list li {

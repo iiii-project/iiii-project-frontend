@@ -38,6 +38,7 @@ onBeforeUnmount(() => {
     <RouterLink class="brand" to="/">AI 求籤互動系統</RouterLink>
     <nav>
       <RouterLink to="/question">求籤</RouterLink>
+      <RouterLink to="/donation">捐款</RouterLink>
       <RouterLink to="/history">歷史</RouterLink>
     </nav>
   </header>

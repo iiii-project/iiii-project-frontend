@@ -14,6 +14,7 @@
         </p>
         <div class="button-row">
           <RouterLink class="primary-button" to="/question">開始求籤</RouterLink>
+          <RouterLink class="secondary-button" to="/donation">功德捐款</RouterLink>
           <RouterLink class="secondary-button" to="/history">查看歷史</RouterLink>
         </div>
       </div>
