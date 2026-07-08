@@ -1488,11 +1488,22 @@ dd {
   background: rgba(212, 175, 55, 0.14);
 }
 
-.reply-list .markdown-text {
+.chat-bubble {
   padding: 14px 16px;
-  border-left: 4px solid var(--gold);
   border-radius: 14px;
   background: rgba(10, 7, 6, 0.45);
+}
+
+.chat-bubble-user {
+  border-left: 4px solid rgba(242, 226, 179, 0.72);
+}
+
+.chat-bubble-assistant {
+  border-left: 4px solid var(--gold);
+}
+
+.chat-bubble-user .markdown-text {
+  color: rgba(242, 226, 179, 0.96);
 }
 
 .history-item {

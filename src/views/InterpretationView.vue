@@ -11,7 +11,7 @@ const router = useRouter()
 const divination = useDivinationStore()
 const isLoading = ref(false)
 const chatMessage = ref('')
-const chatReplies = ref<string[]>([])
+const chatMessages = ref<{ role: 'user' | 'assistant'; content: string }[]>([])
 const errorMessage = ref('')
 
 onMounted(() => {
@@ -39,9 +39,10 @@ async function chat(message = chatMessage.value) {
   if (!trimmed || trimmed.length > 500 || !divination.sessionId) return
 
   chatMessage.value = ''
+  chatMessages.value.push({ role: 'user', content: trimmed })
   try {
     const response = await sendChat(divination.sessionId, trimmed)
-    chatReplies.value.push(response.reply)
+    chatMessages.value.push({ role: 'assistant', content: response.reply })
   } catch (error) {
     errorMessage.value = toUserMessage(error)
   }
@@ -100,8 +101,15 @@ function restart() {
         <button class="secondary-button" type="button" @click="chat()">送出提問</button>
         <button class="ghost-button" type="button" @click="restart">重新求籤</button>
       </div>
-      <div v-if="chatReplies.length" class="reply-list">
-        <MarkdownText v-for="reply in chatReplies" :key="reply" :source="reply" />
+      <div v-if="chatMessages.length" class="reply-list">
+        <div
+          v-for="(item, index) in chatMessages"
+          :key="`${item.role}-${index}`"
+          class="chat-bubble"
+          :class="`chat-bubble-${item.role}`"
+        >
+          <MarkdownText :source="item.content" />
+        </div>
       </div>
     </template>
   </section>
