@@ -327,6 +327,225 @@ nav a:hover {
   min-height: calc(100vh - 164px);
 }
 
+.home-immersive {
+  min-height: calc(100vh - 132px);
+}
+
+.home-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.8fr);
+  align-items: center;
+  gap: clamp(28px, 6vw, 86px);
+  min-height: calc(100vh - 190px);
+  padding: clamp(22px, 5vw, 60px) 0 32px;
+}
+
+.home-stage::before {
+  content: "";
+  position: absolute;
+  inset: 5% -8vw 10%;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 72% 45%, rgba(212, 175, 55, 0.16), transparent 24%),
+    linear-gradient(100deg, rgba(107, 29, 36, 0.16), transparent 54%);
+  filter: blur(2px);
+}
+
+.home-copy {
+  max-width: 760px;
+}
+
+.home-kicker {
+  margin: 0 0 18px;
+  color: var(--gold);
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+}
+
+.home-copy h1 {
+  max-width: 760px;
+  font-size: clamp(3rem, 6.8vw, 5.7rem);
+  letter-spacing: 0.04em;
+  text-wrap: balance;
+}
+
+.home-lede {
+  max-width: 66ch;
+  margin: 24px 0 0;
+  color: rgba(242, 226, 179, 0.84);
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  text-wrap: pretty;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 34px;
+}
+
+.home-privacy {
+  max-width: 58ch;
+  margin: 18px 0 0;
+  color: rgba(242, 226, 179, 0.62);
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+}
+
+.home-oracle {
+  position: relative;
+  justify-self: center;
+  width: min(390px, 82vw);
+  aspect-ratio: 0.86;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+
+.oracle-halo {
+  position: absolute;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(255, 244, 220, 0.14), transparent 26%),
+    radial-gradient(circle, rgba(107, 29, 36, 0.28), transparent 62%);
+  box-shadow:
+    0 0 46px rgba(212, 175, 55, 0.22),
+    inset 0 0 56px rgba(212, 175, 55, 0.14);
+  animation: oracleHalo 4.8s ease-in-out infinite;
+}
+
+.oracle-tube {
+  position: absolute;
+  bottom: 16%;
+  width: 54%;
+  height: 34%;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 215, 0, 0.56);
+  border-radius: 18% 18% 44% 44% / 18% 18% 62% 62%;
+  background:
+    linear-gradient(90deg, #3a1216, #8a2b32 48%, #2c0e11),
+    radial-gradient(circle at 50% 18%, rgba(242, 226, 179, 0.18), transparent 30%);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.52),
+    inset 0 0 30px rgba(242, 226, 179, 0.08);
+}
+
+.oracle-tube span {
+  color: rgba(242, 226, 179, 0.48);
+  font-size: 3.6rem;
+  font-weight: 700;
+}
+
+.oracle-stick {
+  position: absolute;
+  bottom: 43%;
+  width: 12px;
+  height: 44%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f0dca0, #c99a5f, #8a5a30);
+  box-shadow: 0 0 18px rgba(255, 207, 122, 0.35);
+  transform-origin: bottom center;
+  animation: oracleStick 2.8s ease-in-out infinite;
+}
+
+.oracle-stick::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #c94b40;
+  box-shadow: 0 0 16px rgba(255, 207, 122, 0.68);
+  transform: translateX(-50%);
+}
+
+.stick-a {
+  transform: rotate(-9deg);
+}
+
+.stick-b {
+  height: 50%;
+  animation-delay: 0.4s;
+}
+
+.stick-c {
+  transform: rotate(10deg);
+  animation-delay: 0.8s;
+}
+
+.oracle-cups {
+  position: absolute;
+  right: 5%;
+  bottom: 7%;
+  display: flex;
+  gap: 10px;
+}
+
+.oracle-cups span {
+  width: 54px;
+  height: 72px;
+  border: 1px solid #5c2210;
+  border-radius: 52% 48% 44% 56% / 12% 12% 88% 88%;
+  background: radial-gradient(circle at 38% 28%, #e8794f, #cf5a35 55%, #93341c);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.42);
+  transform: rotate(18deg) rotateX(38deg);
+  animation: oracleCup 3.2s ease-in-out infinite;
+}
+
+.oracle-cups span:nth-child(2) {
+  transform: rotate(-22deg) rotateX(70deg) scaleY(0.76);
+  animation-delay: 0.5s;
+}
+
+.home-ritual-path {
+  border-top: 1px solid rgba(255, 215, 0, 0.24);
+  padding: 22px 0 0;
+}
+
+.home-ritual-path ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: rgba(255, 215, 0, 0.18);
+}
+
+.home-ritual-path li {
+  min-height: 86px;
+  padding: 18px;
+  background: rgba(20, 16, 14, 0.74);
+}
+
+.home-ritual-path strong,
+.home-ritual-path span {
+  display: block;
+}
+
+.home-ritual-path strong {
+  color: var(--gold-soft);
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+}
+
+.home-ritual-path span {
+  margin-top: 8px;
+  color: rgba(242, 226, 179, 0.62);
+  font-size: 0.88rem;
+  letter-spacing: 0.08em;
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -1323,6 +1542,40 @@ dd {
   }
 }
 
+@keyframes oracleHalo {
+  0%,
+  100% {
+    opacity: 0.76;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes oracleStick {
+  0%,
+  100% {
+    translate: 0 0;
+    filter: brightness(1);
+  }
+  50% {
+    translate: 0 -12px;
+    filter: brightness(1.22);
+  }
+}
+
+@keyframes oracleCup {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+
 @keyframes effectFlash {
   0% {
     opacity: 0;
@@ -1556,6 +1809,7 @@ dd {
   }
 
   .hero,
+  .home-stage,
   .page-shell.split,
   .choice-grid,
   .flow-list,
@@ -1563,6 +1817,29 @@ dd {
   .donation-hero,
   .donation-grid {
     grid-template-columns: 1fr;
+  }
+
+  .home-stage {
+    min-height: auto;
+    padding-top: 22px;
+  }
+
+  .home-copy h1 {
+    font-size: 2.55rem;
+    letter-spacing: 0.02em;
+  }
+
+  .home-oracle {
+    width: min(300px, 84vw);
+    margin: 8px auto 0;
+  }
+
+  .home-ritual-path ol {
+    grid-template-columns: 1fr;
+  }
+
+  .home-ritual-path li {
+    min-height: auto;
   }
 
   .hero,
