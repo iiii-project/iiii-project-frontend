@@ -15,6 +15,7 @@
     "@vitejs/plugin-vue": "^5.2.4",
     "axios": "^1.7.9",
     "pinia": "^2.3.0",
+    "three": "^0.185.1",
     "vite": "^6.0.5",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/three": "^0.185.0",
     "typescript": "^5.7.2"
   }
 }
