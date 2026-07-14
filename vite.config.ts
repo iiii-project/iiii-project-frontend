@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
-const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8003'
+const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://iiibackend.dev-serve.me'
 
 export default defineConfig({
   plugins: [vue()],
@@ -13,7 +13,7 @@ export default defineConfig({
   },
   server: {
     port: 5174,
-    allowedHosts: ['iii.dev-serve.me'],
+    allowedHosts: ['iii.dev-serve.me', 'iii.gdtumn.com'],
     watch: {
       ignored: ['**/.agents/**', '**/.codex/**', '**/.opencode/**']
     },
