@@ -98,12 +98,7 @@
     display:flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter: blur(10px);
     box-shadow: 0 4px 14px rgba(120,90,50,0.15);
   }
-  #btn-quick-divination{
-    position:fixed; top:20px; right:20px; z-index:20; pointer-events:auto;
-    min-height:38px; padding:0 14px; border:1px solid var(--gold-line); border-radius:999px;
-    background:rgba(255,255,255,0.76); color:var(--jiang-hong); font:500 12px/1 "Noto Serif TC",serif;
-    letter-spacing:.12em; cursor:pointer; backdrop-filter:blur(10px); box-shadow:0 4px 14px rgba(120,90,50,.15);
-  }
+  #btn-quick-divination{ display:none; }
   #quick-divination-modal{ position:fixed; inset:0; z-index:98; display:grid; place-items:center; padding:20px; background:rgba(40,28,20,.48); backdrop-filter:blur(7px); pointer-events:auto; }
   .quick-card{ width:min(520px,100%); padding:32px; }
   .quick-card h2{ margin:0; color:var(--ink); font-size:28px; font-weight:600; letter-spacing:.12em; }
@@ -2172,8 +2167,9 @@ const CATEGORY_API_MAP = {
   '考試學業': 'study', '家庭生活': 'family', '綜合運勢': 'other', '求財運': 'wealth',
   '問姻緣': 'love', '拼事業': 'career', '求健康': 'health', '學業功名': 'study'
 };
-const isQuickOnly = new URLSearchParams(window.location.search).get('flow') === 'quick';
-if (isQuickOnly) document.body.classList.add('search-only');
+const requestedQuickFlow = new URLSearchParams(window.location.search).get('flow') === 'quick';
+if (requestedQuickFlow) window.parent.location.replace('/temple-oracle-v17');
+const isQuickOnly = false;
 
 const DivinationApi = (() => {
   const anonymousKey = 'temple-oracle-anonymous-user-id';
@@ -3310,13 +3306,11 @@ if (isQuickOnly) {
     setTimeout(() => { els.loading.style.display = 'none'; }, 600);
   }).catch(err => {
     const permissionDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
-    const message = permissionDenied
-      ? '鏡頭權限已被拒絕，已為你切換至查詢求籤。'
-      : '無法啟動鏡頭，已為你切換至查詢求籤。';
-    els.loading.style.display = 'none';
-    showToast(message);
-    sessionStorage.setItem('temple-oracle-camera-error', message);
-    window.parent.location.assign('/temple-oracle-v17?flow=quick');
+    els.loading.innerHTML = `
+      <div class="glass-card px-10 py-8 text-center">
+        <p class="gold-text text-lg font-normal tracking-widest mb-2">無法啟動攝影機</p>
+        <p class="text-sm opacity-70 font-light">${permissionDenied ? '鏡頭權限已被拒絕，請在瀏覽器設定允許鏡頭後重新整理。' : '請確認鏡頭可用後重新整理頁面。'}</p>
+      </div>`;
     console.error(err);
   });
 }
