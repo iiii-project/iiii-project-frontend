@@ -98,13 +98,6 @@
     display:flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter: blur(10px);
     box-shadow: 0 4px 14px rgba(120,90,50,0.15);
   }
-  #btn-go-home{
-    position:fixed; top:20px; left:68px; z-index:20; pointer-events:auto; width:38px; height:38px; border-radius:50%;
-    border:1px solid var(--gold-line); background: rgba(255,255,255,0.7); color:var(--jiang-hong); font-size:15px;
-    display:flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter: blur(10px);
-    box-shadow: 0 4px 14px rgba(120,90,50,0.15);
-  }
-  #btn-go-home.hidden{ display:none; }
   #btn-return-site-home{
     position:fixed; top:20px; right:136px; z-index:20; pointer-events:auto;
     min-height:38px; padding:0 14px; border:1px solid var(--gold-line); border-radius:999px;
@@ -121,6 +114,7 @@
   .quick-card{ width:min(520px,100%); padding:32px; }
   .quick-card h2{ margin:0; color:var(--ink); font-size:28px; font-weight:600; letter-spacing:.12em; }
   .quick-card p{ color:var(--ink-soft); font-size:13px; line-height:1.75; }
+  .quick-fallback-notice{ margin:14px 0 0; padding:10px 12px; border:1px solid rgba(166,58,58,.34); border-radius:6px; background:rgba(166,58,58,.07); color:var(--jiang-hong) !important; }
   #quick-question{ box-sizing:border-box; width:100%; min-height:108px; resize:vertical; padding:12px; border:1px solid var(--gold-line); border-radius:6px; color:var(--ink); background:rgba(255,255,255,.65); font:400 15px/1.7 "Noto Serif TC",serif; outline:none; }
   #quick-category-grid{ display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
   .quick-category{ padding:8px 12px; border:1px solid var(--gold-line); border-radius:999px; color:var(--ink-soft); background:rgba(255,255,255,.55); font:400 12px/1 "Noto Serif TC",serif; cursor:pointer; }
@@ -752,26 +746,19 @@
     </div>
   </div>
   <button id="btn-help" title="操作說明" aria-label="操作說明">?</button>
-  <button id="btn-go-home" title="返回首頁" aria-label="返回首頁" class="hidden">
-    <svg viewBox="0 0 100 100" width="22" height="22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12,46 Q22,24 34,32 Q50,14 66,32 Q78,24 88,46" />
-      <path d="M18,46 L82,46" />
-      <path d="M28,46 L28,78 M72,46 L72,78" />
-      <path d="M14,78 L86,78" />
-    </svg>
-  </button>
   <button id="btn-return-site-home" type="button">返回首頁</button>
-  <button id="btn-quick-divination" type="button">快速求籤</button>
+  <button id="btn-quick-divination" type="button">查詢求籤</button>
   <div id="quick-divination-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="quick-title">
     <section class="glass-card quick-card">
-      <p class="eyebrow">QUICK DIVINATION</p>
-      <h2 id="quick-title">快速求籤</h2>
+      <p class="eyebrow">SEARCH DIVINATION</p>
+      <h2 id="quick-title">查詢求籤</h2>
       <p>輸入問題並選擇主題，系統會直接抽出一支籤。這次紀錄同樣會傳送到 Django。</p>
+      <p id="quick-fallback-notice" class="quick-fallback-notice hidden" role="alert"></p>
       <textarea id="quick-question" maxlength="300" placeholder="例如：我該接受這份新工作嗎？"></textarea>
       <div id="quick-category-grid" aria-label="求籤主題"></div>
       <div class="quick-actions">
         <button id="btn-quick-cancel" type="button">取消</button>
-        <button id="btn-quick-submit" type="button">直接求籤</button>
+        <button id="btn-quick-submit" type="button">開始查詢</button>
       </div>
     </section>
   </div>
@@ -951,7 +938,6 @@
         <div class="flex gap-3 mt-6 flex-wrap">
           <button id="btn-amulet" class="btn-line">生成專屬平安符</button>
           <button id="btn-restart" class="btn-line">再 求 一 籤</button>
-          <button id="btn-result-home" class="btn-line">回 到 主 頁</button>
           <button id="btn-open-vow" class="btn-line">還　願　小　榜</button>
         </div>
         <div class="flex gap-3 mt-3 flex-wrap" id="share-row">
@@ -1225,10 +1211,10 @@ const els = {
   btnShareLine: document.getElementById('btn-share-line'),
   tutorial: document.getElementById('tutorial-overlay'),
   btnHelp: document.getElementById('btn-help'),
-  btnGoHome: document.getElementById('btn-go-home'),
   btnQuickDivination: document.getElementById('btn-quick-divination'),
   quickModal: document.getElementById('quick-divination-modal'),
   quickQuestion: document.getElementById('quick-question'),
+  quickFallbackNotice: document.getElementById('quick-fallback-notice'),
   quickCategoryGrid: document.getElementById('quick-category-grid'),
   btnQuickCancel: document.getElementById('btn-quick-cancel'),
   btnQuickSubmit: document.getElementById('btn-quick-submit'),
@@ -1276,7 +1262,6 @@ const els = {
   resultPoem: document.getElementById('result-poem'),
   resultExplain: document.getElementById('result-explain'),
   btnRestart: document.getElementById('btn-restart'),
-  btnResultHome: document.getElementById('btn-result-home'),
 
   // ---- v16 新功能模組 ----
   deitySwitch: document.getElementById('deity-switch'),
@@ -2281,7 +2266,6 @@ const UIActions = (() => {
     [els.sceneIncense, els.sceneDraw, els.sceneBwa, els.sceneResult].forEach(s => s.classList.add('hidden'));
     els.resultBg.classList.remove('show','tier-auspicious','tier-neutral','tier-caution');
     AppState.current = name;
-    els.btnGoHome.classList.remove('hidden');
 
     if (name === 'incense'){
       els.sceneIncense.classList.remove('hidden');
@@ -2554,10 +2538,6 @@ const UIActions = (() => {
   }
 
   els.btnRestart.addEventListener('click', () => playInkTransition(() => goHome()));
-  // This HTML is embedded by the Vue route. "Home" must leave the ritual,
-  // not merely reset the internal ritual screen.
-  const returnToSiteHome = () => window.parent.location.assign('/');
-  els.btnResultHome.addEventListener('click', returnToSiteHome);
   els.btnAmulet.addEventListener('click', () => { els.amuletModal.classList.remove('hidden'); });
   els.btnAmuletClose.addEventListener('click', () => { els.amuletModal.classList.add('hidden'); });
 
@@ -2771,7 +2751,6 @@ const UIActions = (() => {
     els.historyModal.classList.add('hidden');
     els.chatModal.classList.add('hidden');
     els.sceneHome.classList.remove('hidden');
-    els.btnGoHome.classList.add('hidden');
     AppState.current = 'home';
     AppState.bwaTossing = false;
     GestureEngine.resetIncenseProgress();
@@ -2822,7 +2801,6 @@ const UIActions = (() => {
       AppState.interpretation = null;
       els.sceneHome.classList.add('hidden');
       els.tutorial.classList.remove('hidden');
-      els.btnGoHome.classList.remove('hidden');
     } catch (error) {
       showToast(error.message || '無法建立求籤紀錄，請確認 Django 是否啟動');
     } finally {
@@ -2846,10 +2824,16 @@ const UIActions = (() => {
 
   function closeQuickDivination(){ els.quickModal.classList.add('hidden'); }
 
-  els.btnQuickDivination.addEventListener('click', () => {
+  window.openSearchDivination = (fallbackMessage = '') => {
     els.quickQuestion.value = AppState.userQuery.question || '';
+    els.quickFallbackNotice.textContent = fallbackMessage;
+    els.quickFallbackNotice.classList.toggle('hidden', !fallbackMessage);
     els.quickModal.classList.remove('hidden');
     els.quickQuestion.focus();
+  };
+
+  els.btnQuickDivination.addEventListener('click', () => {
+    window.openSearchDivination();
   });
   els.btnQuickCancel.addEventListener('click', closeQuickDivination);
   els.quickModal.addEventListener('click', event => { if (event.target === els.quickModal) closeQuickDivination(); });
@@ -2858,7 +2842,7 @@ const UIActions = (() => {
     if (question.length < 2){ showToast('請先輸入至少兩個字的問題'); return; }
     try {
       els.btnQuickSubmit.disabled = true;
-      els.btnQuickSubmit.textContent = '抽籤中…';
+      els.btnQuickSubmit.textContent = '查詢中…';
       AppState.userQuery = { question, category: quickCategory };
       const session = await DivinationApi.create(question, quickCategory, 'click');
       AppState.sessionId = session.session_id;
@@ -2867,14 +2851,13 @@ const UIActions = (() => {
       AppState.currentFortune = await DivinationApi.draw(session.session_id);
       closeQuickDivination();
       els.sceneHome.classList.add('hidden');
-      els.btnGoHome.classList.remove('hidden');
       els.btnClickBwa.textContent = '擲　筊';
       UIActions.showScene('bwa');
     } catch (error) {
-      showToast(error.message || '無法完成快速求籤，請確認 Django 是否啟動');
+      showToast(error.message || '無法完成查詢求籤，請確認 Django 是否啟動');
     } finally {
       els.btnQuickSubmit.disabled = false;
-      els.btnQuickSubmit.textContent = '直接求籤';
+      els.btnQuickSubmit.textContent = '開始查詢';
     }
   });
 
@@ -2884,8 +2867,7 @@ const UIActions = (() => {
 
   if (isQuickOnly) {
     els.btnHomeStart.hidden = true;
-    els.quickModal.classList.remove('hidden');
-    requestAnimationFrame(() => els.quickQuestion.focus());
+    window.openSearchDivination();
   }
 
   // 籤號查詢只讀取後端公開籤詩，避免以前端示範資料決定結果。
@@ -2910,7 +2892,6 @@ const UIActions = (() => {
       AppState.currentFortune = await DivinationApi.getFortune(n);
       AppState.interpretation = null;
       els.sceneHome.classList.add('hidden');
-      els.btnGoHome.classList.remove('hidden');
       showDivinationLoading(() => { UIActions.showResultScene(); });
     } catch (error) {
       showToast(error.message || '找不到此籤號');
@@ -3280,7 +3261,6 @@ els.btnHelp.addEventListener('click', () => {
   AppState.tutorialPeek = els.sceneHome.classList.contains('hidden');
   els.tutorial.classList.remove('hidden');
 });
-els.btnGoHome.addEventListener('click', () => window.parent.location.assign('/'));
 document.getElementById('btn-return-site-home').addEventListener('click', () => window.parent.location.assign('/'));
 
 function resizeOutputCanvas(){ els.outputCanvas.width = window.innerWidth; els.outputCanvas.height = window.innerHeight; }
@@ -3323,11 +3303,13 @@ if (isQuickOnly) {
   camera.start().then(() => {
     setTimeout(() => { els.loading.style.display = 'none'; }, 600);
   }).catch(err => {
-    els.loading.innerHTML = `
-      <div class="glass-card px-10 py-8 text-center">
-        <p class="gold-text text-lg font-normal tracking-widest mb-2">無法啟動攝影機</p>
-        <p class="text-sm opacity-70 font-light">請確認已允許瀏覽器存取鏡頭權限，或改用免鏡頭快速求籤。</p>
-      </div>`;
+    const permissionDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+    const message = permissionDenied
+      ? '鏡頭權限已被拒絕，已為你切換至查詢求籤。'
+      : '無法啟動鏡頭，已為你切換至查詢求籤。';
+    els.loading.style.display = 'none';
+    showToast(message);
+    window.openSearchDivination?.(message);
     console.error(err);
   });
 }
