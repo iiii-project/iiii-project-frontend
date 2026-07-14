@@ -32,6 +32,7 @@ export async function createDivination(payload: {
   fortune_set_code: string
   question: string
   category: Category
+  categories: Category[]
   interaction_mode: InteractionMode
   anonymous_user_id: string
 }): Promise<DivinationSession> {
@@ -67,6 +68,24 @@ export async function interpretFortune(sessionId: string): Promise<DivinationSes
   return unwrap(data)
 }
 
+export async function interpretFortuneWithContext(
+  sessionId: string,
+  payload: {
+    question: string
+    category: Category
+    categories: Category[]
+    divination_result?: Record<string, unknown>
+  }
+): Promise<DivinationSession & { interpretation: Interpretation }> {
+  const { data } = await apiClient.post<
+    ApiResponse<DivinationSession & { interpretation: Interpretation }> | (DivinationSession & { interpretation: Interpretation })
+  >(
+    `/divinations/${sessionId}/interpret/`,
+    payload
+  )
+  return unwrap(data)
+}
+
 export async function sendChat(sessionId: string, message: string): Promise<{ reply: string; remaining_messages: number }> {
   const { data } = await apiClient.post<
     ApiResponse<{ reply: string; remaining_messages: number }> | { reply: string; remaining_messages: number }
@@ -77,9 +96,9 @@ export async function sendChat(sessionId: string, message: string): Promise<{ re
   return unwrap(data)
 }
 
-export async function listHistory(anonymousUserId: string): Promise<HistoryItem[]> {
+export async function listHistory(anonymousUserId?: string): Promise<HistoryItem[]> {
   const { data } = await apiClient.get<ApiResponse<ListResponse<HistoryItem>> | ListResponse<HistoryItem>>('/divinations/', {
-    params: { anonymous_user_id: anonymousUserId }
+    params: anonymousUserId ? { anonymous_user_id: anonymousUserId } : undefined
   })
   return unwrap(data).items
 }

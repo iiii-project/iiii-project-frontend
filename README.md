@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Vite 會將 `/api` proxy 到 `http://127.0.0.1:8000`。
+Vite 會將 `/api` proxy 到 `VITE_API_PROXY_TARGET`，未設定時預設是 `http://127.0.0.1:8000`。
 
 ## 主要流程
 

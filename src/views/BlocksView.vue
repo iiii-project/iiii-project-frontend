@@ -72,6 +72,7 @@ async function redraw() {
       fortune_set_code: divination.fortuneSet.code,
       question: divination.question,
       category: divination.category,
+      categories: divination.categories?.length ? divination.categories : [divination.category],
       interaction_mode: divination.interactionMode,
       anonymous_user_id: history.anonymousUserId
     })

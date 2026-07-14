@@ -63,6 +63,9 @@ export interface DivinationSession {
   status: DivinationStatus
   fortune_set: FortuneSet
   fortune?: Fortune | null
+  question?: string
+  category?: Category
+  categories?: Category[]
   confirmed?: boolean
   interpretation?: Interpretation | null
 }
@@ -70,6 +73,7 @@ export interface DivinationSession {
 export interface HistoryItem extends DivinationSession {
   question: string
   category: Category
+  categories?: Category[]
   created_at?: string
 }
 

@@ -34,6 +34,15 @@ body {
   font-weight: 300;
 }
 
+body.is-immersive-route {
+  background: #fbf9f5;
+  color: #3a2c22;
+}
+
+body.is-immersive-route::before {
+  display: none;
+}
+
 body::before {
   content: "";
   position: fixed;
@@ -161,6 +170,13 @@ main {
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
   padding: 34px 0 64px;
+}
+
+main.immersive-main {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 .page-fade-enter-active,

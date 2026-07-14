@@ -6,6 +6,14 @@ export const apiClient = axios.create({
   timeout: 120000
 })
 
+apiClient.interceptors.request.use((config) => {
+  const accessToken = localStorage.getItem('ai-fortune-access-token')
+  if (accessToken) {
+    config.headers.Authorization = `Bearer ${accessToken}`
+  }
+  return config
+})
+
 export function toUserMessage(error: unknown): string {
   if (!axios.isAxiosError(error)) return '操作失敗，請稍後再試。'
 

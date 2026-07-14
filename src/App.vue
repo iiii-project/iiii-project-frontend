@@ -1,6 +1,16 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { RITUAL_EFFECT_MS, type RitualEffectKind } from '@/utils/ritualEffect'
+
+const route = useRoute()
+const isImmersiveRoute = computed(() => route.meta.immersive === true)
+
+watch(
+  isImmersiveRoute,
+  (isImmersive) => document.body.classList.toggle('is-immersive-route', isImmersive),
+  { immediate: true }
+)
 
 const effectKind = ref<RitualEffectKind>('draw')
 const effectText = ref('')
@@ -23,34 +33,37 @@ window.addEventListener('ritual-effect', onRitualEffect)
 onBeforeUnmount(() => {
   window.clearTimeout(effectTimer)
   window.removeEventListener('ritual-effect', onRitualEffect)
+  document.body.classList.remove('is-immersive-route')
 })
 </script>
 
 <template>
-  <div class="temple-backdrop" aria-hidden="true">
-    <div class="temple-vignette"></div>
-    <div class="temple-cloud temple-cloud-left"></div>
-    <div class="temple-cloud temple-cloud-right"></div>
-    <div class="temple-dragon temple-dragon-left"></div>
-    <div class="temple-dragon temple-dragon-right"></div>
-  </div>
-  <header class="app-header">
-    <RouterLink class="brand" to="/">AI 求籤互動系統</RouterLink>
-    <nav>
-      <RouterLink to="/question">求籤</RouterLink>
-      <RouterLink to="/donation">捐款</RouterLink>
-      <RouterLink to="/history">歷史</RouterLink>
-    </nav>
-  </header>
-  <main>
+  <template v-if="!isImmersiveRoute">
+    <div class="temple-backdrop" aria-hidden="true">
+      <div class="temple-vignette"></div>
+      <div class="temple-cloud temple-cloud-left"></div>
+      <div class="temple-cloud temple-cloud-right"></div>
+      <div class="temple-dragon temple-dragon-left"></div>
+      <div class="temple-dragon temple-dragon-right"></div>
+    </div>
+    <header class="app-header">
+      <RouterLink class="brand" to="/">AI 求籤互動系統</RouterLink>
+      <nav>
+        <RouterLink to="/temple-oracle-v17">求籤</RouterLink>
+        <RouterLink to="/donation">捐款</RouterLink>
+        <RouterLink to="/history">歷史</RouterLink>
+      </nav>
+    </header>
+  </template>
+  <main :class="{ 'immersive-main': isImmersiveRoute }">
     <RouterView v-slot="{ Component }">
-      <Transition name="page-fade" mode="out-in">
+      <Transition :name="isImmersiveRoute ? '' : 'page-fade'" mode="out-in">
         <component :is="Component" />
       </Transition>
     </RouterView>
   </main>
   <Transition name="ritual-gate">
-    <div v-if="showingEffect" class="ritual-effect" :class="`is-${effectKind}`" aria-hidden="true">
+    <div v-if="showingEffect && !isImmersiveRoute" class="ritual-effect" :class="`is-${effectKind}`" aria-hidden="true">
       <div class="effect-flash"></div>
       <div class="effect-ring"></div>
       <div class="effect-rays"></div>

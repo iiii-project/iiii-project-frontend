@@ -3,16 +3,20 @@ import { createRouter, createWebHistory } from 'vue-router'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
-    { path: '/mode', name: 'mode', component: () => import('@/views/ModeSelectView.vue') },
-    { path: '/question', name: 'question', component: () => import('@/views/QuestionView.vue') },
-    { path: '/prayer', name: 'prayer', component: () => import('@/views/PrayerView.vue') },
-    { path: '/draw', name: 'draw', component: () => import('@/views/DrawView.vue') },
-    { path: '/fortune', name: 'fortune', component: () => import('@/views/FortuneView.vue') },
-    { path: '/blocks', name: 'blocks', component: () => import('@/views/BlocksView.vue') },
-    { path: '/interpretation', name: 'interpretation', component: () => import('@/views/InterpretationView.vue') },
-    { path: '/donation', name: 'donation', component: () => import('@/views/DonationView.vue') },
-    { path: '/history', name: 'history', component: () => import('@/views/HistoryView.vue') }
+    { path: '/', name: 'home', component: () => import('@/views/TempleLandingPage.vue'), meta: { immersive: true } },
+    // Preserve bookmarked legacy URLs without ever reopening the retired dark flow.
+    { path: '/mode', redirect: '/temple-oracle-v17' },
+    { path: '/question', redirect: '/temple-oracle-v17' },
+    { path: '/prayer', redirect: '/temple-oracle-v17' },
+    { path: '/draw', redirect: '/temple-oracle-v17' },
+    { path: '/fortune', redirect: '/temple-oracle-v17' },
+    { path: '/blocks', redirect: '/temple-oracle-v17' },
+    { path: '/interpretation', redirect: '/temple-oracle-v17' },
+    { path: '/donation', name: 'donation', component: () => import('@/views/DonationView.vue'), meta: { immersive: true } },
+    { path: '/temple-map', name: 'temple-map', component: () => import('@/views/TempleMapView.vue'), meta: { immersive: true } },
+    { path: '/history', name: 'history', component: () => import('@/views/HistoryView.vue'), meta: { immersive: true } },
+    { path: '/login', redirect: '/history' },
+    { path: '/temple-oracle-v17', name: 'temple-oracle-v17', component: () => import('@/views/TempleOracleV17Page.vue'), meta: { immersive: true } }
   ]
 })
 

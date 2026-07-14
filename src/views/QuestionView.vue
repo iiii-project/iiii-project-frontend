@@ -52,6 +52,7 @@ async function submitQuestion() {
       fortune_set_code: divination.fortuneSet.code,
       question: trimmedQuestion.value,
       category: divination.category,
+      categories: [divination.category],
       interaction_mode: divination.interactionMode,
       anonymous_user_id: history.anonymousUserId
     })

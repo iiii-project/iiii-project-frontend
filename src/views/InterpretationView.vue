@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { interpretFortune, sendChat } from '@/api/divinationApi'
+import { interpretFortuneWithContext, sendChat } from '@/api/divinationApi'
 import { toUserMessage } from '@/api/client'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import StatusMessage from '@/components/common/StatusMessage.vue'
@@ -24,7 +24,20 @@ async function loadInterpretation() {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const session = await interpretFortune(divination.sessionId)
+    const session = await interpretFortuneWithContext(divination.sessionId, {
+      question: divination.question,
+      category: divination.category,
+      categories: divination.categories?.length ? divination.categories : [divination.category],
+      divination_result: divination.fortune
+        ? {
+            number: divination.fortune.number,
+            title: divination.fortune.title,
+            ganzhi: divination.fortune.ganzhi,
+            fortune_level: divination.fortune.fortune_level,
+            poem: divination.fortune.poem
+          }
+        : undefined
+    })
     divination.status = session.status
     divination.interpretation = session.interpretation
   } catch (error) {
