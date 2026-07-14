@@ -36,7 +36,8 @@ export async function createDivination(payload: {
   interaction_mode: InteractionMode
   anonymous_user_id: string
 }): Promise<DivinationSession> {
-  const { data } = await apiClient.post<ApiResponse<DivinationSession> | DivinationSession>('/divinations/', payload)
+  const { category, ...requestBody } = payload
+  const { data } = await apiClient.post<ApiResponse<DivinationSession> | DivinationSession>('/divinations/', requestBody)
   return unwrap(data)
 }
 
@@ -77,11 +78,12 @@ export async function interpretFortuneWithContext(
     divination_result?: Record<string, unknown>
   }
 ): Promise<DivinationSession & { interpretation: Interpretation }> {
+  const { category, ...requestBody } = payload
   const { data } = await apiClient.post<
     ApiResponse<DivinationSession & { interpretation: Interpretation }> | (DivinationSession & { interpretation: Interpretation })
   >(
     `/divinations/${sessionId}/interpret/`,
-    payload
+    requestBody
   )
   return unwrap(data)
 }

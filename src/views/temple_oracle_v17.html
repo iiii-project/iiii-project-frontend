@@ -903,6 +903,7 @@
       <h2 class="gold-text text-xl md:text-2xl font-normal tracking-[0.5em] mt-2">擲　筊　請　示</h2>
       <div class="hairline mt-4"></div>
       <p id="bwa-hint" class="text-[13px] md:text-sm mt-4 opacity-80 tracking-[0.15em] font-light">單手微握，捧起筊杯</p>
+      <button id="btn-click-bwa" class="btn-line mt-4 hidden" type="button">擲　筊</button>
     </div>
 
     <!-- 筊杯以 Three.js 即時 3D 渲染（真實光照 + 陰影 + PBR 材質），取代先前的 2D 卡片翻轉 -->
@@ -1011,8 +1012,8 @@ const CONFIG = {
   CATEGORIES: ['工作事業', '感情婚姻', '財運投資', '健康平安', '考試學業', '家庭生活', '綜合運勢'],
 };
 
-/* 六十甲子籤 Demo 資料（前五首：甲子／乙丑／丙寅／丁卯／戊辰） */
-const FORTUNES = [
+/* Retained only as an archived visual prototype. Live fortune data comes from the API. */
+/* const FORTUNES = [
   { no: 1, ganzhi: "甲子", grade: "上　上", poem: "旭日初昇照遠山\n雲開霧散路漸寬\n心誠所向終有得\n莫因暫困意闌珊",
     explain: "此籤主「漸入佳境」。眼前雖有阻礙，然如晨霧終將散去，只要堅定初心、不因一時受挫而灰心，前路將逐漸明朗，所求之事可望順遂。",
     modern: "現階段的卡關只是暫時的，別因為一點小挫折就想放棄。手上的計畫可以繼續推進，方向是對的，耐心撐過去就會看到成果。" },
@@ -1193,7 +1194,7 @@ const FORTUNES = [
   { no: 60, ganzhi: "癸亥", grade: "中下", poem: "暗夜行路少星光\n步履蹣跚費思量\n且點心燈照前路\n步步謹慎保安康",
     explain: "此籤示眼前處境較為艱難、方向不明，宜格外謹慎小心行事，凡事多加考量後再行動，方能平安渡過此階段。",
     modern: "看不清方向的時候不要冒進，把步伐放慢、多確認幾次，安全比速度重要。" },
-];
+]; */
 
 const els = {
   video: document.getElementById('input_video'),
@@ -1224,6 +1225,7 @@ const els = {
   quickCategoryGrid: document.getElementById('quick-category-grid'),
   btnQuickCancel: document.getElementById('btn-quick-cancel'),
   btnQuickSubmit: document.getElementById('btn-quick-submit'),
+  btnClickBwa: document.getElementById('btn-click-bwa'),
   btnTutorialStart: document.getElementById('btn-tutorial-start'),
   flash: document.getElementById('flash'),
   darken: document.getElementById('darken'),
@@ -2179,6 +2181,7 @@ const CATEGORY_API_MAP = {
   '考試學業': 'study', '家庭生活': 'family', '綜合運勢': 'other', '求財運': 'wealth',
   '問姻緣': 'love', '拼事業': 'career', '求健康': 'health', '學業功名': 'study'
 };
+const isQuickOnly = new URLSearchParams(window.location.search).get('flow') === 'quick';
 
 const DivinationApi = (() => {
   const anonymousKey = 'temple-oracle-anonymous-user-id';
@@ -2208,18 +2211,28 @@ const DivinationApi = (() => {
     return {
       no: fortune.number,
       ganzhi: fortune.ganzhi || '',
-      grade: fortune.fortune_level || '中平',
+      grade: fortune.fortune_level || '',
       poem: fortune.poem,
-      explain: fortune.explanation || fortune.translation || '籤詩解說準備中。',
-      modern: fortune.translation || fortune.explanation || '請以平穩的心情看待這次求籤結果。'
+      explain: fortune.translation || '',
+      modern: fortune.general_meaning || ''
     };
+  }
+
+  let fortuneSetCode;
+  async function getFortuneSetCode(){
+    if (fortuneSetCode) return fortuneSetCode;
+    const { items } = await request('/fortune-sets/');
+    const fortuneSet = items.find(item => item.is_default) || items[0];
+    if (!fortuneSet) throw new Error('目前沒有可用的籤系');
+    fortuneSetCode = fortuneSet.code;
+    return fortuneSetCode;
   }
 
   async function create(question, category, interactionMode = 'motion'){
     return request('/divinations/', {
       method: 'POST',
       body: JSON.stringify({
-        fortune_set_code: 'SIXTY_JIAZI', question, category: CATEGORY_API_MAP[category] || 'other',
+        question,
         categories: [CATEGORY_API_MAP[category] || 'other'], interaction_mode: interactionMode, anonymous_user_id: anonymousUserId()
       })
     });
@@ -2229,12 +2242,22 @@ const DivinationApi = (() => {
     create,
     prayer: (id) => request(`/divinations/${id}/prayer-complete/`, { method: 'POST' }),
     draw: async (id) => mapFortune((await request(`/divinations/${id}/draw/`, { method: 'POST' })).fortune),
-    quickResult: async (id) => mapFortune((await request(`/divinations/${id}/quick-result/`, { method: 'POST' })).fortune),
-    blocks: (id) => request(`/divinations/${id}/blocks/`, { method: 'POST' })
+    blocks: (id) => request(`/divinations/${id}/blocks/`, { method: 'POST' }),
+    interpret: async (id) => {
+      const session = await request(`/divinations/${id}/interpret/`, { method: 'POST' });
+      return { ...session, fortune: mapFortune(session.fortune) };
+    },
+    getFortune: async (number) => mapFortune(await request(`/fortune-sets/${await getFortuneSetCode()}/fortunes/${number}/`)),
+    chat: (id) => request(`/divinations/${id}/chat/`),
+    sendChat: (id, message) => request(`/divinations/${id}/chat/`, { method: 'POST', body: JSON.stringify({ message }) }),
+    history: async () => {
+      const response = await request(`/divinations/?anonymous_user_id=${encodeURIComponent(anonymousUserId())}`);
+      return response.items || response;
+    }
   };
 })();
 
-const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, currentFortune:null, tutorialPeek:false, sessionId:null, userQuery:{ category:'綜合運勢', question:'' } };
+const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, userQuery:{ category:'綜合運勢', question:'' } };
 
 // 提早解析網址參數（分享連結可能帶入的籤號/分類），確保後續首頁初始化時就能讀到
 (function parseShareParamsEarly(){
@@ -2271,9 +2294,12 @@ const UIActions = (() => {
     if (name === 'bwa'){
       els.sceneBwa.classList.remove('hidden');
       els.bwaResultPanel.classList.add('hidden');
-      els.bwaHint.textContent = '單手微握，捧起筊杯';
-      resetBwaVisual();
-      GestureEngine.resetBwaTracking();
+      els.btnClickBwa.classList.toggle('hidden', !isQuickOnly);
+      els.bwaHint.textContent = isQuickOnly ? '請點擊擲筊，向神明請示此籤。' : '單手微握，捧起筊杯';
+      if (!isQuickOnly) {
+        resetBwaVisual();
+        GestureEngine.resetBwaTracking();
+      }
       AppState.bwaTossing = false;
     }
     if (name === 'result'){ els.sceneResult.classList.remove('hidden'); }
@@ -2314,6 +2340,7 @@ const UIActions = (() => {
   }
 
   function resetBwaVisual(){
+    if (isQuickOnly) return;
     els.outputCanvas.classList.remove('dof-blur');
     els.arDecoration.classList.remove('dof-blur');
     BwaScene.resetIdle();
@@ -2338,7 +2365,7 @@ const UIActions = (() => {
       const result = await DivinationApi.blocks(AppState.sessionId);
       const sides = result.result === 'sheng' ? ['flat', 'domed'] : result.result === 'xiao' ? ['flat', 'flat'] : ['domed', 'domed'];
       const [coinA, coinB] = sides;
-      AppState.pendingBwaResult = { coinA, coinB };
+      AppState.pendingBwaResult = { coinA, coinB, result };
       BwaScene.toss(coinA, coinB,
         () => { playLandingSounds(coinA, coinB); if (navigator.vibrate) navigator.vibrate(20); },
         () => { setTimeout(() => { resolveBwaResult(); }, 250); }
@@ -2350,8 +2377,49 @@ const UIActions = (() => {
     }
   }
 
-  function resolveBwaResult(){
-    const { coinA, coinB } = AppState.pendingBwaResult || {coinA:'flat', coinB:'domed'};
+  async function castClickBwa(){
+    if (AppState.bwaTossing || !AppState.sessionId) return;
+
+    AppState.bwaTossing = true;
+    els.btnClickBwa.disabled = true;
+    els.bwaHint.textContent = '正在請示…';
+    try {
+      const result = await DivinationApi.blocks(AppState.sessionId);
+      els.bwaResultPanel.classList.remove('hidden');
+
+      if (result.confirmed) {
+        els.bwaResultTitle.textContent = '三次聖筊 · 神明允准';
+        els.bwaResultDesc.textContent = '已連續取得三次聖筊，正在取得解籤內容。';
+        try {
+          const session = await DivinationApi.interpret(AppState.sessionId);
+          AppState.currentFortune = session.fortune;
+          AppState.interpretation = session.interpretation;
+        } catch (error) {
+          showToast(error.message || 'AI 解籤暫時無法使用，先為你顯示籤詩內容');
+        }
+        showResultScene();
+      } else {
+        if (result.result === 'sheng') {
+          els.bwaResultTitle.textContent = `第 ${result.attempt_number} 次聖筊`;
+          els.bwaResultDesc.textContent = `請再連續取得 ${result.remaining_attempts} 次聖筊。`;
+          els.bwaHint.textContent = '請再次點擊擲筊。';
+        } else {
+          els.bwaResultTitle.textContent = `${result.result_name} · 重新抽籤`;
+          els.bwaResultDesc.textContent = '本輪未能連續取得聖筊，正在重新抽出一支籤。';
+          AppState.currentFortune = await DivinationApi.draw(AppState.sessionId);
+          els.bwaHint.textContent = '已抽出新籤，請重新開始擲筊。';
+        }
+      }
+    } catch (error) {
+      showToast(error.message || '無法完成擲筊，請再試一次');
+    } finally {
+      AppState.bwaTossing = false;
+      els.btnClickBwa.disabled = false;
+    }
+  }
+
+  async function resolveBwaResult(){
+    const { coinA, coinB, result } = AppState.pendingBwaResult || {coinA:'flat', coinB:'domed'};
     let type;
     if (coinA !== coinB) type='sheng'; else if (coinA==='flat') type='xiao'; else type='yin';
 
@@ -2361,19 +2429,26 @@ const UIActions = (() => {
     els.bwaResultPanel.classList.add('reveal');
     AppState.bwaTossing = false;
 
-    if (type==='sheng'){
+    if (result?.confirmed){
       const pos = BwaScene.getScreenPos();
       ParticleSystem.burst(pos.x, pos.y);
       spawnLightBurst(pos.x, pos.y);
       flashOnce();
-      els.bwaResultTitle.textContent = '聖筊 · 神明賜籤';
-      els.bwaResultDesc.textContent = '一平一凸，神明允准，賜籤生效。';
+      els.bwaResultTitle.textContent = '三次聖筊 · 神明允准';
+      els.bwaResultDesc.textContent = '已連續取得三次聖筊，神明允准解籤。';
       if (typeof SincereStreak !== 'undefined') SincereStreak.increment();
       // 結果「定格放大」停留 1.8 秒，讓使用者看清楚判定結果，再進入墨染過場
-      setTimeout(() => playInkTransition(() => showResultScene()), 1800);
-    } else if (type==='xiao'){
-      els.bwaResultTitle.textContent = '笑筊 · 請重新誠心默念';
-      els.bwaResultDesc.textContent = '兩面皆平，神明含笑不語，請再誠心默念問題後重新捧筊拋擲。';
+      try {
+        const session = await DivinationApi.interpret(AppState.sessionId);
+        AppState.currentFortune = session.fortune;
+        AppState.interpretation = session.interpretation;
+        setTimeout(() => playInkTransition(() => showResultScene()), 1800);
+      } catch (error) {
+        showToast(error.message || '無法取得 AI 解籤，請稍後重試');
+      }
+    } else if (result?.result === 'sheng'){
+      els.bwaResultTitle.textContent = `第 ${result.attempt_number} 次聖筊`;
+      els.bwaResultDesc.textContent = `請再連續取得 ${result.remaining_attempts} 次聖筊。`;
       setTimeout(() => {
         els.bwaResultPanel.classList.add('hidden');
         resetBwaVisual();
@@ -2381,10 +2456,16 @@ const UIActions = (() => {
         els.bwaHint.textContent = '單手微握，捧起筊杯';
       }, 2200);
     } else {
-      els.bwaResultTitle.textContent = '陰筊 · 神明不賜此籤';
-      els.bwaResultDesc.textContent = '兩面皆凸，神明否定此籤，請重新調整問題後再搖籤。';
+      els.bwaResultTitle.textContent = `${result?.result_name || '非聖筊'} · 重新抽籤`;
+      els.bwaResultDesc.textContent = '本輪未能連續取得聖筊，正在重新抽出一支籤。';
       darken(true);
-      setTimeout(() => { darken(false); playInkTransition(() => showScene('draw')); }, 2000);
+      DivinationApi.draw(AppState.sessionId)
+        .then((fortune) => { AppState.currentFortune = fortune; })
+        .then(() => setTimeout(() => { darken(false); playInkTransition(() => showScene('draw')); }, 2000))
+        .catch((error) => {
+          darken(false);
+          showToast(error.message || '無法重新抽籤，請再試一次');
+        });
     }
   }
 
@@ -2427,18 +2508,6 @@ const UIActions = (() => {
     }, speed);
   }
 
-  // 依使用者選定的問事分類，為「現代白話建議」加上客製化的情境開場白
-  // v16：解籤文案改為「陪你一起想、共同面對」的溫暖傾聽語氣，而非單向論斷式開場白
-  function buildCategoryAdvice(f, category){
-    const lead = {
-      '工作事業':'讓我陪你一起想想事業這件事——', '感情婚姻':'關於感情，我們一起靜下心來看看——', '財運投資':'從財運的角度，我陪你一起分析——',
-      '健康平安':'關於健康，我在這裡陪著你——', '考試學業':'學業這條路，我陪你一起面對——', '家庭生活':'關於家裡的事，我們一起想想——',
-      '綜合運勢':'', '求財運':'從財運的角度，我陪你一起分析——', '問姻緣':'關於姻緣，我們一起靜下心來看看——', '拼事業':'讓我陪你一起想想事業這件事——',
-      '求健康':'關於健康，我在這裡陪著你——', '學業功名':'學業這條路，我陪你一起面對——',
-    }[category] || '';
-    return lead + (f.modern || f.explain);
-  }
-
   // v16：健康平安／感情婚姻等高敏感隱私類別清單，供分享按鈕收斂與文案柔化判斷使用
   const SENSITIVE_CATEGORIES = ['健康平安', '感情婚姻', '求健康', '問姻緣'];
 
@@ -2458,22 +2527,23 @@ const UIActions = (() => {
   }
 
   function showResultScene(){
-    const f = AppState.currentFortune || FORTUNES[0];
+    const f = AppState.currentFortune;
+    if (!f) { showToast('尚未取得後端籤詩結果'); return; }
     const q = AppState.userQuery || {};
+    const interpretation = AppState.interpretation;
     applySensitiveUX(q.category);
     els.resultRecap.textContent = q.question ? `你所問的：${q.category} ·「${q.question}」` : `你所問的：${q.category}`;
     els.resultNumber.textContent = `第　${f.no}　首`;
     els.resultGanzhi.textContent = `【${f.ganzhi}籤】`;
     els.resultGrade.textContent = f.grade;
     renderCalligraphyPoem(f.poem);
-    els.resultExplain.textContent = f.explain;
-    typewriter(els.resultModern, buildCategoryAdvice(f, q.category));
+    els.resultExplain.textContent = interpretation?.overall_meaning || f.explain;
+    typewriter(els.resultModern, interpretation?.relation_to_question || f.modern);
     const tier = gradeTier(f.grade);
     els.resultBg.classList.add('show', tier);
     showScene('result');
     generateAmulet(f);
     AudioEngine.resultChime(tier);
-    if (typeof FortuneHistory !== 'undefined') FortuneHistory.record(f, q);
   }
 
   els.btnRestart.addEventListener('click', () => playInkTransition(() => goHome()));
@@ -2701,7 +2771,7 @@ const UIActions = (() => {
     if (typeof ContinueChat !== 'undefined') ContinueChat.hideEntry();
   }
 
-  return { showScene, completeIncense, completeDraw, tossBwa, showResultScene, goHome };
+  return { showScene, completeIncense, completeDraw, tossBwa, castClickBwa, showResultScene, goHome };
 })();
 
 /* =========================================================================
@@ -2739,6 +2809,7 @@ const UIActions = (() => {
       els.btnHomeStart.disabled = true;
       const session = await DivinationApi.create(AppState.userQuery.question, AppState.userQuery.category);
       AppState.sessionId = session.session_id;
+      AppState.interpretation = null;
       els.sceneHome.classList.add('hidden');
       els.tutorial.classList.remove('hidden');
       els.btnGoHome.classList.remove('hidden');
@@ -2781,11 +2852,14 @@ const UIActions = (() => {
       AppState.userQuery = { question, category: quickCategory };
       const session = await DivinationApi.create(question, quickCategory, 'click');
       AppState.sessionId = session.session_id;
-      AppState.currentFortune = await DivinationApi.quickResult(session.session_id);
+      AppState.interpretation = null;
+      await DivinationApi.prayer(session.session_id);
+      AppState.currentFortune = await DivinationApi.draw(session.session_id);
       closeQuickDivination();
       els.sceneHome.classList.add('hidden');
       els.btnGoHome.classList.remove('hidden');
-      showDivinationLoading(() => UIActions.showResultScene());
+      els.btnClickBwa.textContent = '擲　筊';
+      UIActions.showScene('bwa');
     } catch (error) {
       showToast(error.message || '無法完成快速求籤，請確認 Django 是否啟動');
     } finally {
@@ -2794,39 +2868,43 @@ const UIActions = (() => {
     }
   });
 
-  // ============================================================
-  // 籤號輸入模組：支援直接輸入 1-60 的籤號（本系統六十甲子籤資料庫實際範圍），
-  // 並內建防錯驗證（非數字、超出範圍、空白皆會提示錯誤，不會讓程式崩潰）。
-  // ============================================================
+  els.btnClickBwa.addEventListener('click', () => {
+    UIActions.castClickBwa();
+  });
+
+  if (isQuickOnly) {
+    els.btnHomeStart.hidden = true;
+    els.quickModal.classList.remove('hidden');
+    requestAnimationFrame(() => els.quickQuestion.focus());
+  }
+
+  // 籤號查詢只讀取後端公開籤詩，避免以前端示範資料決定結果。
   function validateManualNo(){
     const raw = els.manualNoInput.value.trim();
     if (raw === ''){ els.manualNoError.textContent = '請輸入籤號'; return null; }
     const n = Number(raw);
     if (!Number.isInteger(n) || Number.isNaN(n)){ els.manualNoError.textContent = '請輸入有效的數字'; return null; }
-    if (n < 1 || n > FORTUNES.length){ els.manualNoError.textContent = `籤號範圍為 1～${FORTUNES.length}`; return null; }
+    if (n < 1){ els.manualNoError.textContent = '請輸入正整數籤號'; return null; }
     els.manualNoError.textContent = '';
     return n;
   }
 
-  els.btnScan.addEventListener('click', () => {
-    els.scanFrame.classList.remove('hidden');
-    setTimeout(() => {
-      els.scanFrame.classList.add('hidden');
-      const randomNo = 1 + Math.floor(Math.random() * FORTUNES.length);
-      els.manualNoInput.value = randomNo;
-      els.manualNoError.textContent = '';
-      if (navigator.vibrate) navigator.vibrate(20);
-    }, 2000);
-  });
+  els.btnScan.addEventListener('click', () => showToast('目前 API 未提供掃描辨識服務，請直接輸入籤號查詢'));
 
-  els.btnManualGo.addEventListener('click', () => {
+  els.btnManualGo.addEventListener('click', async () => {
     const n = validateManualNo();
     if (n === null) return;
-    AppState.userQuery.question = els.homeQuestion.value.trim();
-    AppState.currentFortune = FORTUNES.find(f => f.no === n) || FORTUNES[0];
-    els.sceneHome.classList.add('hidden');
-    els.btnGoHome.classList.remove('hidden');
-    showDivinationLoading(() => { UIActions.showResultScene(); });
+    try {
+      AppState.userQuery.question = els.homeQuestion.value.trim();
+      AppState.sessionId = null;
+      AppState.currentFortune = await DivinationApi.getFortune(n);
+      AppState.interpretation = null;
+      els.sceneHome.classList.add('hidden');
+      els.btnGoHome.classList.remove('hidden');
+      showDivinationLoading(() => { UIActions.showResultScene(); });
+    } catch (error) {
+      showToast(error.message || '找不到此籤號');
+    }
   });
 })();
 
@@ -3002,52 +3080,31 @@ const VowLog = (() => {
 })();
 VowLog.init();
 
-// ---- ⑤ 籤詩收藏本：每次求籤（含手勢流程與直接輸入籤號）都會被記錄，僅存 localStorage ----
+// ---- ⑤ 籤詩收藏本：讀取後端保存的匿名或登入使用者求籤紀錄 ----
 const FortuneHistory = (() => {
-  const KEY = 'temple_oracle_fortune_history';
-  function load(){
-    try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e){ return []; }
-  }
-  function save(list){ localStorage.setItem(KEY, JSON.stringify(list)); }
-  function record(f, q){
-    const list = load();
-    const d = new Date();
-    list.push({
-      no: f.no, ganzhi: f.ganzhi, grade: f.grade,
-      category: q.category || '', question: q.question || '',
-      date: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`,
-    });
-    save(list);
-    updateCountBadge();
-  }
-  function updateCountBadge(){
-    const n = load().length;
+  async function load(){ return DivinationApi.history(); }
+  async function updateCountBadge(){
+    const n = (await load()).length;
     if (els.historyCount) els.historyCount.textContent = n;
   }
-  function render(){
-    const list = load();
+  async function render(){
+    const list = await load();
     els.historyList.innerHTML = list.length
       ? list.slice().reverse().map(h =>
-          `<div class="vow-item"><b>第 ${h.no} 首 · ${h.ganzhi}籤（${h.grade}）</b><br>` +
-          `${h.category}${h.question ? '　「'+h.question+'」' : ''}<br>` +
-          `<span style="opacity:0.7;">${h.date}</span></div>`
+          `<div class="vow-item"><b>${h.fortune ? `第 ${h.fortune.number} 首 · ${h.fortune.ganzhi || ''}籤（${h.fortune.fortune_level || ''}）` : '尚未完成的求籤'}</b><br>` +
+          `${h.category || ''}${h.question ? '　「'+h.question+'」' : ''}<br>` +
+          `<span style="opacity:0.7;">${h.created_at || ''}</span></div>`
         ).join('')
       : '<div class="vow-item" style="opacity:0.6;">尚無求籤紀錄，快去求第一支籤吧</div>';
     els.historySincereCount.textContent = (typeof SincereStreak !== 'undefined') ? SincereStreak.getCount() : 0;
   }
   function init(){
-    updateCountBadge();
+    updateCountBadge().catch(() => {});
     els.btnOpenHistory.addEventListener('click', () => { render(); els.historyModal.classList.remove('hidden'); });
     els.btnHistoryClose.addEventListener('click', () => els.historyModal.classList.add('hidden'));
-    els.btnHistoryClear.addEventListener('click', () => {
-      if (!confirm('確定要清空所有籤詩收藏紀錄嗎？此動作無法復原。')) return;
-      save([]);
-      updateCountBadge();
-      render();
-      showToast('已清空籤詩收藏');
-    });
+    els.btnHistoryClear.addEventListener('click', () => showToast('請至求籤紀錄頁逐筆刪除後端紀錄'));
   }
-  return { init, record, load };
+  return { init, load };
 })();
 FortuneHistory.init();
 
@@ -3077,7 +3134,7 @@ const SincereStreak = (() => {
   return { increment, getCount };
 })();
 
-// ---- ⑦ 延續提問聊天入口（QR + Chatbot UI Overlay，純前端介面殼）----
+// ---- ⑦ 延續提問聊天入口：訊息由已完成解籤的 session API 保存與回覆 ----
 const ContinueChat = (() => {
   // 以 Canvas 繪製示意用 QR 樣式圖案（非真實可掃描 QR，僅作視覺意象；
   // 未來如需真實掃碼導轉，建議改接第三方 QR 產生服務或 library）
@@ -3104,10 +3161,15 @@ const ContinueChat = (() => {
     });
     return canvas.toDataURL();
   }
-  function seedChat(){
-    const q = AppState.userQuery || {};
+  async function seedChat(){
     els.chatLog.innerHTML = '';
-    appendBubble('deity', q.question ? `神明聽見了你關於「${q.question}」的提問，還有什麼想繼續問的嗎？` : '還有什麼想繼續請示神明的嗎？');
+    if (!AppState.sessionId) return;
+    try {
+      const { messages } = await DivinationApi.chat(AppState.sessionId);
+      messages.forEach(message => appendBubble(message.role === 'assistant' ? 'deity' : 'user', message.content));
+    } catch (error) {
+      showToast(error.message || '無法載入對話紀錄');
+    }
   }
   function appendBubble(who, text){
     const div = document.createElement('div');
@@ -3116,30 +3178,26 @@ const ContinueChat = (() => {
     els.chatLog.appendChild(div);
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
-  function mockReply(){
-    const replies = [
-      '這件事別急，先把心穩下來，答案通常會在你冷靜下來後浮現。',
-      '神明說，凡事盡人事聽天命，你已經做得很好了。',
-      '可以再想想這個問題背後真正在意的是什麼喔。',
-      '這部分建議您可以再求一支籤，或是找信任的人聊聊。',
-    ];
-    setTimeout(() => appendBubble('deity', replies[Math.floor(Math.random()*replies.length)]), 500);
-  }
   function init(){
     els.continueChatQr.src = drawFakeQr();
     els.continueChatEntry.addEventListener('click', () => { seedChat(); els.chatModal.classList.remove('hidden'); });
     els.btnChatClose.addEventListener('click', () => els.chatModal.classList.add('hidden'));
-    function send(){
+    async function send(){
       const text = els.chatInput.value.trim();
-      if (!text) return;
+      if (!text || !AppState.sessionId) return;
       appendBubble('user', text);
       els.chatInput.value = '';
-      mockReply();
+      try {
+        const { reply } = await DivinationApi.sendChat(AppState.sessionId, text);
+        appendBubble('deity', reply);
+      } catch (error) {
+        showToast(error.message || '無法送出提問');
+      }
     }
     els.btnChatSend.addEventListener('click', send);
     els.chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
   }
-  function showEntry(){ els.continueChatEntry.classList.add('show'); }
+  function showEntry(){ if (AppState.sessionId) els.continueChatEntry.classList.add('show'); }
   function hideEntry(){ els.continueChatEntry.classList.remove('show'); }
   return { init, showEntry, hideEntry };
 })();
@@ -3184,7 +3242,8 @@ function showDivinationLoading(onDone){
    社交分享：複製解籤連結 / 分享至 LINE
    ========================================================================= */
 els.btnCopyLink.addEventListener('click', () => {
-  const f = AppState.currentFortune || FORTUNES[0];
+  const f = AppState.currentFortune;
+  if (!f) { showToast('尚未取得籤詩結果'); return; }
   const url = `${location.origin}${location.pathname}?fortune=${f.no}&category=${encodeURIComponent(AppState.userQuery.category||'')}`;
   if (navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(url).then(() => showToast('連結已複製！快分享給朋友吧')).catch(() => showToast('複製失敗，請手動複製網址列'));
@@ -3193,7 +3252,8 @@ els.btnCopyLink.addEventListener('click', () => {
   }
 });
 els.btnShareLine.addEventListener('click', () => {
-  const f = AppState.currentFortune || FORTUNES[0];
+  const f = AppState.currentFortune;
+  if (!f) { showToast('尚未取得籤詩結果'); return; }
   const url = `${location.origin}${location.pathname}?fortune=${f.no}&category=${encodeURIComponent(AppState.userQuery.category||'')}`;
   window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(url)}`, '_blank');
 });
@@ -3237,25 +3297,29 @@ resizeOutputCanvas();
   }, CONFIG.AMBIENT_SAMPLE_MS);
 })();
 
-const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-// 最多追蹤兩隻手：合十默念階段需要雙手距離判定，其餘階段仍只讀取第一隻手
-hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
-hands.onResults(GestureEngine.onResults);
+if (isQuickOnly) {
+  els.loading.style.display = 'none';
+} else {
+  const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+  // 最多追蹤兩隻手：合十默念階段需要雙手距離判定，其餘階段仍只讀取第一隻手
+  hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+  hands.onResults(GestureEngine.onResults);
 
-BwaScene.init(els.bwaThreeContainer);
+  BwaScene.init(els.bwaThreeContainer);
 
-const camera = new Camera(els.video, { onFrame: async () => { await hands.send({image: els.video}); }, width: 1280, height: 720 });
+  const camera = new Camera(els.video, { onFrame: async () => { await hands.send({image: els.video}); }, width: 1280, height: 720 });
 
-camera.start().then(() => {
-  setTimeout(() => { els.loading.style.display = 'none'; }, 600);
-}).catch(err => {
-  els.loading.innerHTML = `
-    <div class="glass-card px-10 py-8 text-center">
-      <p class="gold-text text-lg font-normal tracking-widest mb-2">無法啟動攝影機</p>
-      <p class="text-sm opacity-70 font-light">請確認已允許瀏覽器存取鏡頭權限，並重新整理頁面。</p>
-    </div>`;
-  console.error(err);
-});
+  camera.start().then(() => {
+    setTimeout(() => { els.loading.style.display = 'none'; }, 600);
+  }).catch(err => {
+    els.loading.innerHTML = `
+      <div class="glass-card px-10 py-8 text-center">
+        <p class="gold-text text-lg font-normal tracking-widest mb-2">無法啟動攝影機</p>
+        <p class="text-sm opacity-70 font-light">請確認已允許瀏覽器存取鏡頭權限，或改用免鏡頭快速求籤。</p>
+      </div>`;
+    console.error(err);
+  });
+}
 </script>
 </body>
 </html>

@@ -1,29 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-
-const amounts = [100, 300, 600, 1200]
-const selectedAmount = ref(300)
-const showDialog = ref(false)
-const paymentMessage = ref('')
-
-const formattedAmount = computed(() => `NT$ ${selectedAmount.value.toLocaleString('zh-TW')}`)
-
-function openDonationDialog() {
-  paymentMessage.value = ''
-  showDialog.value = true
-}
-
-function startApplePay() {
-  if (!('ApplePaySession' in window)) {
-    paymentMessage.value = '這台裝置目前不支援 Apple Pay，請改用 LINE Pay。'
-    return
-  }
-  paymentMessage.value = 'Apple Pay 付款服務尚未設定商家憑證與 HTTPS 網域驗證。'
-}
-
-function startLinePay() {
-  paymentMessage.value = 'LINE Pay 付款服務尚未設定商家憑證。完成後會由 Django 建立付款請求並導向 LINE Pay。'
-}
+const paymentUnavailable = '捐款 API 尚未由後端啟用，暫時無法收款。'
 </script>
 
 <template>
@@ -42,7 +18,8 @@ function startLinePay() {
           <p class="eyebrow">SUPPORT THE EXPERIENCE</p>
           <h1>留一盞燈，<br><span>讓文化繼續發光</span></h1>
           <p class="lede">你的支持會用在籤詩資料整理、互動技術維護，以及讓更多人能靠近台灣廟宇文化的體驗設計。</p>
-          <button type="button" class="donate-button" @click="openDonationDialog">功德隨喜</button>
+          <button type="button" class="donate-button" disabled :title="paymentUnavailable">暫未開放捐款</button>
+          <p class="payment-message">{{ paymentUnavailable }}</p>
         </div>
         <div class="offering" aria-hidden="true">
           <div class="halo"></div>
@@ -64,30 +41,8 @@ function startLinePay() {
         </div>
       </section>
 
-      <p class="donation-note">本頁為付款流程介面。正式收款前，仍需要在 Django 後端設定綠界、LINE Pay 或 Apple Pay 的商家金鑰與付款通知驗證。</p>
+      <p class="donation-note">依 API 文件，捐款端點目前尚未掛載；付款功能會在後端啟用並完成通知驗證後再開放。</p>
     </main>
-
-    <Teleport to="body">
-      <Transition name="donation-fade">
-        <div v-if="showDialog" class="dialog-backdrop" @click.self="showDialog = false">
-          <section class="donation-dialog" role="dialog" aria-modal="true" aria-labelledby="donation-title">
-            <button class="close-button" type="button" aria-label="關閉捐款視窗" @click="showDialog = false">×</button>
-            <p class="eyebrow">MAKE A DONATION</p>
-            <h2 id="donation-title">功德隨喜</h2>
-            <p>選擇一個金額，支持籤好運的文化內容與數位體驗。</p>
-            <div class="amounts" aria-label="捐款金額">
-              <button v-for="amount in amounts" :key="amount" type="button" :class="{ selected: amount === selectedAmount }" @click="selectedAmount = amount">NT$ {{ amount }}</button>
-            </div>
-            <div class="total"><span>本次捐款</span><strong>{{ formattedAmount }}</strong></div>
-            <div class="pay-actions">
-              <button type="button" class="apple-pay" @click="startApplePay">Apple Pay</button>
-              <button type="button" class="line-pay" @click="startLinePay">LINE Pay</button>
-            </div>
-            <p v-if="paymentMessage" class="payment-message">{{ paymentMessage }}</p>
-          </section>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
