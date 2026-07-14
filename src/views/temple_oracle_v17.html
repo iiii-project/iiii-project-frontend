@@ -105,6 +105,12 @@
     box-shadow: 0 4px 14px rgba(120,90,50,0.15);
   }
   #btn-go-home.hidden{ display:none; }
+  #btn-return-site-home{
+    position:fixed; top:20px; right:136px; z-index:20; pointer-events:auto;
+    min-height:38px; padding:0 14px; border:1px solid var(--gold-line); border-radius:999px;
+    background:rgba(255,255,255,0.76); color:var(--jiang-hong); font:500 12px/1 "Noto Serif TC",serif;
+    letter-spacing:.12em; cursor:pointer; backdrop-filter:blur(10px); box-shadow:0 4px 14px rgba(120,90,50,.15);
+  }
   #btn-quick-divination{
     position:fixed; top:20px; right:20px; z-index:20; pointer-events:auto;
     min-height:38px; padding:0 14px; border:1px solid var(--gold-line); border-radius:999px;
@@ -754,6 +760,7 @@
       <path d="M14,78 L86,78" />
     </svg>
   </button>
+  <button id="btn-return-site-home" type="button">返回首頁</button>
   <button id="btn-quick-divination" type="button">快速求籤</button>
   <div id="quick-divination-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="quick-title">
     <section class="glass-card quick-card">
@@ -2547,7 +2554,10 @@ const UIActions = (() => {
   }
 
   els.btnRestart.addEventListener('click', () => playInkTransition(() => goHome()));
-  els.btnResultHome.addEventListener('click', () => playInkTransition(() => goHome()));
+  // This HTML is embedded by the Vue route. "Home" must leave the ritual,
+  // not merely reset the internal ritual screen.
+  const returnToSiteHome = () => window.parent.location.assign('/');
+  els.btnResultHome.addEventListener('click', returnToSiteHome);
   els.btnAmulet.addEventListener('click', () => { els.amuletModal.classList.remove('hidden'); });
   els.btnAmuletClose.addEventListener('click', () => { els.amuletModal.classList.add('hidden'); });
 
@@ -3270,7 +3280,8 @@ els.btnHelp.addEventListener('click', () => {
   AppState.tutorialPeek = els.sceneHome.classList.contains('hidden');
   els.tutorial.classList.remove('hidden');
 });
-els.btnGoHome.addEventListener('click', () => UIActions.goHome());
+els.btnGoHome.addEventListener('click', () => window.parent.location.assign('/'));
+document.getElementById('btn-return-site-home').addEventListener('click', () => window.parent.location.assign('/'));
 
 function resizeOutputCanvas(){ els.outputCanvas.width = window.innerWidth; els.outputCanvas.height = window.innerHeight; }
 window.addEventListener('resize', resizeOutputCanvas);
