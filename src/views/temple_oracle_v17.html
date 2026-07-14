@@ -2170,6 +2170,7 @@ const CATEGORY_API_MAP = {
 const requestedQuickFlow = new URLSearchParams(window.location.search).get('flow') === 'quick';
 if (requestedQuickFlow) window.parent.location.replace('/temple-oracle-v17');
 const isQuickOnly = false;
+const isInterpretOnly = new URLSearchParams(window.location.search).get('mode') === 'interpret';
 
 const DivinationApi = (() => {
   const anonymousKey = 'temple-oracle-anonymous-user-id';
@@ -3290,8 +3291,9 @@ resizeOutputCanvas();
   }, CONFIG.AMBIENT_SAMPLE_MS);
 })();
 
-if (isQuickOnly) {
+if (isInterpretOnly || isQuickOnly) {
   els.loading.style.display = 'none';
+  if (isInterpretOnly) requestAnimationFrame(() => els.manualNoInput.focus());
 } else {
   const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
   // 最多追蹤兩隻手：合十默念階段需要雙手距離判定，其餘階段仍只讀取第一隻手
