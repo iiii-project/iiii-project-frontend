@@ -4,8 +4,16 @@ import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
-const htmlUrl = new URL('./temple_oracle_v17.html', import.meta.url).href
-const iframeUrl = computed(() => (route.query.flow === 'quick' ? `${htmlUrl}?flow=quick` : htmlUrl))
+const iframeUrl = computed(() => {
+  const url = new URL('./temple_oracle_v17.html', import.meta.url)
+  const flow = route.query.flow
+  const mode = route.query.mode
+
+  if (typeof flow === 'string') url.searchParams.set('flow', flow)
+  if (typeof mode === 'string') url.searchParams.set('mode', mode)
+
+  return url.href
+})
 </script>
 
 <template>
