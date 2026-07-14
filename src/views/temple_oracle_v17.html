@@ -118,6 +118,12 @@
   #btn-quick-cancel{ border:1px solid var(--gold-line); color:var(--ink-soft); background:transparent; }
   #btn-quick-submit{ border:0; color:#fffaf0; background:var(--jiang-hong); }
   #btn-quick-submit:disabled{ opacity:.62; cursor:wait; }
+  body.search-only #quick-divination-modal{ padding:88px 24px 48px; background:var(--morandi-stone); backdrop-filter:none; overflow-y:auto; align-items:start; }
+  body.search-only .quick-card{ width:min(820px,100%); padding:0; border:0; border-radius:0; box-shadow:none; background:transparent; }
+  body.search-only .quick-card h2{ font-size:clamp(38px,6vw,62px); }
+  body.search-only .quick-card > p:not(.eyebrow):not(.quick-fallback-notice){ max-width:680px; font-size:16px; }
+  body.search-only #quick-question{ min-height:180px; background:#fffdf8; }
+  body.search-only .quick-actions{ justify-content:flex-start; }
 
   /* ===================== 畫面一：電子籤筒 ===================== */
   #qian-tong-zone{ position:relative; width:min(24vw, 210px); height:min(46vh, 380px); margin-bottom: 4vh; filter: drop-shadow(0 18px 30px rgba(0,0,0,0.55)); }
@@ -2167,6 +2173,7 @@ const CATEGORY_API_MAP = {
   '問姻緣': 'love', '拼事業': 'career', '求健康': 'health', '學業功名': 'study'
 };
 const isQuickOnly = new URLSearchParams(window.location.search).get('flow') === 'quick';
+if (isQuickOnly) document.body.classList.add('search-only');
 
 const DivinationApi = (() => {
   const anonymousKey = 'temple-oracle-anonymous-user-id';
@@ -2818,17 +2825,23 @@ const UIActions = (() => {
   function closeQuickDivination(){ els.quickModal.classList.add('hidden'); }
 
   window.openSearchDivination = (fallbackMessage = '') => {
+    const persistedFallbackMessage = sessionStorage.getItem('temple-oracle-camera-error') || '';
+    const message = fallbackMessage || persistedFallbackMessage;
+    sessionStorage.removeItem('temple-oracle-camera-error');
     els.quickQuestion.value = AppState.userQuery.question || '';
-    els.quickFallbackNotice.textContent = fallbackMessage;
-    els.quickFallbackNotice.classList.toggle('hidden', !fallbackMessage);
+    els.quickFallbackNotice.textContent = message;
+    els.quickFallbackNotice.classList.toggle('hidden', !message);
     els.quickModal.classList.remove('hidden');
     els.quickQuestion.focus();
   };
 
   els.btnQuickDivination.addEventListener('click', () => {
-    window.openSearchDivination();
+    window.parent.location.assign('/temple-oracle-v17?flow=quick');
   });
-  els.btnQuickCancel.addEventListener('click', closeQuickDivination);
+  els.btnQuickCancel.addEventListener('click', () => {
+    if (isQuickOnly) window.parent.location.assign('/temple-oracle-v17');
+    else closeQuickDivination();
+  });
   els.quickModal.addEventListener('click', event => { if (event.target === els.quickModal) closeQuickDivination(); });
   els.btnQuickSubmit.addEventListener('click', async () => {
     const question = els.quickQuestion.value.trim();
@@ -2860,6 +2873,7 @@ const UIActions = (() => {
 
   if (isQuickOnly) {
     els.btnHomeStart.hidden = true;
+    els.btnQuickCancel.textContent = '鏡頭儀式求籤';
     window.openSearchDivination();
   }
 
@@ -3301,7 +3315,8 @@ if (isQuickOnly) {
       : '無法啟動鏡頭，已為你切換至查詢求籤。';
     els.loading.style.display = 'none';
     showToast(message);
-    window.openSearchDivination?.(message);
+    sessionStorage.setItem('temple-oracle-camera-error', message);
+    window.parent.location.assign('/temple-oracle-v17?flow=quick');
     console.error(err);
   });
 }
