@@ -84,7 +84,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-成功時回傳 `{ "access": "...", "refresh": "..." }`。
+成功時回傳 `{ "access": "...", "refresh": "...", "user": {"id": 1, "username": "jimmy", "email": "jimmy@example.com"} }`。
 
 ### 更新 JWT
 

@@ -19,6 +19,11 @@ export function toUserMessage(error: unknown): string {
 
   const axiosError = error as AxiosError<ApiErrorBody>
   const status = axiosError.response?.status
+  const details = axiosError.response?.data?.error?.details
+  if (details && typeof details === 'object') {
+    const messages = Object.values(details).flatMap((value) => Array.isArray(value) ? value : [value])
+    if (messages.length) return messages.join(' ')
+  }
   const apiMessage = axiosError.response?.data?.error?.message || axiosError.response?.data?.message
   if (apiMessage) return `${apiMessage} 請依畫面提示繼續。`
   if (status === 401 || status === 403) return '目前沒有權限執行此操作，請重新整理或聯絡管理者。'

@@ -27,10 +27,8 @@ export async function registerAccount(payload: { username: string; email: string
 }
 
 export async function loginAccount(payload: { username: string; password: string }): Promise<AuthSession> {
-  const { data } = await apiClient.post<ApiResponse<{ access: string; refresh: string }> | { access: string; refresh: string }>('/auth/token/', payload)
-  const tokens = unwrap(data)
-  const user = await getCurrentUser(tokens.access)
-  return { ...tokens, user }
+  const { data } = await apiClient.post<ApiResponse<AuthSession> | AuthSession>('/auth/token/', payload)
+  return unwrap(data)
 }
 
 export async function getCurrentUser(accessToken?: string): Promise<AuthUser> {
