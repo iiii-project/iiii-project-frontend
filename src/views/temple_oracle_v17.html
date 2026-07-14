@@ -836,6 +836,7 @@
       <h1 class="gold-text text-2xl md:text-3xl font-normal tracking-[0.5em] mt-2">祈　願　抽　籤</h1>
       <div class="hairline mt-4"></div>
       <p id="draw-hint" class="text-[13px] md:text-sm mt-4 opacity-80 tracking-[0.15em] font-light">請對著籤筒握拳，上下搖晃</p>
+      <button id="btn-manual-draw" class="btn-line mt-4 hidden" type="button">點 擊 抽 籤</button>
     </div>
 
     <div id="qian-tong-zone">
@@ -1213,6 +1214,7 @@ const els = {
   btnQuickCancel: document.getElementById('btn-quick-cancel'),
   btnQuickSubmit: document.getElementById('btn-quick-submit'),
   btnClickBwa: document.getElementById('btn-click-bwa'),
+  btnManualDraw: document.getElementById('btn-manual-draw'),
   btnTutorialStart: document.getElementById('btn-tutorial-start'),
   flash: document.getElementById('flash'),
   darken: document.getElementById('darken'),
@@ -2278,7 +2280,8 @@ const UIActions = (() => {
       AppState.drawSubState = 'shake';
       stickEls.forEach(s => s.classList.remove('selected'));
       GestureEngine.resetShakeProgress(); GestureEngine.resetPinch();
-      els.drawHint.textContent = '請對著籤筒握拳，上下搖晃';
+      els.drawHint.textContent = isManualOnly ? '準備好後，點擊籤筒抽出一支籤。' : '請對著籤筒握拳，上下搖晃';
+      els.btnManualDraw.classList.toggle('hidden', !isManualOnly);
     }
     if (name === 'bwa'){
       els.sceneBwa.classList.remove('hidden');
@@ -2321,6 +2324,10 @@ const UIActions = (() => {
     ParticleSystem.burst(cx, cy, 26); flashOnce();
     try {
       AppState.currentFortune = await DivinationApi.draw(AppState.sessionId);
+      if (isManualOnly) {
+        playInkTransition(() => showResultScene());
+        return;
+      }
       setTimeout(() => playInkTransition(() => showScene('bwa')), 700);
     } catch (error) {
       AppState.current = 'draw';
@@ -2799,8 +2806,8 @@ const UIActions = (() => {
       AppState.interpretation = null;
       if (isManualOnly) {
         await DivinationApi.prayer(session.session_id);
-        AppState.currentFortune = await DivinationApi.draw(session.session_id);
-        UIActions.showResultScene();
+        els.sceneHome.classList.add('hidden');
+        UIActions.showScene('draw');
         return;
       }
       els.sceneHome.classList.add('hidden');
@@ -2873,6 +2880,9 @@ const UIActions = (() => {
 
   els.btnClickBwa.addEventListener('click', () => {
     UIActions.castClickBwa();
+  });
+  els.btnManualDraw.addEventListener('click', () => {
+    UIActions.completeDraw();
   });
 
   if (isQuickOnly) {
