@@ -98,12 +98,6 @@
     display:flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter: blur(10px);
     box-shadow: 0 4px 14px rgba(120,90,50,0.15);
   }
-  #btn-return-site-home{
-    position:fixed; top:20px; right:136px; z-index:20; pointer-events:auto;
-    min-height:38px; padding:0 14px; border:1px solid var(--gold-line); border-radius:999px;
-    background:rgba(255,255,255,0.76); color:var(--jiang-hong); font:500 12px/1 "Noto Serif TC",serif;
-    letter-spacing:.12em; cursor:pointer; backdrop-filter:blur(10px); box-shadow:0 4px 14px rgba(120,90,50,.15);
-  }
   #btn-quick-divination{
     position:fixed; top:20px; right:20px; z-index:20; pointer-events:auto;
     min-height:38px; padding:0 14px; border:1px solid var(--gold-line); border-radius:999px;
@@ -746,7 +740,6 @@
     </div>
   </div>
   <button id="btn-help" title="操作說明" aria-label="操作說明">?</button>
-  <button id="btn-return-site-home" type="button">返回首頁</button>
   <button id="btn-quick-divination" type="button">查詢求籤</button>
   <div id="quick-divination-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="quick-title">
     <section class="glass-card quick-card">
@@ -3261,7 +3254,6 @@ els.btnHelp.addEventListener('click', () => {
   AppState.tutorialPeek = els.sceneHome.classList.contains('hidden');
   els.tutorial.classList.remove('hidden');
 });
-document.getElementById('btn-return-site-home').addEventListener('click', () => window.parent.location.assign('/'));
 
 function resizeOutputCanvas(){ els.outputCanvas.width = window.innerWidth; els.outputCanvas.height = window.innerHeight; }
 window.addEventListener('resize', resizeOutputCanvas);
