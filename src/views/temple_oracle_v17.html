@@ -2286,9 +2286,10 @@ const UIActions = (() => {
     if (name === 'bwa'){
       els.sceneBwa.classList.remove('hidden');
       els.bwaResultPanel.classList.add('hidden');
-      els.btnClickBwa.classList.toggle('hidden', !isQuickOnly);
-      els.bwaHint.textContent = isQuickOnly ? '請點擊擲筊，向神明請示此籤。' : '單手微握，捧起筊杯';
-      if (!isQuickOnly) {
+      const isClickBwaMode = isQuickOnly || isManualOnly;
+      els.btnClickBwa.classList.toggle('hidden', !isClickBwaMode);
+      els.bwaHint.textContent = isClickBwaMode ? '請點擊擲筊，向神明請示此籤。' : '單手微握，捧起筊杯';
+      if (!isClickBwaMode) {
         resetBwaVisual();
         GestureEngine.resetBwaTracking();
       }
@@ -2325,7 +2326,7 @@ const UIActions = (() => {
     try {
       AppState.currentFortune = await DivinationApi.draw(AppState.sessionId);
       if (isManualOnly) {
-        playInkTransition(() => showResultScene());
+        playInkTransition(() => showScene('bwa'));
         return;
       }
       setTimeout(() => playInkTransition(() => showScene('bwa')), 700);
