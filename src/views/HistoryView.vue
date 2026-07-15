@@ -49,7 +49,7 @@ function formatDate(value?: string) {
   <div class="history-page">
     <header>
       <RouterLink class="brand" to="/">籤好運 <span>TAIWAN TEMPLE ONLINE</span></RouterLink>
-      <nav><RouterLink to="/temple-map">廟宇地圖</RouterLink><RouterLink to="/donation">功德捐款</RouterLink><a href="/admin/">管理後台</a><button v-if="auth.isAuthenticated" type="button" @click="auth.logout()">登出</button></nav>
+      <nav><RouterLink to="/temple-map">廟宇地圖</RouterLink><RouterLink to="/donation">功德捐款</RouterLink><button v-if="auth.isAuthenticated" type="button" @click="auth.logout()">登出</button></nav>
     </header>
     <main :class="{ 'auth-gate': !auth.isAuthenticated && !auth.isRestoring }">
       <section v-if="!auth.isAuthenticated && !auth.isRestoring" class="signin-state">
