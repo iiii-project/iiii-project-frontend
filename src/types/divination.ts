@@ -84,4 +84,6 @@ export interface ApiErrorBody {
     details?: unknown
   }
   message?: string
+  detail?: string
+  [field: string]: unknown
 }

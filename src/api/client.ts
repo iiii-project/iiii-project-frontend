@@ -19,12 +19,15 @@ export function toUserMessage(error: unknown): string {
 
   const axiosError = error as AxiosError<ApiErrorBody>
   const status = axiosError.response?.status
-  const details = axiosError.response?.data?.error?.details
+  const body = axiosError.response?.data
+  const details = body?.error?.details || Object.fromEntries(
+    Object.entries(body || {}).filter(([key]) => !['error', 'message', 'detail'].includes(key))
+  )
   if (details && typeof details === 'object') {
     const messages = Object.values(details).flatMap((value) => Array.isArray(value) ? value : [value])
     if (messages.length) return messages.join(' ')
   }
-  const apiMessage = axiosError.response?.data?.error?.message || axiosError.response?.data?.message
+  const apiMessage = body?.error?.message || body?.message || body?.detail
   if (apiMessage) return `${apiMessage} 請依畫面提示繼續。`
   if (status === 401 || status === 403) return '目前沒有權限執行此操作，請重新整理或聯絡管理者。'
   if (status === 404) return '找不到這次求籤紀錄，請重新開始。'
