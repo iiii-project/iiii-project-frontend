@@ -1716,13 +1716,13 @@ const BwaScene = (() => {
     holding = false;
     AppState.bwaTossing = true;
     const restY = -1.1;
-    const gravity = 14;
-    // 點擊擲筊時從畫面上方落下，讓「拋出 → 翻轉 → 落地」動作清楚可見。
-    cupA.position.set(-0.78, 3.3, 0.15);
-    cupB.position.set(0.78, 3.65, 0.1);
+    const gravity = 4.8;
+    // 從畫面上半部開始下落，整段掉落都在鏡頭內，避免只看見最後落地的結果。
+    cupA.position.set(-0.78, 1.55, 0.15);
+    cupB.position.set(0.78, 1.85, 0.1);
     cupA.rotation.set(-0.7, 0.35, -0.4);
     cupB.rotation.set(0.55, -0.3, 0.45);
-    let vyA = -0.55, vyB = -0.2;
+    let vyA = -0.08, vyB = 0.04;
     let doneA = false, doneB = false;
     const startTime = performance.now();
 
@@ -1733,8 +1733,8 @@ const BwaScene = (() => {
         vyA -= gravity * dt;
         cupA.position.y += vyA * dt;
         cupA.position.x += 0.012;
-        cupA.rotation.x += 0.3;
-        cupA.rotation.y += 0.15;
+        cupA.rotation.x += 0.16;
+        cupA.rotation.y += 0.09;
         if (cupA.position.y <= restY) {
           cupA.position.y = restY;
           // coinA === 'domed' (凸面朝上) -> rotation.x = 0
@@ -1748,8 +1748,8 @@ const BwaScene = (() => {
         vyB -= gravity * dt;
         cupB.position.y += vyB * dt;
         cupB.position.x -= 0.012;
-        cupB.rotation.x += 0.26;
-        cupB.rotation.z += 0.2;
+        cupB.rotation.x += 0.14;
+        cupB.rotation.z += 0.12;
         if (cupB.position.y <= restY) {
           cupB.position.y = restY;
           cupB.rotation.set(coinB === 'domed' ? 0 : Math.PI, 0, 0);
