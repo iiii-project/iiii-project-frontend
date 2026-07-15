@@ -2250,7 +2250,7 @@ const DivinationApi = (() => {
   };
 })();
 
-const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, userQuery:{ category:'綜合運勢', question:'' } };
+const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, isFortuneLookup:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, userQuery:{ category:'綜合運勢', question:'' } };
 
 // 提早解析網址參數（分享連結可能帶入的籤號/分類），確保後續首頁初始化時就能讀到
 (function parseShareParamsEarly(){
@@ -2287,7 +2287,7 @@ const UIActions = (() => {
     if (name === 'bwa'){
       els.sceneBwa.classList.remove('hidden');
       els.bwaResultPanel.classList.add('hidden');
-      const isClickBwaMode = isQuickOnly || isManualOnly;
+      const isClickBwaMode = isQuickOnly || isManualOnly || AppState.isFortuneLookup;
       els.btnClickBwa.classList.toggle('hidden', !isClickBwaMode);
       els.bwaHint.textContent = isClickBwaMode ? '請點擊擲筊，向神明請示此籤。' : '單手微握，捧起筊杯';
       if (!isClickBwaMode) {
@@ -2377,6 +2377,10 @@ const UIActions = (() => {
 
   async function castClickBwa(){
     if (AppState.bwaTossing || !AppState.sessionId) return;
+    if (AppState.isFortuneLookup) {
+      await castLookupBwa();
+      return;
+    }
 
     AppState.bwaTossing = true;
     els.btnClickBwa.disabled = true;
@@ -2414,6 +2418,33 @@ const UIActions = (() => {
       AppState.bwaTossing = false;
       els.btnClickBwa.disabled = false;
     }
+  }
+
+  async function castLookupBwa(){
+    AppState.bwaTossing = true;
+    els.btnClickBwa.disabled = true;
+    els.bwaHint.textContent = '正在擲筊請示…';
+    BwaScene.toss('flat', 'domed',
+      () => { playLandingSounds('flat', 'domed'); if (navigator.vibrate) navigator.vibrate(20); },
+      async () => {
+        els.bwaResultPanel.classList.remove('hidden');
+        els.bwaResultTitle.textContent = '聖筊 · 請示完成';
+        els.bwaResultDesc.textContent = '正在依你的問題取得 AI 解籤內容。';
+        try {
+          const session = await DivinationApi.interpret(AppState.sessionId);
+          AppState.currentFortune = session.fortune;
+          AppState.interpretation = session.interpretation;
+        } catch (error) {
+          AppState.interpretation = null;
+          showToast(error.message || 'AI 解籤暫時無法使用，先為你顯示籤詩內容');
+        } finally {
+          AppState.bwaTossing = false;
+          AppState.isFortuneLookup = false;
+          els.btnClickBwa.disabled = false;
+          setTimeout(() => playInkTransition(() => showResultScene()), 900);
+        }
+      }
+    );
   }
 
   async function resolveBwaResult(){
@@ -2922,16 +2953,10 @@ const UIActions = (() => {
       const session = await DivinationApi.create(question, AppState.userQuery.category, 'click', n);
       AppState.sessionId = session.session_id;
       AppState.currentFortune = await DivinationApi.getFortune(n);
-      try {
-        const interpreted = await DivinationApi.interpret(AppState.sessionId);
-        AppState.currentFortune = interpreted.fortune;
-        AppState.interpretation = interpreted.interpretation;
-      } catch (error) {
-        AppState.interpretation = null;
-        showToast(error.message || 'AI 解籤暫時無法使用，先為你顯示籤詩內容');
-      }
+      AppState.interpretation = null;
+      AppState.isFortuneLookup = true;
       els.sceneHome.classList.add('hidden');
-      showDivinationLoading(() => { UIActions.showResultScene(); });
+      showDivinationLoading(() => { UIActions.showScene('bwa'); });
     } catch (error) {
       showToast(error.message || '找不到此籤號');
     } finally {
