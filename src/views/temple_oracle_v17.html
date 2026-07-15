@@ -352,7 +352,7 @@
   }
   #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ===================== 首頁：籤號輸入 / 掃描 ===================== */
+  /* ===================== 首頁：籤號輸入 ===================== */
   .home-divider{ display:flex; align-items:center; gap:10px; margin:1.2rem 0 0.6rem; }
   .home-divider .line{ flex:1; height:1px; background:var(--gold-line); }
   .home-divider span{ font-size:11px; letter-spacing:0.2em; color:var(--morandi-dust); }
@@ -361,20 +361,6 @@
     border:1px solid var(--gold-line); color:var(--ink); font-family:"Noto Serif TC",serif; font-size:16px; outline:none;
   }
   #manual-no-error{ font-size:11px; color:#b23b3b; min-height:14px; margin-top:4px; }
-  .scan-frame{
-    position:fixed; inset:0; z-index:96; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
-    background:rgba(6,4,3,0.9); pointer-events:auto;
-  }
-  .scan-frame.hidden{ display:none !important; }
-  .scan-demo-note{ font-size:11px; letter-spacing:0.08em; color:rgba(242,226,179,0.7); text-align:center; padding:0 2rem; }
-  .scan-box{ position:relative; width:min(70vw,320px); height:min(70vw,320px); border:2px solid rgba(120,255,170,0.8); border-radius:12px; overflow:hidden; }
-  .scan-beam{
-    position:absolute; left:0; right:0; height:3px; background: linear-gradient(90deg, transparent, #6cffb0, transparent);
-    box-shadow:0 0 12px 3px rgba(108,255,176,0.8);
-    animation: scanMove 1.1s ease-in-out infinite alternate;
-  }
-  @keyframes scanMove{ from{ top:4%; } to{ top:94%; } }
-
   /* ===================== 分類選取：呼吸光暈微互動 ===================== */
   .category-pill.pulse-select{ animation: categoryPulse 0.5s ease 2; }
   @keyframes categoryPulse{
@@ -528,12 +514,6 @@
     <p class="gold-text text-sm tracking-[0.4em] mt-4">解 籤 中，請 稍 候</p>
   </div>
 
-  <!-- ===================== 掃描籤條模擬特效 ===================== -->
-  <div id="scan-frame" class="scan-frame hidden">
-    <div class="scan-box"><div class="scan-beam"></div></div>
-    <p class="scan-demo-note">掃描示意動畫（Demo）· 正式版將串接真實 OCR / QR 辨識</p>
-  </div>
-
   <!-- ===================== Toast 提示 ===================== -->
   <div id="toast"></div>
 
@@ -578,7 +558,6 @@
       <div id="known-fortune-divider" class="home-divider"><div class="line"></div><span>或　已　知　籤　號</span><div class="line"></div></div>
       <div class="flex items-center justify-center gap-3 flex-wrap">
         <input id="manual-no-input" type="number" min="1" max="60" placeholder="1-60" />
-        <button id="btn-scan" class="btn-line" style="padding:0.5rem 1.2rem;">📷 掃描籤條</button>
         <button id="btn-manual-go" class="btn-line" style="padding:0.5rem 1.2rem;">直 接 解 籤</button>
       </div>
       <p id="manual-no-error"></p>
@@ -1197,9 +1176,7 @@ const els = {
   btnHomeStart: document.getElementById('btn-home-start'),
   manualNoInput: document.getElementById('manual-no-input'),
   manualNoError: document.getElementById('manual-no-error'),
-  btnScan: document.getElementById('btn-scan'),
   btnManualGo: document.getElementById('btn-manual-go'),
-  scanFrame: document.getElementById('scan-frame'),
   gateIntro: document.getElementById('gate-intro'),
   divinationLoading: document.getElementById('divination-loading'),
   toast: document.getElementById('toast'),
@@ -2282,7 +2259,6 @@ if (isLookupOnly) {
   document.getElementById('oracle-intro').textContent = '輸入已知籤號與問題，擲筊請示後由 AI 為你解籤';
   document.querySelector('#known-fortune-divider span').textContent = '輸　入　籤　號';
   els.btnHomeStart.hidden = true;
-  els.btnScan.hidden = true;
   els.btnManualGo.textContent = '查　詢　解　籤';
 }
 
@@ -2969,8 +2945,6 @@ const UIActions = (() => {
     return n;
   }
 
-  els.btnScan.addEventListener('click', () => showToast('目前 API 未提供掃描辨識服務，請直接輸入籤號查詢'));
-
   els.btnManualGo.addEventListener('click', async () => {
     const n = validateManualNo();
     if (n === null) return;
@@ -3009,8 +2983,8 @@ const UIActions = (() => {
    ⑤ SincereStreak  — 誠心求籤里程碑：聖筊達吉祥數字時跳出慶祝小卡
    ⑥ ContinueChat— 延續提問聊天入口（QR + Chatbot UI Overlay 介面殼）
    ※ v17：已依需求取消「一天限求一次」限制，可自由重複求籤
-   ※ v17.1：新增籤詩收藏本、誠心求籤里程碑、今日運勢分享、朔望節慶模式、
-            依籤詩吉凶等級播放對應音色、掃描籤條加註 Demo 說明
+    ※ v17.1：新增籤詩收藏本、誠心求籤里程碑、今日運勢分享、朔望節慶模式、
+             依籤詩吉凶等級播放對應音色
    ========================================================================= */
 
 // ---- 農曆日期換算＋今日運勢小卡 ----
