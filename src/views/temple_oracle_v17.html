@@ -482,7 +482,6 @@
     box-shadow:0 6px 18px rgba(120,90,50,0.18); cursor:pointer; opacity:0; transform:translateY(-8px); transition: opacity 0.4s ease, transform 0.4s ease;
   }
   .continue-chat-entry.show{ opacity:1; transform:translateY(0); }
-  .continue-chat-entry img{ width:34px; height:34px; border-radius:8px; }
   .continue-chat-entry span{ font-size:11.5px; color:var(--ink); letter-spacing:0.05em; }
   #chat-modal .modal-card{ max-width:380px; display:flex; flex-direction:column; height:70vh; padding:1.2rem; }
   #chat-log{ flex:1; overflow-y:auto; text-align:left; padding:0.5rem 0.2rem; display:flex; flex-direction:column; gap:8px; }
@@ -492,6 +491,8 @@
   .chat-input-row{ display:flex; gap:8px; margin-top:0.8rem; }
   .chat-input-row input{ flex:1; padding:0.5rem 0.8rem; border-radius:999px; border:1px solid var(--gold-line); background:rgba(166,58,58,0.04); color:var(--ink); font-size:13px; outline:none; }
   .chat-input-row button{ padding:0.5rem 1.1rem; border-radius:999px; background:var(--jiang-hong); color:#fff; border:none; cursor:pointer; font-size:12px; letter-spacing:0.1em; }
+  .chat-input-row button:disabled{ cursor:wait; opacity:0.65; }
+  .chat-limit{ min-height:1.4rem; margin:0.2rem 0 0; color:var(--ink-soft); font-size:10.5px; letter-spacing:0.04em; text-align:left; }
   #share-row.softened{ opacity:0.55; transform:scale(0.9); transform-origin:left center; }
   #share-row.softened button{ font-size:10.5px !important; padding:0.4rem 0.9rem !important; border-style:dashed; }
   .question-recap{ font-size:12px; opacity:0.65; letter-spacing:0.1em; margin-bottom:0.6rem; }
@@ -659,10 +660,9 @@
     <span id="milestone-text"></span>
   </div>
 
-  <!-- ===================== 延續提問聊天入口（介面殼，模擬掃碼後導向對話） ===================== -->
+  <!-- ===================== 延續提問聊天入口 ===================== -->
   <div class="continue-chat-entry" id="continue-chat-entry">
-    <img id="continue-chat-qr" alt="掃描以繼續提問" />
-    <span>掃碼或點擊<br>與神明繼續對話</span>
+    <span>繼續提問<br>與神明對話</span>
   </div>
 
   <div id="chat-modal" class="hidden">
@@ -671,12 +671,13 @@
       <h3 class="gold-text text-base tracking-[0.3em] mt-1">與　神　明　延　續　提　問</h3>
       <div class="hairline mt-2 mb-2"></div>
       <div id="chat-log"></div>
-      <div class="chat-input-row">
-        <input type="text" id="chat-input" maxlength="60" placeholder="請輸入您想繼續詢問的問題…">
-        <button id="btn-chat-send">送出</button>
-      </div>
-      <button id="btn-chat-close" class="btn-line mt-3" style="padding:0.4rem 1.2rem;font-size:11px;">關　閉</button>
-      <p class="privacy-note">＊此為介面示意殼，實際對話功能將於串接後端 AI 服務後啟用。</p>
+       <div class="chat-input-row">
+         <input type="text" id="chat-input" maxlength="60" placeholder="請輸入您想繼續詢問的問題…">
+         <button id="btn-chat-send">送出</button>
+       </div>
+       <p id="chat-limit" class="chat-limit" aria-live="polite"></p>
+       <button id="btn-chat-close" class="btn-line mt-3" style="padding:0.4rem 1.2rem;font-size:11px;">關　閉</button>
+       <p class="privacy-note">＊追問會依本次解籤內容回覆；重大醫療、法律與財務問題請諮詢專業人士。</p>
     </div>
   </div>
 
@@ -1289,12 +1290,12 @@ const els = {
   milestoneBadge: document.getElementById('milestone-badge'),
   milestoneText: document.getElementById('milestone-text'),
   continueChatEntry: document.getElementById('continue-chat-entry'),
-  continueChatQr: document.getElementById('continue-chat-qr'),
-  chatModal: document.getElementById('chat-modal'),
-  chatLog: document.getElementById('chat-log'),
-  chatInput: document.getElementById('chat-input'),
-  btnChatSend: document.getElementById('btn-chat-send'),
-  btnChatClose: document.getElementById('btn-chat-close'),
+   chatModal: document.getElementById('chat-modal'),
+   chatLog: document.getElementById('chat-log'),
+   chatInput: document.getElementById('chat-input'),
+   btnChatSend: document.getElementById('btn-chat-send'),
+   btnChatClose: document.getElementById('btn-chat-close'),
+   chatLimit: document.getElementById('chat-limit'),
 };
 
 const outCtx = els.outputCanvas.getContext('2d');
@@ -2265,7 +2266,6 @@ const DivinationApi = (() => {
       return { ...session, fortune: mapFortune(session.fortune) };
     },
     getFortune: async (number) => mapFortune(await request(`/fortune-sets/${await getFortuneSetCode()}/fortunes/${number}/`)),
-    chat: (id) => request(`/divinations/${id}/chat/`),
     sendChat: (id, message) => request(`/divinations/${id}/chat/`, { method: 'POST', body: JSON.stringify({ message }) }),
     history: async () => {
       const response = await request(`/divinations/?anonymous_user_id=${encodeURIComponent(anonymousUserId())}`);
@@ -3226,43 +3226,52 @@ const SincereStreak = (() => {
   return { increment, getCount };
 })();
 
-// ---- ⑦ 延續提問聊天入口：訊息由已完成解籤的 session API 保存與回覆 ----
+// ---- ⑦ 延續提問聊天入口：訊息由已完成解籤的 session API 回覆 ----
 const ContinueChat = (() => {
-  // 以 Canvas 繪製示意用 QR 樣式圖案（非真實可掃描 QR，僅作視覺意象；
-  // 未來如需真實掃碼導轉，建議改接第三方 QR 產生服務或 library）
-  function drawFakeQr(){
-    const size = 68;
-    const canvas = document.createElement('canvas');
-    canvas.width = size; canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fdfbf6'; ctx.fillRect(0,0,size,size);
-    ctx.fillStyle = '#3a2c22';
-    const cell = 4;
-    for (let y = 0; y < size; y += cell){
-      for (let x = 0; x < size; x += cell){
-        // 用座標雜湊決定黑白格，畫面每次穩定不變
-        const h = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-        if ((h - Math.floor(h)) > 0.5) ctx.fillRect(x, y, cell-1, cell-1);
+  let sessionId = null;
+  let remainingMessages = null;
+
+  function reset(session){
+    if (sessionId === session) return;
+    sessionId = session;
+    remainingMessages = null;
+    els.chatLog.innerHTML = '';
+    els.chatLimit.textContent = '';
+  }
+
+  function updateLimit(){
+    if (remainingMessages === null) return;
+    els.chatLimit.textContent = remainingMessages > 0
+      ? `本次尚可追問 ${remainingMessages} 次`
+      : '本次追問額度已用完';
+    els.chatInput.disabled = remainingMessages === 0;
+    els.btnChatSend.disabled = remainingMessages === 0;
+  }
+
+  function replyText(reply){
+    if (typeof reply === 'string') return reply;
+    if (!reply || typeof reply !== 'object') return '暫時無法讀取回覆內容。';
+
+    const keys = ['content', 'message', 'text', 'answer', 'reply', 'response', 'output'];
+    for (const key of keys){
+      const value = reply[key];
+      if (typeof value === 'string') return value;
+      if (value && typeof value === 'object') {
+        const text = replyText(value);
+        if (text !== '暫時無法讀取回覆內容。') return text;
       }
     }
-    // 三個定位角標記，強化「這是 QR」的視覺意象
-    [[0,0],[size-16,0],[0,size-16]].forEach(([x,y]) => {
-      ctx.fillStyle = '#fdfbf6'; ctx.fillRect(x,y,16,16);
-      ctx.fillStyle = '#3a2c22'; ctx.fillRect(x+2,y+2,12,12);
-      ctx.fillStyle = '#fdfbf6'; ctx.fillRect(x+5,y+5,6,6);
-    });
-    return canvas.toDataURL();
-  }
-  async function seedChat(){
-    els.chatLog.innerHTML = '';
-    if (!AppState.sessionId) return;
-    try {
-      const { messages } = await DivinationApi.chat(AppState.sessionId);
-      messages.forEach(message => appendBubble(message.role === 'assistant' ? 'deity' : 'user', message.content));
-    } catch (error) {
-      showToast(error.message || '無法載入對話紀錄');
+
+    for (const value of Object.values(reply)){
+      if (typeof value === 'string') return value;
+      if (value && typeof value === 'object') {
+        const text = replyText(value);
+        if (text !== '暫時無法讀取回覆內容。') return text;
+      }
     }
+    return '暫時無法讀取回覆內容。';
   }
+
   function appendBubble(who, text){
     const div = document.createElement('div');
     div.className = `chat-bubble ${who}`;
@@ -3271,19 +3280,32 @@ const ContinueChat = (() => {
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
   function init(){
-    els.continueChatQr.src = drawFakeQr();
-    els.continueChatEntry.addEventListener('click', () => { seedChat(); els.chatModal.classList.remove('hidden'); });
+    els.continueChatEntry.addEventListener('click', () => {
+      reset(AppState.sessionId);
+      els.chatModal.classList.remove('hidden');
+      els.chatInput.focus();
+    });
     els.btnChatClose.addEventListener('click', () => els.chatModal.classList.add('hidden'));
     async function send(){
       const text = els.chatInput.value.trim();
-      if (!text || !AppState.sessionId) return;
+      if (!text || !AppState.sessionId || remainingMessages === 0 || els.btnChatSend.disabled) return;
       appendBubble('user', text);
       els.chatInput.value = '';
+      els.chatInput.disabled = true;
+      els.btnChatSend.disabled = true;
+      els.btnChatSend.textContent = '回覆中';
       try {
-        const { reply } = await DivinationApi.sendChat(AppState.sessionId, text);
-        appendBubble('deity', reply);
+        const { reply, remaining_messages } = await DivinationApi.sendChat(AppState.sessionId, text);
+        appendBubble('deity', replyText(reply));
+        remainingMessages = remaining_messages;
       } catch (error) {
-        showToast(error.message || '無法送出提問');
+        appendBubble('deity', error.message || '暫時無法回覆，請稍後再試。');
+      } finally {
+        els.btnChatSend.textContent = '送出';
+        els.chatInput.disabled = false;
+        els.btnChatSend.disabled = false;
+        updateLimit();
+        if (!els.chatInput.disabled) els.chatInput.focus();
       }
     }
     els.btnChatSend.addEventListener('click', send);

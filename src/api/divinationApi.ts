@@ -88,9 +88,18 @@ export async function interpretFortuneWithContext(
   return unwrap(data)
 }
 
-export async function sendChat(sessionId: string, message: string): Promise<{ reply: string; remaining_messages: number }> {
+export async function sendChat(sessionId: string, message: string): Promise<{
+  reply: unknown
+  remaining_messages: number
+}> {
   const { data } = await apiClient.post<
-    ApiResponse<{ reply: string; remaining_messages: number }> | { reply: string; remaining_messages: number }
+    ApiResponse<{
+      reply: unknown
+      remaining_messages: number
+    }> | {
+      reply: unknown
+      remaining_messages: number
+    }
   >(
     `/divinations/${sessionId}/chat/`,
     { message }
