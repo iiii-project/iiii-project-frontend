@@ -2220,12 +2220,13 @@ const DivinationApi = (() => {
     return fortuneSetCode;
   }
 
-  async function create(question, category, interactionMode = 'motion'){
+  async function create(question, category, interactionMode = 'motion', fortuneNumber = null){
     return request('/divinations/', {
       method: 'POST',
       body: JSON.stringify({
         question,
-        categories: [CATEGORY_API_MAP[category] || 'other'], interaction_mode: interactionMode, anonymous_user_id: anonymousUserId()
+        categories: [CATEGORY_API_MAP[category] || 'other'], interaction_mode: interactionMode, anonymous_user_id: anonymousUserId(),
+        ...(fortuneNumber === null ? {} : { fortune_number: fortuneNumber })
       })
     });
   }
@@ -2908,15 +2909,34 @@ const UIActions = (() => {
   els.btnManualGo.addEventListener('click', async () => {
     const n = validateManualNo();
     if (n === null) return;
+    const question = els.homeQuestion.value.trim();
+    if (question.length < 2){
+      showToast('請先輸入至少兩個字的問題，才能依問題進行 AI 解籤');
+      els.homeQuestion.focus();
+      return;
+    }
     try {
-      AppState.userQuery.question = els.homeQuestion.value.trim();
-      AppState.sessionId = null;
+      els.btnManualGo.disabled = true;
+      els.btnManualGo.textContent = '解 籤 中…';
+      AppState.userQuery.question = question;
+      const session = await DivinationApi.create(question, AppState.userQuery.category, 'click', n);
+      AppState.sessionId = session.session_id;
       AppState.currentFortune = await DivinationApi.getFortune(n);
-      AppState.interpretation = null;
+      try {
+        const interpreted = await DivinationApi.interpret(AppState.sessionId);
+        AppState.currentFortune = interpreted.fortune;
+        AppState.interpretation = interpreted.interpretation;
+      } catch (error) {
+        AppState.interpretation = null;
+        showToast(error.message || 'AI 解籤暫時無法使用，先為你顯示籤詩內容');
+      }
       els.sceneHome.classList.add('hidden');
       showDivinationLoading(() => { UIActions.showResultScene(); });
     } catch (error) {
       showToast(error.message || '找不到此籤號');
+    } finally {
+      els.btnManualGo.disabled = false;
+      els.btnManualGo.textContent = '直 接 解 籤';
     }
   });
 })();
