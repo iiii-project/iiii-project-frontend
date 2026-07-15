@@ -219,13 +219,13 @@ Authorization: Bearer <access_token>
 
 `POST /divinations/{session_id}/draw/`
 
-無 request body。僅限 `drawing` 狀態，隨機選出一支啟用籤詩並將狀態改為 `waiting_for_blocks`。已經抽過籤時會直接回傳原紀錄。
+無 request body。僅限 `drawing` 狀態，隨機選出一支啟用籤詩並將狀態改為 `waiting_for_blocks`。在該輪出現非聖筊後，會清除籤詩並回到 `drawing`，可再次抽籤。
 
 ### 擲筊
 
 `POST /divinations/{session_id}/blocks/`
 
-無 request body。僅限 `waiting_for_blocks` 狀態；每一輪籤必須連續擲出 3 次聖筊。回傳：
+無 request body。僅限 `waiting_for_blocks` 狀態；每輪抽籤後只能擲一次筊。非聖筊會回到抽籤階段，單一 session 最多三輪；第三輪保證為聖筊。回傳：
 
 ```json
 {
@@ -243,7 +243,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-第 3 次連續取得 `sheng` 時紀錄才改為 `confirmed`。任一次結果不是 `sheng` 時，系統立即清除該輪籤與擲筊結果、將狀態改回 `drawing`；請重新呼叫抽籤端點後開始新一輪。非聖筊回應的 `remaining_attempts` 為 `0`。
+任一次取得 `sheng` 時紀錄即改為 `confirmed`，可直接解籤。前兩輪若不是 `sheng`，該輪籤詩會清除並回到抽籤階段；筊杯結果僅在本次 API 回應中提供，不會寫入資料庫。`remaining_attempts` 分別為 `2` 與 `1`。第三輪固定取得 `sheng`。
 
 ### AI 解籤
 
@@ -260,6 +260,23 @@ Authorization: Bearer <access_token>
 ```
 
 成功後回傳更新後的求籤紀錄，狀態為 `completed`。AI 服務不可用時回傳 `503` 與錯誤碼 `AI_SERVICE_UNAVAILABLE`。
+
+### 初始化 AI 對話
+
+`POST /divinations/{session_id}/chat/init/`
+
+僅限已完成解籤的紀錄。會將籤詩、使用者問題與解籤主題建立為 chatbot 的初始 prompt；可重複呼叫，已初始化時不會重複建立。
+
+```json
+{
+  "success": true,
+  "data": {
+    "initialized": true,
+    "message": {"id": 1, "role": "system", "content": "...", "created_at": "..."}
+  },
+  "message": "操作成功"
+}
+```
 
 ### AI 對話
 
@@ -280,7 +297,7 @@ Authorization: Bearer <access_token>
 
 `POST /divinations/{session_id}/chat/`
 
-僅限已完成解籤的紀錄。
+僅限已完成解籤的紀錄。會以初始化的籤詩與問題 prompt 作為對話背景；尚未呼叫初始化端點時，仍可使用以維持舊版相容性。
 
 ```json
 {"message": "請再說明我該注意的事項"}
