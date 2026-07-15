@@ -1724,6 +1724,7 @@ const BwaScene = (() => {
     cupB.rotation.set(0.55, -0.3, 0.45);
     let vyA = -0.08, vyB = 0.04;
     let doneA = false, doneB = false;
+    let bouncesA = 0, bouncesB = 0;
     const startTime = performance.now();
 
     function step(now) {
@@ -1737,6 +1738,14 @@ const BwaScene = (() => {
         cupA.rotation.y += 0.09;
         if (cupA.position.y <= restY) {
           cupA.position.y = restY;
+          if (bouncesA < 1) {
+            bouncesA++;
+            vyA = 1.35;
+            cupA.rotation.x += Math.PI * 0.42;
+            onImpact && onImpact();
+            requestAnimationFrame(step);
+            return;
+          }
           // coinA === 'domed' (凸面朝上) -> rotation.x = 0
           // flat (平面朝上) -> rotation.x = Math.PI (翻轉180度)
           cupA.rotation.set(coinA === 'domed' ? 0 : Math.PI, 0, 0);
@@ -1752,6 +1761,13 @@ const BwaScene = (() => {
         cupB.rotation.z += 0.12;
         if (cupB.position.y <= restY) {
           cupB.position.y = restY;
+          if (bouncesB < 1) {
+            bouncesB++;
+            vyB = 1.15;
+            cupB.rotation.x += Math.PI * 0.36;
+            requestAnimationFrame(step);
+            return;
+          }
           cupB.rotation.set(coinB === 'domed' ? 0 : Math.PI, 0, 0);
           doneB = true;
         }
@@ -2584,8 +2600,8 @@ const UIActions = (() => {
     els.resultGanzhi.textContent = `【${f.ganzhi}籤】`;
     els.resultGrade.textContent = f.grade;
     renderCalligraphyPoem(f.poem);
-    els.resultExplain.textContent = interpretation?.overall_meaning || f.explain;
-    typewriter(els.resultModern, interpretation?.relation_to_question || f.modern);
+    els.resultExplain.textContent = interpretation?.overall_meaning || 'AI 解籤模型尚未連線，因此目前無法依你的問題產生專屬解讀。';
+    typewriter(els.resultModern, interpretation?.relation_to_question || '請啟動後端設定的 LLM 服務後，再次求籤即可取得 AI 專屬解籤。');
     const tier = gradeTier(f.grade);
     els.resultBg.classList.add('show', tier);
     showScene('result');
