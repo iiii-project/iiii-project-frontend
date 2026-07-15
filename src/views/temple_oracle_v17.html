@@ -1715,9 +1715,14 @@ const BwaScene = (() => {
   function toss(coinA, coinB, onImpact, onSettle) {
     holding = false;
     AppState.bwaTossing = true;
-    const restY = -1.1; 
-    const gravity = 12; // 稍微加大重力讓掉落乾脆點
-    let vyA = 3.2, vyB = 3.5;
+    const restY = -1.1;
+    const gravity = 14;
+    // 點擊擲筊時從畫面上方落下，讓「拋出 → 翻轉 → 落地」動作清楚可見。
+    cupA.position.set(-0.78, 3.3, 0.15);
+    cupB.position.set(0.78, 3.65, 0.1);
+    cupA.rotation.set(-0.7, 0.35, -0.4);
+    cupB.rotation.set(0.55, -0.3, 0.45);
+    let vyA = -0.55, vyB = -0.2;
     let doneA = false, doneB = false;
     const startTime = performance.now();
 
@@ -1727,6 +1732,7 @@ const BwaScene = (() => {
       if (!doneA) {
         vyA -= gravity * dt;
         cupA.position.y += vyA * dt;
+        cupA.position.x += 0.012;
         cupA.rotation.x += 0.3;
         cupA.rotation.y += 0.15;
         if (cupA.position.y <= restY) {
@@ -1741,6 +1747,7 @@ const BwaScene = (() => {
       if (!doneB) {
         vyB -= gravity * dt;
         cupB.position.y += vyB * dt;
+        cupB.position.x -= 0.012;
         cupB.rotation.x += 0.26;
         cupB.rotation.z += 0.2;
         if (cupB.position.y <= restY) {
