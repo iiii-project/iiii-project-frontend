@@ -2179,6 +2179,9 @@ const isLookupOnly = new URLSearchParams(window.location.search).get('mode') ===
 
 const DivinationApi = (() => {
   const anonymousKey = 'temple-oracle-anonymous-user-id';
+  const apiBaseUrl = window.location.hostname === 'iii.gdtumn.com'
+    ? 'https://iiibackend.dev-serve.me/api/v1'
+    : '/api/v1';
 
   function anonymousUserId(){
     let value = localStorage.getItem(anonymousKey);
@@ -2188,7 +2191,7 @@ const DivinationApi = (() => {
 
   async function request(path, options = {}){
     const accessToken = localStorage.getItem('ai-fortune-access-token');
-    const response = await fetch(`/api/v1${path}`, {
+    const response = await fetch(`${apiBaseUrl}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
