@@ -2412,8 +2412,8 @@ const UIActions = (() => {
       els.bwaResultPanel.classList.remove('hidden');
 
       if (result.confirmed) {
-        els.bwaResultTitle.textContent = '三次聖筊 · 神明允准';
-        els.bwaResultDesc.textContent = '已連續取得三次聖筊，正在取得解籤內容。';
+        els.bwaResultTitle.textContent = '聖筊 · 神明允准';
+        els.bwaResultDesc.textContent = '聖筊，正在取得解籤內容。';
         try {
           const session = await DivinationApi.interpret(AppState.sessionId);
           AppState.currentFortune = session.fortune;
@@ -2485,8 +2485,8 @@ const UIActions = (() => {
       ParticleSystem.burst(pos.x, pos.y);
       spawnLightBurst(pos.x, pos.y);
       flashOnce();
-      els.bwaResultTitle.textContent = '三次聖筊 · 神明允准';
-      els.bwaResultDesc.textContent = '已連續取得三次聖筊，神明允准解籤。';
+      els.bwaResultTitle.textContent = '聖筊 · 神明允准';
+      els.bwaResultDesc.textContent = '聖筊，神明允准解籤。';
       if (typeof SincereStreak !== 'undefined') SincereStreak.increment();
       // 結果「定格放大」停留 1.8 秒，讓使用者看清楚判定結果，再進入墨染過場
       try {
