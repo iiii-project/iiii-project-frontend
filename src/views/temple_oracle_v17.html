@@ -474,9 +474,9 @@
   .chat-bubble{ max-width:80%; padding:0.55rem 0.85rem; border-radius:14px; font-size:12.5px; line-height:1.6; }
   .chat-bubble.deity{ align-self:flex-start; background:rgba(212,175,55,0.14); color:var(--ink); border:1px solid var(--gold-line); }
   .chat-bubble.user{ align-self:flex-end; background:var(--jiang-hong); color:#fff; }
-  .chat-input-row{ display:flex; gap:8px; margin-top:0.8rem; }
-  .chat-input-row input{ flex:1; padding:0.5rem 0.8rem; border-radius:999px; border:1px solid var(--gold-line); background:rgba(166,58,58,0.04); color:var(--ink); font-size:13px; outline:none; }
-  .chat-input-row button{ padding:0.5rem 1.1rem; border-radius:999px; background:var(--jiang-hong); color:#fff; border:none; cursor:pointer; font-size:12px; letter-spacing:0.1em; }
+  .chat-input-row{ display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px; margin-top:0.8rem; width:100%; }
+  .chat-input-row input{ min-width:0; width:100%; box-sizing:border-box; padding:0.5rem 0.8rem; border-radius:999px; border:1px solid var(--gold-line); background:rgba(166,58,58,0.04); color:var(--ink); font-size:13px; outline:none; }
+  .chat-input-row button{ white-space:nowrap; padding:0.5rem 1.1rem; border-radius:999px; background:var(--jiang-hong); color:#fff; border:none; cursor:pointer; font-size:12px; letter-spacing:0.1em; }
   .chat-input-row button:disabled{ cursor:wait; opacity:0.65; }
   .chat-limit{ min-height:1.4rem; margin:0.2rem 0 0; color:var(--ink-soft); font-size:10.5px; letter-spacing:0.04em; text-align:left; }
   #share-row.softened{ opacity:0.55; transform:scale(0.9); transform-origin:left center; }
