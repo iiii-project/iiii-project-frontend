@@ -244,7 +244,11 @@
 
   /* ===================== 誠心機制：插香 / 合十默念 ===================== */
   #scene-incense{ justify-content:center; align-items:center; }
-  #incense-stick{ position:relative; width:14px; height:180px; }
+  #incense-anchor{
+    position:fixed; left:50%; top:62%; width:54px; height:180px; z-index:20; pointer-events:none;
+    transform:translate3d(-50%,-50%,0); transform-origin:50% 85%; will-change:left,top,transform;
+  }
+  #incense-stick{ position:relative; width:14px; height:180px; margin:0 auto; }
   #incense-stick .stick-body{ position:absolute; bottom:0; left:0; width:100%; height:140px; background:linear-gradient(180deg,#e9c46a,#8a5a30); border-radius:2px; }
   #incense-stick .stick-tip{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:8px; height:8px; border-radius:50%; background:radial-gradient(circle,#ffcf7a,#c94b40); box-shadow:0 0 14px rgba(255,160,80,0.9); }
   #incense-progress-ring{
@@ -799,7 +803,7 @@
       <div class="hairline mt-4"></div>
       <p id="incense-hint" class="text-[13px] md:text-sm mt-4 opacity-80 tracking-[0.15em] font-light">請雙手合十，於心中默念所求之事</p>
     </div>
-    <div style="position:relative;">
+    <div id="incense-anchor">
       <div id="incense-progress-ring"></div>
       <div id="incense-stick"><div class="stick-body"></div><div class="stick-tip"></div></div>
     </div>
@@ -971,6 +975,9 @@ const CONFIG = {
   INCENSE_CENTER_X: [0.28, 0.72], // 單手備援路徑：手部須落在畫面水平置中範圍
   INCENSE_CENTER_Y: [0.3, 0.85],  // 單手備援路徑：手部須落在畫面垂直置中範圍
   INCENSE_STILL_VELOCITY_MAX: 0.006, // 單手備援路徑：每影格移動量需小於此值才算「穩定」
+  INCENSE_FOLLOW_EASE: 0.18,       // 香跟隨手部時的低通濾波，越小越柔和
+  INCENSE_FOLLOW_Y_OFFSET: 0.1,   // 香位於合十雙手稍下方，避免遮住掌心
+  INCENSE_TILT_MAX: 8,             // 跟隨手部左右移動時的最大傾角
 
   // ---- 環境光連動 / 粒子互動 ----
   AMBIENT_SAMPLE_MS: 300,      // 環境亮度取樣間隔
@@ -1203,6 +1210,7 @@ const els = {
   sceneResult: document.getElementById('scene-result'),
 
   incenseHint: document.getElementById('incense-hint'),
+  incenseAnchor: document.getElementById('incense-anchor'),
   incenseStick: document.getElementById('incense-stick'),
   incenseRing: document.getElementById('incense-progress-ring'),
 
@@ -1771,7 +1779,7 @@ const GestureEngine = (() => {
   const shake = { active:false, startTime:0, lastY:0, lastVelocitySign:0, oscillations:0, lastFistTime:0 };
 
   // ---- 合十默念狀態 ----
-  const incense = { active:false, startTime:0 };
+  const incense = { active:false, startTime:0, visualX:0.5, visualY:0.62, visualTilt:0 };
 
   // ---- 捧筊 / 拋擲 狀態 ----
   const cup = {
@@ -1881,6 +1889,29 @@ const GestureEngine = (() => {
 
   let incenseLastSingleHandPos = null;
 
+  function updateIncenseFollow(point){
+    // MediaPipe coordinates are unmirrored; match the mirrored camera canvas for the AR object.
+    const targetX = 1 - point.x;
+    const targetY = Math.min(0.82, Math.max(0.28, point.y + CONFIG.INCENSE_FOLLOW_Y_OFFSET));
+    const ease = CONFIG.INCENSE_FOLLOW_EASE;
+    const dx = targetX - incense.visualX;
+    incense.visualX += dx * ease;
+    incense.visualY += (targetY - incense.visualY) * ease;
+    const targetTilt = Math.max(-CONFIG.INCENSE_TILT_MAX, Math.min(CONFIG.INCENSE_TILT_MAX, -dx * 90));
+    incense.visualTilt += (targetTilt - incense.visualTilt) * ease;
+    els.incenseAnchor.style.left = `${incense.visualX * 100}%`;
+    els.incenseAnchor.style.top = `${incense.visualY * 100}%`;
+    els.incenseAnchor.style.transform = `translate3d(-50%,-50%,0) rotate(${incense.visualTilt}deg)`;
+    return { x: incense.visualX, y: incense.visualY };
+  }
+
+  function resetIncenseFollow(){
+    incense.visualX = 0.5; incense.visualY = 0.62; incense.visualTilt = 0;
+    els.incenseAnchor.style.left = '50%';
+    els.incenseAnchor.style.top = '62%';
+    els.incenseAnchor.style.transform = 'translate3d(-50%,-50%,0)';
+  }
+
   function defaultIncenseText(){
     const q = AppState.userQuery || {};
     return q.question ? `請雙手合十，默念：「${q.question}」` : `請雙手合十，默念關於「${q.category||'所求之事'}」的問題`;
@@ -1929,6 +1960,8 @@ const GestureEngine = (() => {
       return;
     }
 
+    const visualCenter = centerPt ? updateIncenseFollow(centerPt) : null;
+
     if (isClose){
       if (!incense.active){ incense.active = true; incense.startTime = now; els.incenseRing.classList.add('on'); }
       const elapsed = now - incense.startTime;
@@ -1937,8 +1970,8 @@ const GestureEngine = (() => {
       els.incenseHint.textContent = `${statusText} ${Math.round(progress*100)}%`;
       els.incenseHint.classList.add('sensing'); els.incenseStick.classList.add('sensing');
       // 誠心凝聚的即時回饋：附近的金色香灰粒子緩緩向雙手中心匯聚，進度越高匯聚力道越強
-      if (centerPt){
-        ParticleSystem.converge(centerPt.x*window.innerWidth, centerPt.y*window.innerHeight, 260, 2 + progress*5);
+      if (visualCenter){
+        ParticleSystem.converge(visualCenter.x*window.innerWidth, visualCenter.y*window.innerHeight, 260, 2 + progress*5);
       }
       if (progress >= 1){ UIActions.completeIncense(); }
     } else {
@@ -1950,6 +1983,7 @@ const GestureEngine = (() => {
   }
   function resetIncenseProgress(){
     incense.active = false; incenseLastSingleHandPos = null;
+    resetIncenseFollow();
     els.incenseRing.classList.remove('on'); els.incenseRing.style.setProperty('--p',0);
     els.incenseHint.classList.remove('sensing'); els.incenseStick.classList.remove('sensing');
   }
