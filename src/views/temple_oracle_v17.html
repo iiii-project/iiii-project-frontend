@@ -381,6 +381,8 @@
   .home-divider{ display:flex; align-items:center; gap:10px; margin:1.2rem 0 0.6rem; }
   .home-divider .line{ flex:1; height:1px; background:var(--gold-line); }
   .home-divider span{ font-size:11px; letter-spacing:0.2em; color:var(--morandi-dust); }
+  .lookup-mobile-note{ display:none; }
+  .mobile-form-label{ display:none; }
   #manual-no-input{
     width:100px; text-align:center; padding:0.5rem; border-radius:10px; background:rgba(166,58,58,0.04);
     border:1px solid var(--gold-line); color:var(--ink); font-family:"Noto Serif TC",serif; font-size:16px; outline:none;
@@ -421,7 +423,7 @@
   }
   .category-pill.selected{ background: var(--gold); color:#2a1a06; font-weight:600; border-color:var(--gold); }
   #home-question{
-    width:100%; margin-top:0.8rem; padding:0.7rem 1rem; border-radius:14px; background:rgba(166,58,58,0.04);
+    box-sizing:border-box; width:100%; max-width:100%; margin-top:0.8rem; padding:0.7rem 1rem; border-radius:14px; background:rgba(166,58,58,0.04);
     border:1px solid var(--gold-line); color:var(--ink); font-family:"Noto Serif TC",serif; font-size:14px;
     outline:none; resize:none;
   }
@@ -533,6 +535,35 @@
   @media (max-width: 640px){
     html, body{ min-height:100dvh; }
     #output_canvas, #particle_canvas{ width:100vw; height:100dvh; }
+    /* 手機首頁：讓「選主題、寫問題、搖籤」成為一眼可完成的主要流程。 */
+    body.mobile-shake-mode #scene-home{
+      position:relative; min-height:100dvh; overflow-y:auto; align-items:flex-start;
+      padding:12px 12px calc(env(safe-area-inset-bottom) + 22px);
+      background:linear-gradient(180deg, #211813 0%, #120d0a 100%);
+    }
+    body.mobile-shake-mode .home-card{
+      width:100%; max-width:none; max-height:none; min-height:0; overflow:visible;
+      padding:1.25rem 1rem 1.5rem; border-radius:18px;
+    }
+    body.mobile-shake-mode .deity-switch{ margin-bottom:0.45rem; }
+    body.mobile-shake-mode .deity-switch button:not(.active){ display:none; }
+    body.mobile-shake-mode .today-card{ gap:6px 10px; padding:0.42rem 0.7rem; margin-bottom:0.35rem; border-radius:10px; font-size:10.5px; }
+    body.mobile-shake-mode .today-card-actions{ justify-content:flex-end; margin:0 0 0.45rem; }
+    body.mobile-shake-mode #btn-share-today{ display:none; }
+    body.mobile-shake-mode .profile-toggle{ margin:0.45rem 0 0.7rem; font-size:10.5px; }
+    body.mobile-shake-mode #deity-portrait{ width:82px; height:82px; margin-bottom:0.4rem; }
+    body.mobile-shake-mode #oracle-title{ font-size:1.35rem; letter-spacing:0.26em !important; }
+    body.mobile-shake-mode #oracle-intro{ margin:0.45rem 0 0.65rem; line-height:1.65; }
+    body.mobile-shake-mode .mobile-form-label{ display:block; margin:0.8rem 0 0.45rem; color:var(--ink-soft); font-size:11px; letter-spacing:0.12em; text-align:left; }
+    body.mobile-shake-mode .category-grid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin:0; }
+    body.mobile-shake-mode .category-pill{ width:100%; min-height:42px; padding:0.45rem 0.5rem; font-size:12px; letter-spacing:0.08em; }
+    body.mobile-shake-mode #home-question{ min-height:96px; margin-top:0; padding:0.75rem 0.85rem; border-radius:12px; font-size:16px; line-height:1.65; }
+    body.mobile-shake-mode #btn-home-start{ width:100%; min-height:54px; margin-top:1rem !important; font-size:14px; }
+    body.mobile-shake-mode .lookup-section{ margin-top:1.15rem; padding:0.9rem; border:1px solid rgba(212,175,55,0.35); border-radius:14px; background:rgba(212,175,55,0.055); }
+    body.mobile-shake-mode .home-divider{ margin:0 0 0.35rem; }
+    body.mobile-shake-mode .lookup-mobile-note{ display:block; margin:0 0 0.65rem; color:var(--ink-soft); font-size:10.5px; line-height:1.6; text-align:left; }
+    body.mobile-shake-mode #manual-no-input{ flex:1; max-width:130px; min-height:42px; }
+    body.mobile-shake-mode #btn-manual-go{ min-height:42px; font-size:11px !important; }
     body.mobile-shake-mode #output_canvas,
     body.mobile-shake-mode #particle_canvas,
     body.mobile-shake-mode #ar-decoration{ display:none; }
@@ -698,20 +729,25 @@
       <div class="hairline mt-3 mb-1"></div>
       <p id="oracle-intro" class="text-[12px] opacity-70 font-light tracking-wide mb-2">請選擇你想詢問的方向，並簡短寫下心中的問題</p>
 
+      <p class="mobile-form-label">選擇所問方向</p>
       <div id="category-grid" class="category-grid">
         <!-- 分類清單由 CONFIG.CATEGORIES 動態產生，若要增減分類，直接編輯該陣列即可 -->
       </div>
 
+      <p class="mobile-form-label">寫下你想請示的問題</p>
       <textarea id="home-question" rows="2" maxlength="80" placeholder="例如：我今年適合轉換跑道嗎？"></textarea>
 
       <button id="btn-home-start" class="btn-line mt-6">開　始　祈　福</button>
 
-      <div id="known-fortune-divider" class="home-divider"><div class="line"></div><span>或　已　知　籤　號</span><div class="line"></div></div>
-      <div class="flex items-center justify-center gap-3 flex-wrap">
-        <input id="manual-no-input" type="number" min="1" max="60" placeholder="1-60" />
-        <button id="btn-manual-go" class="btn-line" style="padding:0.5rem 1.2rem;">直 接 解 籤</button>
+      <div class="lookup-section">
+        <div id="known-fortune-divider" class="home-divider"><div class="line"></div><span>已　知　籤　號</span><div class="line"></div></div>
+        <p class="lookup-mobile-note">已經拿到籤號？輸入籤號後，會依上方的問題與主題為你解籤。</p>
+        <div class="flex items-center justify-center gap-3 flex-wrap">
+          <input id="manual-no-input" type="number" min="1" max="60" placeholder="1-60" />
+          <button id="btn-manual-go" class="btn-line" style="padding:0.5rem 1.2rem;">查　詢　解　籤</button>
+        </div>
+        <p id="manual-no-error"></p>
       </div>
-      <p id="manual-no-error"></p>
     </div>
   </div>
 
