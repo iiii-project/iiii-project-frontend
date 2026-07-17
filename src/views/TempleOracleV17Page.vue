@@ -8,9 +8,13 @@ const iframeUrl = computed(() => {
   const url = new URL('./temple_oracle_v17.html', import.meta.url)
   const flow = route.query.flow
   const mode = route.query.mode
+  const session = route.query.session
+  const share = route.query.share
 
   if (typeof flow === 'string') url.searchParams.set('flow', flow)
   if (typeof mode === 'string') url.searchParams.set('mode', mode)
+  if (typeof session === 'string') url.searchParams.set('session', session)
+  if (typeof share === 'string') url.searchParams.set('share', share)
 
   return url.href
 })
@@ -63,5 +67,27 @@ const iframeUrl = computed(() => {
 .return-home-button:hover {
   background: #922f31;
   color: #fffaf2;
+}
+
+@media (max-width: 767px) {
+  .temple-oracle-page {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: #fffdf8;
+  }
+
+  .return-home-button {
+    position: static;
+    flex: 0 0 auto;
+    align-self: flex-end;
+    margin: 12px 16px;
+  }
+
+  .temple-oracle-v17-frame {
+    min-height: 0;
+    height: calc(100dvh - 68px);
+    flex: 1 1 auto;
+  }
 }
 </style>

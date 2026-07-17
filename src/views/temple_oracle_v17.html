@@ -12,6 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"></script>
 
 <style>
   :root{
@@ -219,6 +220,26 @@
     backdrop-filter: blur(30px) saturate(1.15) !important;
     border-color: rgba(212,175,55,0.6) !important;
     color: var(--ink);
+    max-height: calc(100vh - 48px);
+    overflow: hidden auto;
+    pointer-events:auto;
+  }
+  #scene-result .text-left{ max-height: calc(100vh - 110px); overflow-y:auto; padding-right:0.55rem; scrollbar-gutter:stable; }
+  #result-explain, #result-modern{ overflow-wrap:anywhere; white-space:pre-wrap; }
+  #result-explain{ max-height:34vh; overflow-y:auto; padding-right:0.35rem; }
+  #result-explain.is-collapsed{ position:relative; max-height:17rem; overflow:hidden; }
+  #result-explain.is-collapsed::after{ content:''; position:absolute; right:0; bottom:0; left:0; height:3.2rem; background:linear-gradient(transparent, rgba(253,250,244,0.98)); pointer-events:none; }
+  .result-read-more{ display:none; width:100%; margin-top:0.25rem; padding:0.45rem 0; border:0; background:transparent; color:var(--jiang-hong); cursor:pointer; font-size:11px; letter-spacing:0.14em; text-align:center; }
+  .result-read-more.visible{ display:block; }
+  .interpretation-section{ padding:0.1rem 0 0.95rem; }
+  .interpretation-section + .interpretation-section{ border-top:1px solid rgba(212,175,55,0.18); padding-top:0.95rem; }
+  .interpretation-section-title{ margin:0 0 0.35rem; color:var(--jiang-hong); font-size:12px; font-weight:600; letter-spacing:0.12em; }
+  .interpretation-section-body{ margin:0; line-height:1.85; }
+  @media (max-width: 767px){
+    #scene-result{ align-items:flex-start; overflow-y:auto; padding:1.5rem 0; }
+    #scene-result .glass-card{ max-height:none; overflow:visible; }
+    #scene-result .text-left{ max-height:none; overflow:visible; }
+    #result-explain{ max-height:38vh; }
   }
   @media (min-width: 768px){ #result-poem{ min-width: 230px; } }
 
@@ -445,8 +466,8 @@
     color:var(--ink-soft); border:1px dashed var(--gold-line); border-radius:999px; padding:0.3rem 0.9rem; cursor:pointer; margin-bottom:0.6rem;
     background:rgba(255,255,255,0.4);
   }
-  #profile-modal, #vow-modal, #chat-modal, #history-modal{ position:fixed; inset:0; z-index:97; background:rgba(40,28,20,0.55); backdrop-filter: blur(6px); display:flex; align-items:center; justify-content:center; pointer-events:auto; }
-  #profile-modal.hidden, #vow-modal.hidden, #chat-modal.hidden, #history-modal.hidden{ display:none !important; }
+  #profile-modal, #vow-modal, #chat-modal, #history-modal, #qr-modal{ position:fixed; inset:0; z-index:97; background:rgba(40,28,20,0.55); backdrop-filter: blur(6px); display:flex; align-items:center; justify-content:center; pointer-events:auto; }
+  #profile-modal.hidden, #vow-modal.hidden, #chat-modal.hidden, #history-modal.hidden, #qr-modal.hidden{ display:none !important; }
   .modal-card{ max-width:420px; width:90vw; max-height:86vh; overflow-y:auto; padding:2rem 1.8rem; text-align:center; }
   .form-row{ text-align:left; margin-top:0.9rem; }
   .form-row label{ display:block; font-size:11px; letter-spacing:0.15em; color:var(--ink-soft); margin-bottom:0.3rem; }
@@ -467,7 +488,7 @@
   }
   .sensitive-note{ font-size:12px; color:var(--jiang-hong); margin-top:0.5rem; line-height:1.7; }
   .continue-chat-entry{
-    position:fixed; top:76px; right:14px; z-index:45; pointer-events:auto; display:flex; align-items:center; gap:8px;
+    position:fixed; top:auto; right:28px; bottom:24px; z-index:110; pointer-events:auto; display:flex; align-items:center; gap:8px;
     background:rgba(255,255,255,0.85); border:1px solid var(--gold-line); border-radius:999px; padding:6px 14px 6px 6px;
     box-shadow:0 6px 18px rgba(120,90,50,0.18); cursor:pointer; opacity:0; transform:translateY(-8px); transition: opacity 0.4s ease, transform 0.4s ease;
   }
@@ -483,9 +504,131 @@
   .chat-input-row button{ white-space:nowrap; padding:0.5rem 1.1rem; border-radius:999px; background:var(--jiang-hong); color:#fff; border:none; cursor:pointer; font-size:12px; letter-spacing:0.1em; }
   .chat-input-row button:disabled{ cursor:wait; opacity:0.65; }
   .chat-limit{ min-height:1.4rem; margin:0.2rem 0 0; color:var(--ink-soft); font-size:10.5px; letter-spacing:0.04em; text-align:left; }
+  .chat-suggestions{ display:flex; flex-wrap:wrap; gap:0.4rem; margin:0.55rem 0 0; }
+  .chat-suggestion{ padding:0.38rem 0.65rem; border:1px solid rgba(212,175,55,0.62); border-radius:999px; background:rgba(255,255,255,0.55); color:var(--ink-soft); cursor:pointer; font-size:10.5px; line-height:1.35; text-align:left; }
+  .chat-suggestion:hover, .chat-suggestion:focus-visible{ color:var(--jiang-hong); border-color:var(--jiang-hong); outline:none; }
   #share-row.softened{ opacity:0.55; transform:scale(0.9); transform-origin:left center; }
   #share-row.softened button{ font-size:10.5px !important; padding:0.4rem 0.9rem !important; border-style:dashed; }
   .question-recap{ font-size:12px; opacity:0.65; letter-spacing:0.1em; margin-bottom:0.6rem; }
+  .result-primary-actions{ display:flex; margin-top:1.5rem; }
+  .result-primary-actions{ gap:0.65rem; }
+  .result-primary-actions .btn-line{ flex:1; min-width:0; }
+  #btn-show-qr{ background:var(--jiang-hong); color:#fff; border-color:var(--jiang-hong); }
+  .chat-context{ margin:0.1rem 0 0.35rem; color:var(--ink-soft); font-size:10.5px; line-height:1.55; text-align:left; }
+  .result-more-actions{ margin-top:0.8rem; }
+  .result-more-actions summary{
+    list-style:none; cursor:pointer; color:var(--ink-soft); font-size:11px; letter-spacing:0.16em; text-align:center;
+    padding:0.55rem 0; border-top:1px solid rgba(212,175,55,0.24);
+  }
+  .result-more-actions summary::-webkit-details-marker{ display:none; }
+  .result-more-actions summary::after{ content:'+'; margin-left:0.5rem; color:var(--jiang-hong); font-size:16px; }
+  .result-more-actions[open] summary::after{ content:'−'; }
+  .result-extra-actions{ display:flex; flex-wrap:wrap; gap:0.55rem; padding-top:0.25rem; }
+  .result-extra-actions .btn-line{ flex:1 1 135px; padding:0.48rem 0.75rem !important; font-size:11px !important; letter-spacing:0.12em; }
+  #qr-modal .modal-card{ max-width:340px; padding:1.8rem; }
+  #share-qr-code{ display:flex; justify-content:center; margin:1rem auto; padding:12px; background:#fff; border-radius:8px; width:max-content; max-width:100%; }
+  .mobile-shared-kicker{ display:none; }
+
+  /* 手機鏡頭求籤：確保教學、上香和控制項能在 Safari 動態工具列下完整操作。 */
+  @media (max-width: 640px){
+    html, body{ min-height:100dvh; }
+    #output_canvas, #particle_canvas{ width:100vw; height:100dvh; }
+    #tutorial-overlay{ align-items:stretch; padding:calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px); }
+    .tutorial-card{
+      width:100%; max-width:none; max-height:none; overflow-y:auto; padding:1.2rem 1rem calc(1rem + env(safe-area-inset-bottom));
+      border-radius:18px; overscroll-behavior:contain;
+    }
+    .tutorial-card .eyebrow{ font-size:10px; letter-spacing:0.2em; }
+    .tutorial-card h2{ font-size:18px !important; letter-spacing:0.22em !important; }
+    .tutorial-card .hairline{ margin-top:0.7rem; }
+    .tutorial-steps{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin:1rem 0; }
+    .tutorial-step{
+      width:auto; min-height:142px; padding:0.7rem 0.45rem; border:1px solid rgba(212,175,55,0.22);
+      border-radius:12px; background:rgba(255,255,255,0.38);
+    }
+    .tutorial-step:last-child{ grid-column:1 / -1; min-height:118px; }
+    .tutorial-step svg{ width:62px; height:62px; }
+    .tutorial-step h4{ margin:0.25rem 0; font-size:11px; letter-spacing:0.1em; }
+    .tutorial-step p{ font-size:10.5px; line-height:1.45; }
+    #btn-tutorial-start{
+      position:sticky; bottom:0; width:100%; min-height:46px; padding:0.65rem 1rem;
+      background:rgba(255,253,248,0.96); box-shadow:0 -8px 18px rgba(253,250,244,0.9);
+    }
+    #btn-help{ top:calc(env(safe-area-inset-top) + 12px); left:12px; width:36px; height:36px; }
+    #scene-incense .glass-card{
+      top:calc(env(safe-area-inset-top) + 14px) !important; width:calc(100vw - 32px); max-width:440px;
+      padding:1rem 0.85rem !important; border-radius:18px;
+    }
+    #scene-incense .glass-card h1{ font-size:19px !important; letter-spacing:0.27em !important; }
+    #incense-hint{ margin-top:0.7rem !important; font-size:11.5px !important; line-height:1.65; letter-spacing:0.07em !important; }
+    #incense-anchor{ top:64%; transform:translate3d(-50%,-50%,0) scale(0.78); }
+
+    /* 掃碼後的專屬籤詩頁：移除 AR 畫布，讓籤詩、解讀與追問成為單一手機閱讀流程。 */
+    body.shared-session{ overflow:auto; background:#f7f2e8; }
+    body.shared-session #output_canvas,
+    body.shared-session #particle_canvas,
+    body.shared-session #vignette,
+    body.shared-session #ar-decoration,
+    body.shared-session #result-bg{ display:none; }
+    body.shared-session #scene-result{
+      position:relative; inset:auto; min-height:100dvh; overflow-y:auto; align-items:flex-start; pointer-events:auto;
+      padding:calc(env(safe-area-inset-top) + 18px) 14px calc(env(safe-area-inset-bottom) + 28px);
+      background:linear-gradient(180deg, #fffdf8 0%, #f7f0e3 100%);
+    }
+    body.shared-session #scene-result .glass-card{
+      width:100%; max-width:560px; max-height:none; margin:0 auto; padding:1.3rem 1.05rem 1.6rem !important;
+      gap:1.35rem; overflow:visible; border-radius:18px; box-shadow:0 14px 32px rgba(94,68,40,0.12);
+    }
+    body.shared-session #scene-result .text-center,
+    body.shared-session #scene-result .text-left{ width:100%; max-width:none; max-height:none; overflow:visible; padding:0; }
+    body.shared-session .mobile-shared-kicker{ display:block; margin:0 0 0.35rem; color:var(--jiang-hong); font-size:10px; letter-spacing:0.18em; }
+    body.shared-session #result-recap{ line-height:1.65; color:var(--ink-soft); }
+    body.shared-session #result-poem{
+      writing-mode:horizontal-tb; height:auto !important; min-width:0; max-width:100%; padding:1rem 0.8rem;
+      border-top:1px solid var(--gold-line); border-bottom:1px solid var(--gold-line); text-align:center;
+      font-size:18px !important; line-height:2.05; letter-spacing:0.12em !important;
+    }
+    body.shared-session #result-poem br{ display:block; content:""; margin:0.2rem 0; }
+    body.shared-session #result-explain{ max-height:none; overflow:visible; padding:0; font-size:14px !important; line-height:1.9; }
+    body.shared-session #result-explain.is-collapsed{ max-height:18rem; overflow:hidden; }
+    body.shared-session #result-modern{ font-size:14px !important; line-height:1.9; }
+    body.shared-session .disclaimer-note{ margin-top:1rem; font-size:11px; line-height:1.65; }
+    body.shared-session #share-row{ display:none; }
+    body.shared-session #btn-show-qr{ display:none; }
+    .continue-chat-entry,
+    body.shared-session .continue-chat-entry{
+      position:fixed; top:auto; right:14px; bottom:calc(env(safe-area-inset-bottom) + 14px); z-index:96;
+      min-height:50px; padding:8px 16px; border-color:rgba(166,58,58,0.42); background:var(--jiang-hong); box-shadow:0 10px 24px rgba(100,34,34,0.28);
+    }
+    .continue-chat-entry,
+    body.shared-session .continue-chat-entry{ bottom:max(100px, calc(env(safe-area-inset-bottom) + 76px)); right:16px; }
+    .continue-chat-entry span,
+    body.shared-session .continue-chat-entry span{ color:#fff; font-size:12px; line-height:1.35; }
+    body.shared-session #shared-chat-slot{ display:block; margin-top:1rem; }
+    body.shared-session #shared-chat-slot .continue-chat-entry{
+      position:static; inset:auto; width:100%; min-height:54px; margin:0; justify-content:center; padding:10px 18px;
+      border-radius:14px; opacity:0; transform:none; pointer-events:none;
+    }
+    body.shared-session #shared-chat-slot .continue-chat-entry.show{ opacity:1; pointer-events:auto; }
+    body.shared-session #shared-chat-slot .continue-chat-entry span{ font-size:13px; text-align:center; }
+    .result-primary-actions{ margin-top:1.25rem; }
+    .result-primary-actions .btn-line{ min-height:52px; }
+    body.shared-session .result-primary-actions{ display:block; }
+    body.shared-session .result-primary-actions #btn-restart{ width:100%; }
+    .result-extra-actions{ display:grid; grid-template-columns:1fr; }
+    .result-extra-actions .btn-line{ width:100%; min-height:42px; }
+    body.shared-session #chat-modal{ align-items:flex-end; padding:0; }
+    body.shared-session #chat-modal .modal-card{
+      width:100vw; max-width:none; height:min(74dvh,680px); max-height:none; margin:0; padding:1.2rem 1rem calc(1rem + env(safe-area-inset-bottom));
+      border-radius:22px 22px 0 0; box-shadow:0 -10px 30px rgba(34,22,14,0.24);
+    }
+    body.shared-session #chat-log{ padding:0.6rem 0.25rem; }
+    body.shared-session .chat-bubble{ max-width:86%; font-size:13px; }
+    body.shared-session .chat-suggestions{ margin-top:0.65rem; }
+    body.shared-session .chat-suggestion{ font-size:11px; }
+    body.shared-session .chat-input-row{ position:sticky; bottom:0; padding-top:0.6rem; background:var(--cream); }
+  }
+  }
 </style>
 </head>
 <body>
@@ -645,7 +788,7 @@
 
   <!-- ===================== 延續提問聊天入口 ===================== -->
   <div class="continue-chat-entry" id="continue-chat-entry">
-    <span>繼續提問<br>與神明對話</span>
+    <span>繼續提問 · 與神明對話</span>
   </div>
 
   <div id="chat-modal" class="hidden">
@@ -654,6 +797,8 @@
       <h3 class="gold-text text-base tracking-[0.3em] mt-1">與　神　明　延　續　提　問</h3>
       <div class="hairline mt-2 mb-2"></div>
       <div id="chat-log"></div>
+      <div id="chat-suggestions" class="chat-suggestions" aria-label="追問建議"></div>
+      <p id="chat-context" class="chat-context"></p>
        <div class="chat-input-row">
          <input type="text" id="chat-input" maxlength="60" placeholder="請輸入您想繼續詢問的問題…">
          <button id="btn-chat-send">送出</button>
@@ -661,6 +806,16 @@
        <p id="chat-limit" class="chat-limit" aria-live="polite"></p>
        <button id="btn-chat-close" class="btn-line mt-3" style="padding:0.4rem 1.2rem;font-size:11px;">關　閉</button>
        <p class="privacy-note">＊追問會依本次解籤內容回覆；重大醫療、法律與財務問題請諮詢專業人士。</p>
+    </div>
+  </div>
+
+  <div id="qr-modal" class="hidden" aria-modal="true" role="dialog" aria-labelledby="qr-title">
+    <div class="glass-card modal-card fade-in">
+      <p class="eyebrow mb-1">OPEN ON YOUR PHONE</p>
+      <h3 id="qr-title" class="gold-text text-base tracking-[0.25em] mt-1">在手機接續這支籤</h3>
+      <div id="share-qr-code" aria-label="手機開啟解籤的 QR Code"></div>
+      <p class="privacy-note">掃描後會直接開啟本次籤詩；閱讀完可在同一個對話中繼續提問。</p>
+      <button id="btn-qr-close" class="btn-line mt-3" style="padding:0.4rem 1.2rem;font-size:11px;">關　閉</button>
     </div>
   </div>
 
@@ -896,6 +1051,7 @@
     <div class="glass-card px-10 md:px-20 py-10 md:py-14 flex flex-col md:flex-row items-center gap-10 md:gap-16 fade-in max-w-4xl mx-6">
       <div class="text-center">
         <p class="eyebrow mb-2">六十甲子籤 · THE ORACLE SAYS</p>
+        <p class="mobile-shared-kicker">你的專屬籤詩</p>
         <p id="result-recap" class="question-recap"></p>
         <p id="result-number" class="gold-text text-base tracking-[0.4em] mb-1">第　　首</p>
         <p id="result-ganzhi" class="text-xs opacity-70 tracking-[0.3em] mb-3"></p>
@@ -909,20 +1065,28 @@
           <h3 class="gold-text text-lg font-normal tracking-[0.3em]">籤　語　解　說</h3>
         </div>
         <div class="divider-gold !mx-0"></div>
-        <p id="result-explain" class="text-[13px] md:text-sm leading-loose font-light opacity-90 tracking-wide"></p>
+        <div id="result-explain" class="text-[13px] md:text-sm leading-loose font-light opacity-90 tracking-wide"></div>
+        <button id="btn-result-read-more" class="result-read-more" type="button" aria-controls="result-explain" aria-expanded="false">展開完整解讀</button>
         <h4 class="gold-text text-sm tracking-[0.3em] mt-5 mb-1 opacity-90">現代白話建議</h4>
         <p id="result-modern" class="text-[13px] md:text-sm leading-loose font-light opacity-80 tracking-wide"></p>
         <p id="sensitive-note" class="sensitive-note hidden"></p>
         <p class="disclaimer-note">＊重大問題（如醫療、法律等）仍請務必諮詢各領域專業人士。</p>
-        <div class="flex gap-3 mt-6 flex-wrap">
-          <button id="btn-amulet" class="btn-line">生成專屬平安符</button>
+        <div class="result-primary-actions">
+          <button id="btn-show-qr" class="btn-line">用手機接續這支籤</button>
           <button id="btn-restart" class="btn-line">再 求 一 籤</button>
-          <button id="btn-open-vow" class="btn-line">還　願　小　榜</button>
         </div>
-        <div class="flex gap-3 mt-3 flex-wrap" id="share-row">
-          <button id="btn-copy-link" class="btn-line" style="padding:0.5rem 1.2rem;font-size:12px;">🔗 複製解籤連結</button>
-          <button id="btn-share-line" class="btn-line" style="padding:0.5rem 1.2rem;font-size:12px;">分享至 LINE</button>
-        </div>
+        <div id="shared-chat-slot" aria-live="polite"></div>
+        <details class="result-more-actions">
+          <summary>更多功能</summary>
+          <div class="result-extra-actions">
+            <button id="btn-amulet" class="btn-line">生成專屬平安符</button>
+            <button id="btn-open-vow" class="btn-line">還　願　小　榜</button>
+            <div id="share-row" class="contents">
+              <button id="btn-copy-link" class="btn-line">複製解籤連結</button>
+              <button id="btn-share-line" class="btn-line">分享至 LINE</button>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   </div>
@@ -1188,7 +1352,11 @@ const els = {
   divinationLoading: document.getElementById('divination-loading'),
   toast: document.getElementById('toast'),
   btnCopyLink: document.getElementById('btn-copy-link'),
+  btnShowQr: document.getElementById('btn-show-qr'),
   btnShareLine: document.getElementById('btn-share-line'),
+  qrModal: document.getElementById('qr-modal'),
+  shareQrCode: document.getElementById('share-qr-code'),
+  btnQrClose: document.getElementById('btn-qr-close'),
   tutorial: document.getElementById('tutorial-overlay'),
   btnHelp: document.getElementById('btn-help'),
   btnQuickDivination: document.getElementById('btn-quick-divination'),
@@ -1243,6 +1411,8 @@ const els = {
   resultGrade: document.getElementById('result-grade'),
   resultPoem: document.getElementById('result-poem'),
   resultExplain: document.getElementById('result-explain'),
+  btnResultReadMore: document.getElementById('btn-result-read-more'),
+  sharedChatSlot: document.getElementById('shared-chat-slot'),
   btnRestart: document.getElementById('btn-restart'),
 
   // ---- v16 新功能模組 ----
@@ -1277,11 +1447,16 @@ const els = {
   continueChatEntry: document.getElementById('continue-chat-entry'),
    chatModal: document.getElementById('chat-modal'),
    chatLog: document.getElementById('chat-log'),
+   chatSuggestions: document.getElementById('chat-suggestions'),
+   chatContext: document.getElementById('chat-context'),
    chatInput: document.getElementById('chat-input'),
    btnChatSend: document.getElementById('btn-chat-send'),
    btnChatClose: document.getElementById('btn-chat-close'),
    chatLimit: document.getElementById('chat-limit'),
 };
+
+const continueChatEntryOrigin = document.createComment('continue-chat-entry-origin');
+els.continueChatEntry.before(continueChatEntryOrigin);
 
 const outCtx = els.outputCanvas.getContext('2d');
 const stickEls = Array.from(els.sticksGroup.querySelectorAll('.stick'));
@@ -2204,6 +2379,8 @@ const CATEGORY_API_MAP = {
   '考試學業': 'study', '家庭生活': 'family', '綜合運勢': 'other', '求財運': 'wealth',
   '問姻緣': 'love', '拼事業': 'career', '求健康': 'health', '學業功名': 'study'
 };
+const CATEGORY_LABELS = Object.fromEntries(Object.entries(CATEGORY_API_MAP).map(([label, value]) => [value, label]));
+const pageParams = new URLSearchParams(window.location.search);
 const requestedQuickFlow = new URLSearchParams(window.location.search).get('flow') === 'quick';
 if (requestedQuickFlow) window.parent.location.replace('/temple-oracle-v17');
 const isQuickOnly = false;
@@ -2236,6 +2413,12 @@ const DivinationApi = (() => {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body?.error?.message || '後端暫時無法處理這次求籤');
     return body.data || body;
+  }
+
+  function withShareAccess(path){
+    const token = pageParams.get('share');
+    if (!token) return path;
+    return `${path}${path.includes('?') ? '&' : '?'}share=${encodeURIComponent(token)}`;
   }
 
   function mapFortune(fortune){
@@ -2279,8 +2462,13 @@ const DivinationApi = (() => {
       const session = await request(`/divinations/${id}/interpret/`, { method: 'POST' });
       return { ...session, fortune: mapFortune(session.fortune) };
     },
+    get: async (id) => {
+      const session = await request(withShareAccess(`/divinations/${id}/`));
+      return { ...session, fortune: session.fortune ? mapFortune(session.fortune) : null };
+    },
     getFortune: async (number) => mapFortune(await request(`/fortune-sets/${await getFortuneSetCode()}/fortunes/${number}/`)),
-    sendChat: (id, message) => request(`/divinations/${id}/chat/`, { method: 'POST', body: JSON.stringify({ message }) }),
+    getChat: (id) => request(withShareAccess(`/divinations/${id}/chat/`)),
+    sendChat: (id, message) => request(withShareAccess(`/divinations/${id}/chat/`), { method: 'POST', body: JSON.stringify({ message }) }),
     history: async () => {
       const response = await request(`/divinations/?anonymous_user_id=${encodeURIComponent(anonymousUserId())}`);
       return response.items || response;
@@ -2288,7 +2476,7 @@ const DivinationApi = (() => {
   };
 })();
 
-const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, isFortuneLookup:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, userQuery:{ category:'綜合運勢', question:'' } };
+const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, isFortuneLookup:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, shareToken:null, userQuery:{ category:'綜合運勢', question:'' } };
 
 if (isLookupOnly) {
   document.getElementById('oracle-eyebrow').textContent = 'FORTUNE LOOKUP · AI INTERPRETATION';
@@ -2301,11 +2489,12 @@ if (isLookupOnly) {
 
 // 提早解析網址參數（分享連結可能帶入的籤號/分類），確保後續首頁初始化時就能讀到
 (function parseShareParamsEarly(){
-  const params = new URLSearchParams(window.location.search);
-  const sharedNo = params.get('fortune');
-  const sharedCategory = params.get('category');
+  const sharedNo = pageParams.get('fortune');
+  const sharedCategory = pageParams.get('category');
+  const sharedSessionId = pageParams.get('session');
   if (sharedNo && !Number.isNaN(Number(sharedNo))) AppState.pendingSharedFortuneNo = Number(sharedNo);
   if (sharedCategory) AppState.pendingSharedCategory = decodeURIComponent(sharedCategory);
+  if (sharedSessionId) AppState.sharedSessionId = sharedSessionId;
 })();
 
 const UIActions = (() => {
@@ -2596,6 +2785,48 @@ const UIActions = (() => {
     }, speed);
   }
 
+  function displayInterpretation(text){
+    const value = String(text || '').trim();
+    const maxLength = 2400;
+    return value.length > maxLength ? `${value.slice(0, maxLength).trimEnd()}\n\n（內容過長，已先顯示前段解讀。）` : value;
+  }
+
+  // 將 LLM 常見的段落標題轉成可快速掃讀的區塊，未知格式仍完整保留原文。
+  function renderInterpretation(text){
+    const fallback = 'AI 解籤模型尚未連線，因此目前無法依你的問題產生專屬解讀。';
+    const value = displayInterpretation(text) || fallback;
+    const headings = ['籤詩整體含義', '與問題的關聯', '當前情況分析', '可採取的行動', '應注意事項', '文化體驗提醒'];
+    const chunks = value.split(/(?=(?:籤詩整體含義|與問題的關聯|當前情況分析|可採取的行動|應注意事項|文化體驗提醒)\s*[：:])/g)
+      .map(chunk => chunk.trim())
+      .filter(Boolean);
+
+    els.resultExplain.innerHTML = '';
+    chunks.forEach(chunk => {
+      const section = document.createElement('section');
+      section.className = 'interpretation-section';
+      const match = chunk.match(/^([^：:\n]{1,12})\s*[：:]\s*/);
+      const title = match && headings.includes(match[1].trim()) ? match[1].trim() : '';
+      const body = title ? chunk.slice(match[0].length).trim() : chunk;
+      if (title){
+        const heading = document.createElement('h4');
+        heading.className = 'interpretation-section-title';
+        heading.textContent = title;
+        section.appendChild(heading);
+      }
+      const paragraph = document.createElement('p');
+      paragraph.className = 'interpretation-section-body';
+      paragraph.textContent = body;
+      section.appendChild(paragraph);
+      els.resultExplain.appendChild(section);
+    });
+
+    const needsExpansion = value.length > 620;
+    els.resultExplain.classList.toggle('is-collapsed', needsExpansion);
+    els.btnResultReadMore.classList.toggle('visible', needsExpansion);
+    els.btnResultReadMore.textContent = '展開完整解讀';
+    els.btnResultReadMore.setAttribute('aria-expanded', 'false');
+  }
+
   // v16：健康平安／感情婚姻等高敏感隱私類別清單，供分享按鈕收斂與文案柔化判斷使用
   const SENSITIVE_CATEGORIES = ['健康平安', '感情婚姻', '求健康', '問姻緣'];
 
@@ -2625,7 +2856,7 @@ const UIActions = (() => {
     els.resultGanzhi.textContent = `【${f.ganzhi}籤】`;
     els.resultGrade.textContent = f.grade;
     renderCalligraphyPoem(f.poem);
-    els.resultExplain.textContent = interpretation?.overall_meaning || 'AI 解籤模型尚未連線，因此目前無法依你的問題產生專屬解讀。';
+    renderInterpretation(interpretation?.overall_meaning);
     typewriter(els.resultModern, interpretation?.relation_to_question || '請啟動後端設定的 LLM 服務後，再次求籤即可取得 AI 專屬解籤。');
     const tier = gradeTier(f.grade);
     els.resultBg.classList.add('show', tier);
@@ -2635,6 +2866,12 @@ const UIActions = (() => {
   }
 
   els.btnRestart.addEventListener('click', () => playInkTransition(() => goHome()));
+  els.btnResultReadMore.addEventListener('click', () => {
+    const expanded = els.resultExplain.classList.toggle('is-collapsed');
+    els.btnResultReadMore.textContent = expanded ? '展開完整解讀' : '收起完整解讀';
+    els.btnResultReadMore.setAttribute('aria-expanded', String(!expanded));
+    if (expanded) els.resultExplain.scrollIntoView({ behavior:'smooth', block:'start' });
+  });
   els.btnAmulet.addEventListener('click', () => { els.amuletModal.classList.remove('hidden'); });
   els.btnAmuletClose.addEventListener('click', () => { els.amuletModal.classList.add('hidden'); });
 
@@ -2847,6 +3084,8 @@ const UIActions = (() => {
     els.vowModal.classList.add('hidden');
     els.historyModal.classList.add('hidden');
     els.chatModal.classList.add('hidden');
+    continueChatEntryOrigin.after(els.continueChatEntry);
+    document.body.classList.remove('shared-session');
     els.sceneHome.classList.remove('hidden');
     AppState.current = 'home';
     AppState.bwaTossing = false;
@@ -2895,6 +3134,7 @@ const UIActions = (() => {
       els.btnHomeStart.disabled = true;
       const session = await DivinationApi.create(AppState.userQuery.question, AppState.userQuery.category);
       AppState.sessionId = session.session_id;
+      AppState.shareToken = session.share_token;
       AppState.interpretation = null;
       if (isManualOnly) {
         await DivinationApi.prayer(session.session_id);
@@ -2955,6 +3195,7 @@ const UIActions = (() => {
       AppState.userQuery = { question, category: quickCategory };
       const session = await DivinationApi.create(question, quickCategory, 'click');
       AppState.sessionId = session.session_id;
+      AppState.shareToken = session.share_token;
       AppState.interpretation = null;
       await DivinationApi.prayer(session.session_id);
       AppState.currentFortune = await DivinationApi.draw(session.session_id);
@@ -3009,6 +3250,7 @@ const UIActions = (() => {
       AppState.userQuery.question = question;
       const session = await DivinationApi.create(question, AppState.userQuery.category, 'click', n);
       AppState.sessionId = session.session_id;
+      AppState.shareToken = session.share_token;
       AppState.currentFortune = await DivinationApi.getFortune(n);
       AppState.interpretation = null;
       AppState.isFortuneLookup = true;
@@ -3253,6 +3495,15 @@ const SincereStreak = (() => {
 const ContinueChat = (() => {
   let sessionId = null;
   let remainingMessages = null;
+  const SUGGESTIONS = {
+    '工作事業': ['我現在最該準備的是什麼？', '這件事有哪些風險要先留意？', '下一步適合怎麼做？'],
+    '感情婚姻': ['我應該先理解自己的哪個感受？', '這段關係需要留意什麼？', '我可以先做哪一步？'],
+    '財運投資': ['我現在應先確認哪些資訊？', '這個選擇的風險在哪裡？', '我該怎麼穩健地規劃？'],
+    '健康平安': ['我可以先調整哪個生活習慣？', '我該留意哪些訊號？', '現在最適合先做什麼？'],
+    '考試學業': ['我目前最需要補強的是什麼？', '讀書計畫該怎麼安排？', '我可以先完成哪一步？'],
+    '家庭生活': ['我可以如何更好地溝通？', '這件事需要先釐清什麼？', '我現在最適合先做哪一步？'],
+    '綜合運勢': ['這支籤最想提醒我的事是什麼？', '我現在可以採取什麼行動？', '有什麼地方需要特別留意？'],
+  };
 
   function reset(session){
     if (sessionId === session) return;
@@ -3269,6 +3520,36 @@ const ContinueChat = (() => {
       : '本次追問額度已用完';
     els.chatInput.disabled = remainingMessages === 0;
     els.btnChatSend.disabled = remainingMessages === 0;
+  }
+
+  function renderSuggestions(){
+    if (!els.chatSuggestions) return;
+    const category = AppState.userQuery?.category;
+    const suggestions = SUGGESTIONS[category] || SUGGESTIONS['綜合運勢'];
+    els.chatSuggestions.innerHTML = '';
+    suggestions.forEach(text => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'chat-suggestion';
+      button.textContent = text;
+      button.addEventListener('click', () => {
+        if (els.chatInput.disabled) return;
+        els.chatInput.value = text;
+        els.chatInput.focus();
+      });
+      els.chatSuggestions.appendChild(button);
+    });
+  }
+
+  function applySessionContext(){
+    const query = AppState.userQuery || {};
+    const fortune = AppState.currentFortune || {};
+    const subject = query.question ? `「${query.question}」` : (query.category || '這支籤');
+    const fortuneLabel = fortune.no ? `第 ${fortune.no} 首` : '本次籤詩';
+    if (els.chatContext) els.chatContext.textContent = `正在延續 ${fortuneLabel}：${subject}`;
+    els.chatInput.placeholder = query.category
+      ? `針對${query.category}繼續提問…`
+      : '請輸入您想繼續詢問的問題…';
   }
 
   function replyText(reply){
@@ -3302,12 +3583,28 @@ const ContinueChat = (() => {
     els.chatLog.appendChild(div);
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
+  async function loadHistory(){
+    if (!AppState.sessionId) return;
+    const { messages = [], remaining_messages } = await DivinationApi.getChat(AppState.sessionId);
+    els.chatLog.innerHTML = '';
+    messages.forEach(message => appendBubble(message.role === 'assistant' ? 'deity' : 'user', message.content));
+    remainingMessages = remaining_messages;
+    updateLimit();
+  }
+  async function open(){
+    reset(AppState.sessionId);
+    els.chatModal.classList.remove('hidden');
+    applySessionContext();
+    renderSuggestions();
+    try {
+      await loadHistory();
+    } catch (error) {
+      appendBubble('deity', error.message || '暫時無法讀取先前的對話。');
+    }
+    els.chatInput.focus();
+  }
   function init(){
-    els.continueChatEntry.addEventListener('click', () => {
-      reset(AppState.sessionId);
-      els.chatModal.classList.remove('hidden');
-      els.chatInput.focus();
-    });
+    els.continueChatEntry.addEventListener('click', open);
     els.btnChatClose.addEventListener('click', () => els.chatModal.classList.add('hidden'));
     async function send(){
       const text = els.chatInput.value.trim();
@@ -3336,7 +3633,7 @@ const ContinueChat = (() => {
   }
   function showEntry(){ if (AppState.sessionId) els.continueChatEntry.classList.add('show'); }
   function hideEntry(){ els.continueChatEntry.classList.remove('show'); }
-  return { init, showEntry, hideEntry };
+  return { init, showEntry, hideEntry, open };
 })();
 ContinueChat.init();
 
@@ -3378,20 +3675,35 @@ function showDivinationLoading(onDone){
 /* =========================================================================
    社交分享：複製解籤連結 / 分享至 LINE
    ========================================================================= */
+function getShareUrl(){
+  const shareBase = window.parent !== window
+    ? `${window.parent.location.origin}/temple-oracle-v17`
+    : `${location.origin}${location.pathname}`;
+  return `${shareBase}?session=${encodeURIComponent(AppState.sessionId)}&share=${encodeURIComponent(AppState.shareToken || '')}`;
+}
+
 els.btnCopyLink.addEventListener('click', () => {
   const f = AppState.currentFortune;
-  if (!f) { showToast('尚未取得籤詩結果'); return; }
-  const url = `${location.origin}${location.pathname}?fortune=${f.no}&category=${encodeURIComponent(AppState.userQuery.category||'')}`;
+  if (!f || !AppState.sessionId) { showToast('尚未取得可分享的解籤結果'); return; }
+  const url = getShareUrl();
   if (navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(url).then(() => showToast('連結已複製！快分享給朋友吧')).catch(() => showToast('複製失敗，請手動複製網址列'));
   } else {
     showToast('此瀏覽器不支援自動複製，請手動複製網址列');
   }
 });
+els.btnShowQr.addEventListener('click', () => {
+  if (!AppState.currentFortune || !AppState.sessionId) { showToast('尚未取得可分享的解籤結果'); return; }
+  if (typeof QRCode === 'undefined') { showToast('QR Code 元件尚未載入，請稍後再試。'); return; }
+  els.shareQrCode.innerHTML = '';
+  new QRCode(els.shareQrCode, { text: getShareUrl(), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  els.qrModal.classList.remove('hidden');
+});
+els.btnQrClose.addEventListener('click', () => els.qrModal.classList.add('hidden'));
 els.btnShareLine.addEventListener('click', () => {
   const f = AppState.currentFortune;
-  if (!f) { showToast('尚未取得籤詩結果'); return; }
-  const url = `${location.origin}${location.pathname}?fortune=${f.no}&category=${encodeURIComponent(AppState.userQuery.category||'')}`;
+  if (!f || !AppState.sessionId) { showToast('尚未取得可分享的解籤結果'); return; }
+  const url = getShareUrl();
   window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(url)}`, '_blank');
 });
 
@@ -3435,7 +3747,33 @@ resizeOutputCanvas();
 
 BwaScene.init(els.bwaThreeContainer);
 
-if (isInterpretOnly || isManualOnly || isLookupOnly || isQuickOnly) {
+async function restoreSharedSession(){
+  try {
+    const session = await DivinationApi.get(AppState.sharedSessionId);
+    if (!session.fortune || session.status !== 'completed') throw new Error('這筆求籤尚未完成，暫時無法開啟分享結果。');
+    AppState.sessionId = session.session_id;
+    AppState.shareToken = session.share_token || pageParams.get('share');
+    AppState.currentFortune = session.fortune;
+    AppState.interpretation = session.interpretation;
+    AppState.userQuery = {
+      question: session.question || '',
+      category: CATEGORY_LABELS[session.category] || '綜合運勢'
+    };
+    document.body.classList.add('shared-session');
+    els.sceneHome.classList.add('hidden');
+    UIActions.showResultScene();
+    els.sharedChatSlot.appendChild(els.continueChatEntry);
+  } catch (error) {
+    showToast(error.message || '無法開啟這筆分享的解籤結果。');
+    UIActions.goHome();
+  } finally {
+    els.loading.style.display = 'none';
+  }
+}
+
+if (AppState.sharedSessionId) {
+  restoreSharedSession();
+} else if (isInterpretOnly || isManualOnly || isLookupOnly || isQuickOnly) {
   els.loading.style.display = 'none';
   if (isInterpretOnly) {
     const fallbackMessage = sessionStorage.getItem('temple-oracle-manual-fallback');
