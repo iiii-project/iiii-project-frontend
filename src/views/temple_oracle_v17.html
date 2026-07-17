@@ -533,6 +533,10 @@
   @media (max-width: 640px){
     html, body{ min-height:100dvh; }
     #output_canvas, #particle_canvas{ width:100vw; height:100dvh; }
+    body.mobile-shake-mode #output_canvas,
+    body.mobile-shake-mode #particle_canvas,
+    body.mobile-shake-mode #ar-decoration{ display:none; }
+    body.mobile-shake-mode #scene-draw{ background:radial-gradient(circle at 50% 35%, rgba(212,175,55,0.16), transparent 42%), #17110d; }
     #tutorial-overlay{ align-items:stretch; padding:calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px); }
     .tutorial-card{
       width:100%; max-width:none; max-height:none; overflow-y:auto; padding:1.2rem 1rem calc(1rem + env(safe-area-inset-bottom));
@@ -2476,7 +2480,87 @@ const DivinationApi = (() => {
   };
 })();
 
-const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, isFortuneLookup:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, shareToken:null, userQuery:{ category:'綜合運勢', question:'' } };
+const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && window.matchMedia('(pointer:coarse)').matches && window.innerWidth < 900);
+const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, isFortuneLookup:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, shareToken:null, mobileShakeReady:false, userQuery:{ category:'綜合運勢', question:'' } };
+
+// 手機抽籤使用裝置動作感測，不會請求鏡頭；iOS 需在使用者點擊後明確授權。
+const MobileShake = (() => {
+  let active = false;
+  let lastMagnitude = null;
+  let lastHitAt = 0;
+  let hits = 0;
+  const requiredHits = 3;
+
+  function supportsMotion(){ return 'DeviceMotionEvent' in window; }
+
+  async function requestAccess(){
+    if (!supportsMotion()) return false;
+    try {
+      if (typeof DeviceMotionEvent.requestPermission === 'function'){
+        const permission = await DeviceMotionEvent.requestPermission();
+        return permission === 'granted';
+      }
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function stop(){
+    active = false;
+    lastMagnitude = null;
+    lastHitAt = 0;
+    hits = 0;
+    els.qianTongZone.classList.remove('shaking');
+    window.removeEventListener('devicemotion', onMotion);
+  }
+
+  function complete(){
+    stop();
+    const chosen = stickEls[Math.floor(Math.random() * stickEls.length)];
+    stickEls.forEach(stick => stick.classList.remove('selected'));
+    chosen.classList.add('selected');
+    AppState.selectedStickCx = parseFloat(chosen.dataset.cx);
+    els.qianStick.style.left = `${(AppState.selectedStickCx / 200) * 100}%`;
+    els.qianStick.style.transform = 'translate(-50%, 0)';
+    els.qianStick.classList.remove('hidden');
+    els.drawHint.textContent = '感應完成，正在抽出籤條…';
+    if (navigator.vibrate) navigator.vibrate([20, 45, 20]);
+    setTimeout(() => UIActions.completeDraw(), 420);
+  }
+
+  function onMotion(event){
+    if (!active || AppState.current !== 'draw') return;
+    const rawAcceleration = event.acceleration;
+    const hasRawAcceleration = rawAcceleration && [rawAcceleration.x, rawAcceleration.y, rawAcceleration.z]
+      .some(value => Number.isFinite(value));
+    const acceleration = hasRawAcceleration ? rawAcceleration : event.accelerationIncludingGravity;
+    if (!acceleration) return;
+    const magnitude = Math.hypot(acceleration.x || 0, acceleration.y || 0, acceleration.z || 0);
+    const now = performance.now();
+    if (lastMagnitude !== null && Math.abs(magnitude - lastMagnitude) > 4.5 && now - lastHitAt > 280){
+      hits += 1;
+      lastHitAt = now;
+      els.qianTongZone.classList.remove('shaking');
+      void els.qianTongZone.offsetWidth;
+      els.qianTongZone.classList.add('shaking');
+      els.drawHint.textContent = `感應到搖動 ${hits} / ${requiredHits}`;
+      if (hits >= requiredHits) complete();
+    }
+    lastMagnitude = magnitude;
+  }
+
+  function start(){
+    if (!AppState.mobileShakeReady) return false;
+    stop();
+    active = true;
+    window.addEventListener('devicemotion', onMotion, { passive:true });
+    return true;
+  }
+
+  return { requestAccess, start, stop };
+})();
 
 if (isLookupOnly) {
   document.getElementById('oracle-eyebrow').textContent = 'FORTUNE LOOKUP · AI INTERPRETATION';
@@ -2502,6 +2586,7 @@ const UIActions = (() => {
   function showScene(name){
     [els.sceneIncense, els.sceneDraw, els.sceneBwa, els.sceneResult].forEach(s => s.classList.add('hidden'));
     els.resultBg.classList.remove('show','tier-auspicious','tier-neutral','tier-caution');
+    if (name !== 'draw') MobileShake.stop();
     AppState.current = name;
 
     if (name === 'incense'){
@@ -2517,13 +2602,23 @@ const UIActions = (() => {
       AppState.drawSubState = 'shake';
       stickEls.forEach(s => s.classList.remove('selected'));
       GestureEngine.resetShakeProgress(); GestureEngine.resetPinch();
-      els.drawHint.textContent = isManualOnly ? '準備好後，點擊籤筒抽出一支籤。' : '請對著籤筒握拳，上下搖晃';
-      els.btnManualDraw.classList.toggle('hidden', !isManualOnly);
+      const useMobileShake = isMobileDevice && !isManualOnly;
+      els.drawHint.textContent = isManualOnly
+        ? '準備好後，點擊籤筒抽出一支籤。'
+        : useMobileShake && AppState.mobileShakeReady
+          ? '拿起手機，上下搖動三次即可抽籤'
+          : useMobileShake
+            ? '未開啟動作感測，可直接抽籤。'
+            : '請對著籤筒握拳，上下搖晃';
+      // 手機正常流程只透過搖動抽籤；僅在感測器不可用時才顯示直接抽籤備援。
+      els.btnManualDraw.classList.toggle('hidden', !(isManualOnly || (useMobileShake && !AppState.mobileShakeReady)));
+      els.btnManualDraw.textContent = useMobileShake ? '直 接 抽 籤' : '手 動 抽 籤';
+      if (useMobileShake && AppState.mobileShakeReady) MobileShake.start();
     }
     if (name === 'bwa'){
       els.sceneBwa.classList.remove('hidden');
       els.bwaResultPanel.classList.add('hidden');
-      const isClickBwaMode = isQuickOnly || isManualOnly || AppState.isFortuneLookup;
+      const isClickBwaMode = isQuickOnly || isManualOnly || AppState.isFortuneLookup || isMobileDevice;
       els.btnClickBwa.classList.toggle('hidden', !isClickBwaMode);
       els.bwaHint.textContent = isClickBwaMode ? '請點擊擲筊，向神明請示此籤。' : '單手微握，捧起筊杯';
       if (!isClickBwaMode) {
@@ -3093,6 +3188,7 @@ const UIActions = (() => {
     GestureEngine.resetShakeProgress();
     GestureEngine.resetPinch();
     GestureEngine.resetBwaTracking();
+    MobileShake.stop();
     if (typeof ContinueChat !== 'undefined') ContinueChat.hideEntry();
   }
 
@@ -3132,6 +3228,9 @@ const UIActions = (() => {
     if (AppState.userQuery.question.length < 2){ showToast('請先輸入至少兩個字的問題'); return; }
     try {
       els.btnHomeStart.disabled = true;
+      if (isMobileDevice && !isManualOnly) {
+        AppState.mobileShakeReady = await MobileShake.requestAccess();
+      }
       const session = await DivinationApi.create(AppState.userQuery.question, AppState.userQuery.category);
       AppState.sessionId = session.session_id;
       AppState.shareToken = session.share_token;
@@ -3140,6 +3239,13 @@ const UIActions = (() => {
         await DivinationApi.prayer(session.session_id);
         els.sceneHome.classList.add('hidden');
         UIActions.showScene('draw');
+        return;
+      }
+      if (isMobileDevice) {
+        await DivinationApi.prayer(session.session_id);
+        els.sceneHome.classList.add('hidden');
+        UIActions.showScene('draw');
+        if (!AppState.mobileShakeReady) showToast('未開啟動作感測，已提供直接抽籤。');
         return;
       }
       els.sceneHome.classList.add('hidden');
@@ -3789,6 +3895,11 @@ if (AppState.sharedSessionId) {
     requestAnimationFrame(() => els.homeQuestion.focus());
   }
   if (isLookupOnly) requestAnimationFrame(() => els.manualNoInput.focus());
+} else if (isMobileDevice) {
+  document.body.classList.add('mobile-shake-mode');
+  els.btnHomeStart.textContent = '搖　一　搖　求　籤';
+  document.getElementById('oracle-intro').textContent = '寫下心中的問題後，搖動手機籤筒即可請示';
+  els.loading.style.display = 'none';
 } else {
   const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
   // 最多追蹤兩隻手：合十默念階段需要雙手距離判定，其餘階段仍只讀取第一隻手
