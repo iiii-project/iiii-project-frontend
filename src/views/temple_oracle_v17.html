@@ -209,10 +209,36 @@
   .btn-line:disabled:hover{ background:transparent; box-shadow:none; }
 
   .grade-badge{ display:inline-flex; align-items:center; gap:8px; font-size:13px; letter-spacing:0.3em; color:var(--jiang-hong); padding:4px 18px; border:1px solid var(--jiang-hong); border-radius:999px; background:rgba(166,58,58,0.05); }
+  .result-amulet-mark{
+    margin:0 0 0.25rem;
+    color:var(--jiang-hong);
+    font-size:10px;
+    font-weight:600;
+    letter-spacing:0.16em;
+    text-align:center;
+  }
+  .result-oracle-label{
+    margin:0 0 0.7rem;
+    color:var(--morandi-dust);
+    font-size:10px;
+    font-weight:400;
+    letter-spacing:0.2em;
+    line-height:1.6;
+    text-align:center;
+  }
+  #scene-result .text-center{ text-align:center; }
 
   #result-poem{
-    overflow: visible;
+    box-sizing:border-box;
+    overflow:visible;
     min-width: 190px;
+    padding:1.1rem 0.78rem;
+    color:#74322f;
+    background:rgba(250,244,231,0.88);
+    border:1px solid rgba(190,151,66,0.6);
+    border-radius:8px;
+    box-shadow:inset 0 0 0 3px rgba(212,175,55,0.08), 0 10px 22px rgba(104,74,42,0.1);
+    text-shadow:0 1px 0 rgba(255,255,255,0.72);
   }
   #scene-result .text-center{ flex-shrink: 0; overflow: visible; }
   #scene-result .glass-card{
@@ -242,6 +268,21 @@
     #result-explain{ max-height:38vh; }
   }
   @media (min-width: 768px){ #result-poem{ min-width: 230px; } }
+  @media (min-width: 768px){
+    #scene-result .text-center{
+      width:260px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      flex:0 0 260px;
+    }
+    #scene-result #result-poem{
+      width:100%;
+      min-width:0;
+      height:clamp(22rem, 35vh, 28rem) !important;
+      padding:1.25rem 0.9rem;
+    }
+  }
 
   /* ===================== 擲筊結果標籤：確保永遠在 3D 畫布之上，且清晰不被遮擋 ===================== */
   #bwa-result-panel{
@@ -620,7 +661,7 @@
     body.shared-session #result-recap{ line-height:1.65; color:var(--ink-soft); }
     body.shared-session #result-poem{
       writing-mode:horizontal-tb; height:auto !important; min-width:0; max-width:100%; padding:1rem 0.8rem;
-      border-top:1px solid var(--gold-line); border-bottom:1px solid var(--gold-line); text-align:center;
+      border:1px solid rgba(190,151,66,0.6); text-align:center;
       font-size:18px !important; line-height:2.05; letter-spacing:0.12em !important;
     }
     body.shared-session #result-poem br{ display:block; content:""; margin:0.2rem 0; }
@@ -1090,14 +1131,15 @@
   <div id="scene-result" class="scene hidden justify-center items-center">
     <div class="glass-card px-10 md:px-20 py-10 md:py-14 flex flex-col md:flex-row items-center gap-10 md:gap-16 fade-in max-w-4xl mx-6">
       <div class="text-center">
-        <p class="eyebrow mb-2">六十甲子籤 · THE ORACLE SAYS</p>
+        <p class="result-amulet-mark">籤好運・數位平安符</p>
+        <p class="result-oracle-label">TAIWAN TEMPLE ORACLE ・ 六十甲子籤</p>
         <p class="mobile-shared-kicker">你的專屬籤詩</p>
         <p id="result-recap" class="question-recap"></p>
         <p id="result-number" class="gold-text text-base tracking-[0.4em] mb-1">第　　首</p>
         <p id="result-ganzhi" class="text-xs opacity-70 tracking-[0.3em] mb-3"></p>
         <span id="result-grade" class="grade-badge mb-4"></span>
         <div class="hairline my-4"></div>
-        <p id="result-poem" class="vertical-rl gold-text text-lg md:text-xl leading-loose h-[38vh] md:h-[42vh] tracking-[0.3em] font-light"></p>
+        <p id="result-poem" class="vertical-rl text-lg md:text-xl leading-loose h-[38vh] md:h-[42vh] tracking-[0.3em] font-light"></p>
       </div>
       <div class="text-left max-w-xs">
         <div class="ornament-row !justify-start mb-2">
