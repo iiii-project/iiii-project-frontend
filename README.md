@@ -18,7 +18,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-預設在 `http://localhost:8080` 提供前端，並將 `/api`、`/admin` 轉送到 `BACKEND_URL`。請在 `.env` 設定實際的 Django 後端網址與需要的 `FRONTEND_PORT`。
+這份 Compose 同時啟動前端、Django 後端與 Llama。預設在 `http://localhost:8080` 提供前端，並將 `/api`、`/admin` 透過內部網路轉送至 `backend:8000`，不需要設定 `BACKEND_URL`。後端設定仍由 `../iiii-project-backend/.env` 讀取。
 
 ## 主要流程
 

@@ -1,9 +1,74 @@
 services:
+  llama:
+    build: ../iiii-project-backend/llamacpp
+    restart: unless-stopped
+    environment:
+      LLAMA_HOST: 0.0.0.0
+      LLAMA_PORT: 1234
+      LLAMA_MODEL: ${LLAMA_MODEL:-}
+      LLAMA_MODEL_ALIAS: ${LLAMA_MODEL_ALIAS:-local-model}
+    volumes:
+      - ../iiii-project-backend/llamacpp:/llamacpp
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        cd /llamacpp/llamacpp-linux &&
+        ln -sf libggml-base.so.0 libggml-base.so &&
+        ln -sf libggml-base.so.0.15.3 libggml-base.so.0 &&
+        ln -sf libggml.so.0 libggml.so &&
+        ln -sf libggml.so.0.15.3 libggml.so.0 &&
+        ln -sf libllama-common.so.0 libllama-common.so &&
+        ln -sf libllama-common.so.0.0.9873 libllama-common.so.0 &&
+        ln -sf libllama.so.0 libllama.so &&
+        ln -sf libllama.so.0.0.9873 libllama.so.0 &&
+        ln -sf libmtmd.so.0 libmtmd.so &&
+        ln -sf libmtmd.so.0.0.9873 libmtmd.so.0 &&
+        sed -i 's/\r$//' start-llama.sh &&
+        exec bash start-llama.sh
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:1234/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  backend:
+    build: ../iiii-project-backend
+    restart: unless-stopped
+    env_file: ../iiii-project-backend/.env
+    environment:
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-1234}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      LLM_BASE_URL: http://llama:1234/v1
+      LLM_MODEL: ${LLAMA_MODEL_ALIAS:-local-model}
+    depends_on:
+      llama:
+        condition: service_healthy
+    volumes:
+      - sqlite_data:/app/data
+      - media_data:/app/media
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   frontend:
     build: .
     ports:
       - "${FRONTEND_PORT:-8080}:80"
     environment:
-      BACKEND_URL: "${BACKEND_URL:-http://iiibackend.dev-serve.me}"
+      BACKEND_URL: http://backend:8000
       NGINX_ENVSUBST_FILTER: BACKEND_URL
     restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  sqlite_data:
+  media_data:
