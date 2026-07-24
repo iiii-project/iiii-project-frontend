@@ -14,7 +14,7 @@ export default defineConfig(() => {
   },
   server: {
     port: 5176,
-    allowedHosts: ['iii.dev-serve.me', 'iii.gdtumn.com'],
+    allowedHosts: ['ihappy.dev-serve.me', 'iii.gdtumn.com'],
     watch: {
       ignored: ['**/.agents/**', '**/.codex/**', '**/.opencode/**']
     },

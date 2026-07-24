@@ -11,6 +11,15 @@ npm run dev
 
 Vite 會將 `/api` proxy 到 `VITE_API_PROXY_TARGET`，未設定時預設是 `http://127.0.0.1:8000`。
 
+## Docker Compose 部署
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+預設在 `http://localhost:8080` 提供前端，並將 `/api`、`/admin` 轉送到 `BACKEND_URL`。請在 `.env` 設定實際的 Django 後端網址與需要的 `FRONTEND_PORT`。
+
 ## 主要流程
 
 ```text
