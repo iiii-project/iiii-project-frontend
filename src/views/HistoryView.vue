@@ -40,8 +40,21 @@ async function removeItem(sessionId: string) {
   }
 }
 
+// 畫面一律以民國紀年呈現；後端仍回傳西元 ISO 字串，只在顯示時換算。
 function formatDate(value?: string) {
-  return value ? new Intl.DateTimeFormat('zh-TW', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : ''
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  try {
+    const formatted = new Intl.DateTimeFormat('zh-TW-u-ca-roc', { dateStyle: 'long', timeStyle: 'short' }).format(date)
+    if (formatted.includes('民國')) return formatted
+  } catch {
+    // 少數環境不支援 roc 曆法，改用下方手動換算
+  }
+  const rocYear = date.getFullYear() - 1911
+  const era = rocYear > 0 ? `民國${rocYear}` : `民國前${1 - rocYear}`
+  const time = new Intl.DateTimeFormat('zh-TW', { timeStyle: 'short' }).format(date)
+  return `${era}年${date.getMonth() + 1}月${date.getDate()}日 ${time}`
 }
 </script>
 

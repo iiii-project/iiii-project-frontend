@@ -514,10 +514,19 @@
   .modal-card{ max-width:420px; width:90vw; max-height:86vh; overflow-y:auto; padding:2rem 1.8rem; text-align:center; }
   .form-row{ text-align:left; margin-top:0.9rem; }
   .form-row label{ display:block; font-size:11px; letter-spacing:0.15em; color:var(--ink-soft); margin-bottom:0.3rem; }
-  .form-row input[type=text], .form-row input[type=date], .form-row input[type=time], .form-row select, .form-row textarea{
+  .form-row input[type=text], .form-row input[type=number], .form-row select, .form-row textarea{
     width:100%; padding:0.55rem 0.8rem; border-radius:10px; background:rgba(166,58,58,0.04);
     border:1px solid var(--gold-line); color:var(--ink); font-family:"Noto Serif TC",serif; font-size:13.5px; outline:none; box-sizing:border-box;
   }
+  /* 民國（國曆）日期／時辰欄位：以「民國 ○年 ○月 ○日」拆欄輸入，提示字全為繁體中文 */
+  .roc-field{ display:flex; align-items:center; gap:6px; }
+  .roc-field .roc-era{ flex:0 0 auto; font-size:12.5px; color:var(--ink-soft); letter-spacing:0.08em; white-space:nowrap; }
+  .roc-field .roc-unit{ flex:0 0 auto; font-size:12.5px; color:var(--ink-soft); white-space:nowrap; }
+  .roc-field input[type=number]{ flex:1 1 0; min-width:0; padding:0.55rem 0.4rem; text-align:center; -moz-appearance:textfield; }
+  .roc-field input[type=number]::-webkit-outer-spin-button,
+  .roc-field input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .roc-field input::placeholder{ color:rgba(58,44,34,0.35); }
+  .field-hint{ margin-top:0.35rem; font-size:10.5px; color:var(--ink-soft); opacity:0.85; line-height:1.6; }
   .gender-row{ display:flex; gap:8px; }
   .gender-row button{ flex:1; padding:0.5rem; border-radius:10px; border:1px solid var(--gold-line); background:rgba(255,255,255,0.5); color:var(--ink-soft); cursor:pointer; font-size:13px; }
   .gender-row button.active{ background:var(--jiang-hong); color:#fff; border-color:var(--jiang-hong); }
@@ -811,12 +820,27 @@
         </div>
       </div>
       <div class="form-row">
-        <label>出生日期</label>
-        <input type="date" id="profile-birth-date">
+        <label>出生日期（民國）</label>
+        <div class="roc-field">
+          <span class="roc-era">民國</span>
+          <input type="number" id="profile-birth-roc-year" inputmode="numeric" min="1" max="200" step="1" placeholder="年">
+          <span class="roc-unit">年</span>
+          <input type="number" id="profile-birth-month" inputmode="numeric" min="1" max="12" step="1" placeholder="月">
+          <span class="roc-unit">月</span>
+          <input type="number" id="profile-birth-day" inputmode="numeric" min="1" max="31" step="1" placeholder="日">
+          <span class="roc-unit">日</span>
+        </div>
+        <p class="field-hint" id="profile-birth-date-hint">請以民國紀年填寫，例如民國七十九年三月五日，請填 79 年 3 月 5 日。</p>
       </div>
       <div class="form-row">
         <label>出生時辰（約略即可）</label>
-        <input type="time" id="profile-birth-time">
+        <div class="roc-field">
+          <input type="number" id="profile-birth-hour" inputmode="numeric" min="0" max="23" step="1" placeholder="時">
+          <span class="roc-unit">時</span>
+          <input type="number" id="profile-birth-minute" inputmode="numeric" min="0" max="59" step="1" placeholder="分">
+          <span class="roc-unit">分</span>
+        </div>
+        <p class="field-hint" id="profile-birth-time-hint">請以二十四小時制填寫，例如下午三點半，請填 15 時 30 分；若不確定，可只填時。</p>
       </div>
       <p class="privacy-note">此資料僅儲存於您目前使用的裝置（localStorage），不會上傳至任何伺服器；換裝置或清除瀏覽器資料後將無法保留，二次造訪本裝置時會自動帶入。</p>
       <div class="flex gap-3 mt-5 justify-center flex-wrap">
@@ -1189,6 +1213,65 @@
    4. AppState + UIActions — 場景切換與流程狀態機
    ========================================================================= */
 
+/* ---- 民國（國曆）日期工具 ----
+   畫面上所有日期一律以民國紀年呈現；localStorage 與後端仍保存西元 ISO 字串，
+   確保既有資料與 API 格式不受影響，只在輸入與顯示兩端做轉換。 */
+const RocDate = (() => {
+  const pad = (n) => String(n).padStart(2, '0');
+  // 少數瀏覽器（或精簡版 ICU）不支援 roc 曆法，退回手動換算避免顯示成西元
+  const hasRocCalendar = (() => {
+    try {
+      return new Intl.DateTimeFormat('zh-TW-u-ca-roc', { dateStyle: 'long' }).format(new Date()).includes('民國');
+    } catch (e) { return false; }
+  })();
+  function toDate(value){
+    if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+    if (value === null || value === undefined || value === '') return null;
+    // 純日期字串（YYYY-MM-DD）以當地時間解析，避免被當成 UTC 而顯示成前一天
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+    const d = dateOnly
+      ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+      : new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function eraOf(year){
+    const roc = year - 1911;
+    return roc > 0 ? `民國${roc}` : `民國前${1 - roc}`;
+  }
+  // 例：民國115年7月27日
+  function formatDate(value){
+    const d = toDate(value);
+    if (!d) return '';
+    if (hasRocCalendar) return new Intl.DateTimeFormat('zh-TW-u-ca-roc', { dateStyle: 'long' }).format(d);
+    return `${eraOf(d.getFullYear())}年${d.getMonth() + 1}月${d.getDate()}日`;
+  }
+  // 例：民國115年7月27日 下午2:30
+  function formatDateTime(value){
+    const d = toDate(value);
+    if (!d) return '';
+    if (hasRocCalendar) return new Intl.DateTimeFormat('zh-TW-u-ca-roc', { dateStyle: 'long', timeStyle: 'short' }).format(d);
+    return `${formatDate(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  // 民國年月日 → 西元 ISO（YYYY-MM-DD）；日期不合法時回傳空字串
+  function toIso(rocYear, month, day){
+    const y = Number(rocYear), m = Number(month), dd = Number(day);
+    if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(dd)) return '';
+    if (y < 1 || m < 1 || m > 12 || dd < 1 || dd > 31) return '';
+    const year = y + 1911;
+    const d = new Date(year, m - 1, dd);
+    // 擋掉 2 月 30 日這類不存在的日期（Date 會自動進位）
+    if (d.getFullYear() !== year || d.getMonth() !== m - 1 || d.getDate() !== dd) return '';
+    return `${year}-${pad(m)}-${pad(dd)}`;
+  }
+  // 西元 ISO（YYYY-MM-DD）→ { rocYear, month, day }
+  function fromIso(iso){
+    const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!matched) return null;
+    return { rocYear: Number(matched[1]) - 1911, month: Number(matched[2]), day: Number(matched[3]) };
+  }
+  return { formatDate, formatDateTime, toIso, fromIso, pad };
+})();
+
 const CONFIG = {
   FIST_CURL_RATIO: 1.15,
   FIST_MIN_CURLED: 3,
@@ -1504,8 +1587,12 @@ const els = {
   profileModal: document.getElementById('profile-modal'),
   profileName: document.getElementById('profile-name'),
   profileGenderRow: document.getElementById('profile-gender-row'),
-  profileBirthDate: document.getElementById('profile-birth-date'),
-  profileBirthTime: document.getElementById('profile-birth-time'),
+  profileBirthRocYear: document.getElementById('profile-birth-roc-year'),
+  profileBirthMonth: document.getElementById('profile-birth-month'),
+  profileBirthDay: document.getElementById('profile-birth-day'),
+  profileBirthDateHint: document.getElementById('profile-birth-date-hint'),
+  profileBirthHour: document.getElementById('profile-birth-hour'),
+  profileBirthMinute: document.getElementById('profile-birth-minute'),
   btnProfileSave: document.getElementById('btn-profile-save'),
   btnProfileClose: document.getElementById('btn-profile-close'),
   sensitiveNote: document.getElementById('sensitive-note'),
@@ -3228,7 +3315,7 @@ const UIActions = (() => {
     const today = new Date();
     ctx.font = '13px "Noto Serif TC", serif';
     ctx.fillStyle = 'rgba(242,226,179,0.55)';
-    ctx.fillText(`祈福日期：${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`, 300, 836);
+    ctx.fillText(`祈福日期：${RocDate.formatDate(today)}`, 300, 836);
     ctx.fillText('僅為互動祈福小語，非命理定論，願你事事順心', 300, 860);
 
     els.amuletImg.src = cv.toDataURL('image/png');
@@ -3508,7 +3595,7 @@ const TodayCard = (() => {
     const fortune = FORTUNE_POOL[doy % FORTUNE_POOL.length];
     const gz = ganzhiOfDay(d);
     const lunar = pseudoLunar(d);
-    const solar = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+    const solar = RocDate.formatDate(d);
     // 節慶模式：農曆初一／十五（朔望）視為吉日，today-card 換上金色光暈樣式
     const isFestivalDay = lunar.endsWith('初一') || lunar.endsWith('十五');
     todaySummary = { solar, lunar, gz, yi, ji, fortune, isFestivalDay };
@@ -3553,12 +3640,43 @@ const Profile = (() => {
       return JSON.parse(raw);
     } catch(e){ return null; }
   }
+  const DATE_HINT = '請以民國紀年填寫，例如民國七十九年三月五日，請填 79 年 3 月 5 日。';
+  // 三個欄位皆空白視為「未填寫」；填了卻不合法則回傳 null，交由 save 提示使用者
+  function readBirthDate(){
+    const y = els.profileBirthRocYear.value.trim();
+    const m = els.profileBirthMonth.value.trim();
+    const d = els.profileBirthDay.value.trim();
+    if (!y && !m && !d) return '';
+    return RocDate.toIso(y, m, d) || null;
+  }
+  function readBirthTime(){
+    const h = els.profileBirthHour.value.trim();
+    const mi = els.profileBirthMinute.value.trim();
+    if (!h && !mi) return '';
+    const hour = Number(h);
+    const minute = mi === '' ? 0 : Number(mi);
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+    if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null;
+    return `${RocDate.pad(hour)}:${RocDate.pad(minute)}`;
+  }
+  // 邊填邊回饋：合法時顯示完整的民國日期，讓使用者確認自己沒填成西元年
+  function refreshDateHint(){
+    const iso = readBirthDate();
+    if (iso === '') { els.profileBirthDateHint.textContent = DATE_HINT; return; }
+    els.profileBirthDateHint.textContent = iso
+      ? `您填寫的是 ${RocDate.formatDate(iso)}`
+      : '這個日期不存在，請確認民國年、月、日是否填寫正確。';
+  }
   function save(){
+    const birthDate = readBirthDate();
+    if (birthDate === null){ showToast('出生日期請填寫正確的民國年月日'); return; }
+    const birthTime = readBirthTime();
+    if (birthTime === null){ showToast('出生時辰請以二十四小時制填寫，時為 0 至 23、分為 0 至 59'); return; }
     const data = {
       name: els.profileName.value.trim(),
       gender: selectedGender,
-      birthDate: els.profileBirthDate.value,
-      birthTime: els.profileBirthTime.value,
+      birthDate,
+      birthTime,
     };
     localStorage.setItem(KEY, JSON.stringify(data));
     showToast('已為您記下這份資料，神明知道了');
@@ -3567,13 +3685,21 @@ const Profile = (() => {
   function fillForm(data){
     if (!data) return;
     els.profileName.value = data.name || '';
-    els.profileBirthDate.value = data.birthDate || '';
-    els.profileBirthTime.value = data.birthTime || '';
+    const birth = RocDate.fromIso(data.birthDate);
+    els.profileBirthRocYear.value = birth ? birth.rocYear : '';
+    els.profileBirthMonth.value = birth ? birth.month : '';
+    els.profileBirthDay.value = birth ? birth.day : '';
+    const time = /^(\d{2}):(\d{2})$/.exec(data.birthTime || '');
+    els.profileBirthHour.value = time ? Number(time[1]) : '';
+    els.profileBirthMinute.value = time ? Number(time[2]) : '';
+    refreshDateHint();
     selectedGender = data.gender || '';
     els.profileGenderRow.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.gender === selectedGender));
   }
   function init(){
     fillForm(load());
+    [els.profileBirthRocYear, els.profileBirthMonth, els.profileBirthDay]
+      .forEach(input => input.addEventListener('input', refreshDateHint));
     els.profileGenderRow.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('click', () => {
         selectedGender = btn.dataset.gender;
@@ -3599,7 +3725,7 @@ const VowLog = (() => {
   function render(){
     const list = load();
     els.vowList.innerHTML = list.length
-      ? list.slice().reverse().map(v => `<div class="vow-item"><b>${v.date}</b>　${v.text}</div>`).join('')
+      ? list.slice().reverse().map(v => `<div class="vow-item"><b>${RocDate.formatDate(v.date) || v.date}</b>　${v.text}</div>`).join('')
       : '<div class="vow-item" style="opacity:0.6;">尚無還願紀錄</div>';
   }
   function init(){
@@ -3634,7 +3760,7 @@ const FortuneHistory = (() => {
       ? list.slice().reverse().map(h =>
           `<div class="vow-item"><b>${h.fortune ? `第 ${h.fortune.number} 首 · ${h.fortune.ganzhi || ''}籤（${h.fortune.fortune_level || ''}）` : '尚未完成的求籤'}</b><br>` +
           `${h.category || ''}${h.question ? '　「'+h.question+'」' : ''}<br>` +
-          `<span style="opacity:0.7;">${h.created_at || ''}</span></div>`
+          `<span style="opacity:0.7;">${RocDate.formatDateTime(h.created_at)}</span></div>`
         ).join('')
       : '<div class="vow-item" style="opacity:0.6;">尚無求籤紀錄，快去求第一支籤吧</div>';
     els.historySincereCount.textContent = (typeof SincereStreak !== 'undefined') ? SincereStreak.getCount() : 0;
