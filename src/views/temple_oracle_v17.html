@@ -423,13 +423,12 @@
   .home-divider .line{ flex:1; height:1px; background:var(--gold-line); }
   .home-divider span{ font-size:11px; letter-spacing:0.2em; color:var(--morandi-dust); }
   .lookup-mobile-note{ display:none; }
-  .mobile-form-label{ display:none; }
   #manual-no-input{
     width:100px; text-align:center; padding:0.5rem; border-radius:10px; background:rgba(166,58,58,0.04);
     border:1px solid var(--gold-line); color:var(--ink); font-family:"Noto Serif TC",serif; font-size:16px; outline:none;
   }
   #manual-no-error{ font-size:11px; color:#b23b3b; min-height:14px; margin-top:4px; }
-  /* ===================== 分類選取：呼吸光暈微互動 ===================== */
+  /* ===================== 分類選取：呼吸光暈微互動（比賽用版本專用） ===================== */
   .category-pill.pulse-select{ animation: categoryPulse 0.5s ease 2; }
   @keyframes categoryPulse{
     0%,100%{ box-shadow:0 0 0 rgba(212,175,55,0); transform:scale(1); }
@@ -456,6 +455,7 @@
   }
   #deity-portrait img{ width:100%; height:100%; object-fit:cover; }
   #deity-portrait svg{ width:82%; height:82%; object-fit:contain; }
+  /* .category-grid / .category-pill 為比賽用版本的分類樣式，簡化版改用下方的 .choice-list / .choice-row */
   .category-grid{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin: 1.2rem 0; }
   .category-pill{
     pointer-events:auto; padding:0.5rem 1.3rem; border-radius:999px; cursor:pointer; font-size:13px;
@@ -469,6 +469,125 @@
     outline:none; resize:none;
   }
   #home-question::placeholder{ color:rgba(58,44,34,0.35); }
+
+  /* =====================================================================
+     【比賽用版本｜目前停用】三步驟求籤精靈樣式（步驟圓點列、pill 分類、小按鈕）
+     要切回比賽版時，把下面這段註解打開，並停用其後的「簡化版」樣式。
+
+     .wizard.is-lookup .wizard-steps,
+     .wizard.is-lookup .wizard-actions{ display:none; }
+     .wizard-steps{ display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; margin:1.1rem 0 1rem; padding:0; list-style:none; }
+     .wizard-step{ display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:0.1em; color:var(--morandi-dust); }
+     .wizard-step + .wizard-step::before{ content:''; width:20px; height:1px; background:var(--gold-line); }
+     .wizard-step-no{
+       display:inline-flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%;
+       border:1px solid var(--gold-line); font-size:10px; line-height:1;
+     }
+     .wizard-step.is-active{ color:var(--jiang-hong); }
+     .wizard-step.is-active .wizard-step-no{ background:var(--jiang-hong); border-color:var(--jiang-hong); color:#fff; }
+     .wizard-step.is-done .wizard-step-no{ background:var(--gold); border-color:var(--gold); color:#2a1a06; }
+     .wizard-title{ font-size:14px; letter-spacing:0.12em; color:var(--ink); margin-bottom:0.3rem; }
+     .wizard-note{ font-size:11px; line-height:1.7; color:var(--ink-soft); opacity:0.85; margin:0 auto 0.2rem; max-width:26em; }
+     .wizard-actions{ display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:1.2rem; }
+     .btn-line.btn-quiet{
+       padding:0.5rem 1.2rem; font-size:11.5px; letter-spacing:0.15em;
+       color:var(--ink-soft); border-color:var(--gold-line);
+     }
+     .btn-line.btn-quiet:hover{ background:rgba(212,175,55,0.1); box-shadow:none; }
+     ===================================================================== */
+
+  /* ===================== 求籤精靈（簡化版｜目前使用中） =====================
+     長輩友善：字大、按鈕大、觸控區大；分類以整列大卡點選，不必打字。 */
+  .wizard.hidden{ display:none !important; }
+  .wizard-panel.hidden{ display:none !important; }
+  .wizard{ margin-top:1.4rem; text-align:left; }
+  /* 查籤模式：只留「選要問的事」，步驟列與按鈕都收起來 */
+  .wizard.is-lookup .wizard-progress,
+  .wizard.is-lookup .wizard-btn,
+  .wizard.is-lookup .wizard-footnote{ display:none !important; }
+
+  .wizard-progress{ margin-bottom:0.9rem; }
+  .wizard-progress-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:8px; }
+  #wizard-step-count{ font-size:15px; font-weight:600; color:var(--jiang-hong); letter-spacing:0.06em; }
+  #wizard-step-name{ font-size:15px; color:var(--ink-soft); letter-spacing:0.06em; }
+  .wizard-progress-bar{ display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+  .wizard-progress-bar span{ height:7px; border-radius:999px; background:rgba(166,58,58,0.14); transition:background 0.25s ease; }
+  .wizard-progress-bar span.is-filled{ background:var(--jiang-hong); }
+
+  .wizard-card{
+    padding:1.6rem 1.4rem 1.3rem; border-radius:20px; border:1px solid var(--gold-line);
+    background:var(--cream); box-shadow:0 10px 30px rgba(120,90,50,0.08);
+  }
+  .wizard-title{ margin:0; font-size:26px; font-weight:700; line-height:1.4; color:var(--ink); text-align:center; letter-spacing:0.04em; }
+  .wizard-note{ margin:0.5rem 0 1.2rem; font-size:15px; line-height:1.7; color:var(--ink-soft); text-align:center; }
+
+  /* 分類：整列大卡，左側圖示、右側勾選圈 */
+  .choice-list{ display:grid; gap:12px; }
+  .choice-row{
+    pointer-events:auto; display:flex; align-items:center; gap:14px; width:100%; min-height:74px;
+    padding:0.9rem 1.1rem; border-radius:16px; border:1px solid var(--gold-line); background:#fffdf8;
+    cursor:pointer; text-align:left; font-family:"Noto Serif TC",serif;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .choice-row:hover{ border-color:rgba(166,58,58,0.45); }
+  .choice-row .choice-icon{ flex:0 0 auto; font-size:27px; line-height:1; }
+  .choice-row .choice-text{ flex:1 1 auto; min-width:0; }
+  .choice-row .choice-label{ display:block; font-size:19px; font-weight:700; color:var(--ink); letter-spacing:0.04em; }
+  .choice-row .choice-desc{ display:block; margin-top:3px; font-size:14px; color:var(--ink-soft); letter-spacing:0.02em; }
+  .choice-row .choice-check{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center; width:28px; height:28px;
+    border-radius:50%; border:1.5px solid var(--gold-line); color:transparent; font-size:15px; font-weight:700;
+  }
+  .choice-row.selected{ border:2px solid var(--jiang-hong); background:rgba(166,58,58,0.06); box-shadow:0 6px 18px rgba(166,58,58,0.1); padding:calc(0.9rem - 1px) calc(1.1rem - 1px); }
+  .choice-row.selected .choice-check{ border-color:var(--jiang-hong); background:var(--jiang-hong); color:#fff; }
+
+  #home-question{ font-size:17px; line-height:1.8; padding:0.9rem 1rem; }
+
+  .wizard-summary{ margin:0; }
+  .wizard-summary > div{ display:flex; gap:14px; padding:0.85rem 0.2rem; border-bottom:1px dashed var(--gold-line); }
+  .wizard-summary dt{ flex:0 0 5.6em; font-size:15px; color:var(--ink-soft); line-height:1.8; }
+  .wizard-summary dd{ flex:1; margin:0; font-size:17px; line-height:1.8; color:var(--ink); word-break:break-word; }
+  .wizard-summary dd.is-auto{ color:var(--morandi-dust); }
+
+  .wizard-btn{
+    pointer-events:auto; display:block; width:100%; min-height:58px; margin-top:1.3rem; padding:0.9rem 1rem;
+    border:1px solid transparent; border-radius:14px; cursor:pointer;
+    font-family:"Noto Serif TC",serif; font-size:19px; font-weight:600; letter-spacing:0.12em;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .wizard-btn.hidden{ display:none !important; }
+  .wizard-btn-primary{ background:var(--jiang-hong-deep); color:#fffaf2; box-shadow:0 8px 20px rgba(122,38,38,0.2); }
+  .wizard-btn-primary:hover{ background:#8f2f2f; }
+  .wizard-btn-primary:disabled{ opacity:0.5; cursor:not-allowed; }
+  .wizard-btn-ghost{ margin-top:0.7rem; min-height:52px; background:#f0e7d8; color:var(--ink-soft); font-size:17px; }
+  .wizard-btn-ghost:hover{ background:#e9dfcc; }
+  .wizard-footnote{ margin:1rem 0 0; font-size:14px; color:var(--ink-soft); text-align:center; line-height:1.7; }
+
+  /* 簡化版首頁：只留「媽祖籤＋一句話＋精靈」，讓第一眼就看到要做的事。
+     神明切換、頭像、英文 eyebrow 與金線分隔線都是比賽用版本的裝飾，
+     要一起切回比賽版時，把下面這條規則整段刪除即可，元素本身仍在 DOM 中。 */
+  #deity-switch,
+  #deity-portrait,
+  #oracle-eyebrow,
+  .home-card > .hairline{ display:none !important; }
+  .home-card{ padding:2rem 1.6rem; }
+  #oracle-title{
+    margin:0 !important; color:var(--jiang-hong-deep); font-size:40px !important;
+    font-weight:700; letter-spacing:0.12em !important;
+  }
+  #oracle-intro{ margin:0.5rem 0 0 !important; font-size:15px; opacity:1 !important; color:var(--ink-soft); }
+
+  /* 次要功能收合，首頁只保留主要動線 */
+  .home-more{ margin-top:1.5rem; padding-top:0.5rem; border-top:1px solid var(--gold-line); text-align:center; }
+  .home-more > summary{
+    pointer-events:auto; cursor:pointer; list-style:none; padding:0.35rem; font-size:11px;
+    letter-spacing:0.12em; color:var(--ink-soft);
+  }
+  .home-more > summary::-webkit-details-marker{ display:none; }
+  .home-more > summary::after{ content:'▾'; margin-left:6px; }
+  .home-more[open] > summary::after{ content:'▴'; }
+  .home-more .today-card-actions{ margin-top:0.5rem; }
+  .home-more .lookup-section{ margin-top:0.2rem; }
 
   /* ===================== 神明選擇 / 自我介紹 / 農曆運勢卡（v16 新增） ===================== */
   .deity-switch{ display:flex; gap:8px; justify-content:center; margin-bottom:0.8rem; flex-wrap:wrap; }
@@ -604,11 +723,14 @@
     body.mobile-shake-mode #deity-portrait{ width:82px; height:82px; margin-bottom:0.4rem; }
     body.mobile-shake-mode #oracle-title{ font-size:1.35rem; letter-spacing:0.26em !important; }
     body.mobile-shake-mode #oracle-intro{ margin:0.45rem 0 0.65rem; line-height:1.65; }
-    body.mobile-shake-mode .mobile-form-label{ display:block; margin:0.8rem 0 0.45rem; color:var(--ink-soft); font-size:11px; letter-spacing:0.12em; text-align:left; }
-    body.mobile-shake-mode .category-grid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin:0; }
-    body.mobile-shake-mode .category-pill{ width:100%; min-height:42px; padding:0.45rem 0.5rem; font-size:12px; letter-spacing:0.08em; }
-    body.mobile-shake-mode #home-question{ min-height:96px; margin-top:0; padding:0.75rem 0.85rem; border-radius:12px; font-size:16px; line-height:1.65; }
-    body.mobile-shake-mode #btn-home-start{ width:100%; min-height:54px; margin-top:1rem !important; font-size:14px; }
+    /* 求籤精靈（簡化版）在手機上維持大字大按鈕，只收一點外距 */
+    body.mobile-shake-mode .wizard{ margin-top:0.9rem; }
+    body.mobile-shake-mode .wizard-card{ padding:1.2rem 1rem 1.1rem; border-radius:18px; }
+    body.mobile-shake-mode .wizard-title{ font-size:23px; }
+    body.mobile-shake-mode .wizard-note{ margin-bottom:1rem; font-size:14px; }
+    body.mobile-shake-mode .choice-row{ min-height:68px; gap:12px; padding:0.8rem 0.9rem; }
+    body.mobile-shake-mode .choice-row .choice-label{ font-size:18px; }
+    body.mobile-shake-mode #home-question{ min-height:110px; margin-top:0; border-radius:12px; font-size:16px; line-height:1.7; }
     body.mobile-shake-mode .lookup-section{ margin-top:1.15rem; padding:0.9rem; border:1px solid rgba(212,175,55,0.35); border-radius:14px; background:rgba(212,175,55,0.055); }
     body.mobile-shake-mode .home-divider{ margin:0 0 0.35rem; }
     body.mobile-shake-mode .lookup-mobile-note{ display:block; margin:0 0 0.65rem; color:var(--ink-soft); font-size:10.5px; line-height:1.6; text-align:left; }
@@ -761,43 +883,127 @@
         <button type="button" disabled title="敬請期待">觀音菩薩</button>
       </div>
 
-      <!-- 農曆日期與今日運勢小卡：純前端由 JS 依日期公式化產生，無需連線後端 -->
-      <div class="today-card" id="today-card"></div>
-      <div class="today-card-actions">
-        <button type="button" id="btn-share-today" class="mini-link-btn">📤 分享今日運勢</button>
-        <button type="button" id="btn-open-history" class="mini-link-btn">📜 我的籤詩收藏（<span id="history-count">0</span>）</button>
-      </div>
-
-      <!-- 向神明稟告：姓名／性別／生辰八字，僅寫入 localStorage，不上傳伺服器 -->
-      <div class="profile-toggle" id="btn-open-profile">🙏 向神明稟告（填寫我的基本資料）</div>
-
       <div id="deity-portrait">
         <img src="data:image/jpeg;base64,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" alt="媽祖">
       </div>
       <p id="oracle-eyebrow" class="eyebrow">MAZU ORACLE · 六十甲子籤</p>
-      <h1 id="oracle-title" class="gold-text text-xl md:text-2xl tracking-[0.4em] mt-2">媽　祖　籤</h1>
+      <h1 id="oracle-title" class="gold-text text-xl md:text-2xl tracking-[0.4em] mt-2">媽祖籤</h1>
       <div class="hairline mt-3 mb-1"></div>
-      <p id="oracle-intro" class="text-[12px] opacity-70 font-light tracking-wide mb-2">請選擇你想詢問的方向，並簡短寫下心中的問題</p>
+      <p id="oracle-intro" class="text-[12px] opacity-70 font-light tracking-wide mb-2">照著步驟，慢慢把心裡的事說給神明聽</p>
 
-      <p class="mobile-form-label">選擇所問方向</p>
-      <div id="category-grid" class="category-grid">
-        <!-- 分類清單由 CONFIG.CATEGORIES 動態產生，若要增減分類，直接編輯該陣列即可 -->
+      <!-- ============================================================
+           【比賽用版本｜目前停用】三步驟求籤精靈（金線細框、pill 分類、多顆小按鈕）
+           比賽展示時如需切回，把下面這段註解打開，並停用其後的「簡化版」區塊，
+           同時把 JS 的「比賽用 HomeWizard」與 CSS 的「比賽用樣式」一併切回。
+           ============================================================
+      <div id="home-wizard" class="wizard">
+        <ol class="wizard-steps">
+          <li class="wizard-step is-active" data-step="1"><span class="wizard-step-no">1</span>選擇方向</li>
+          <li class="wizard-step" data-step="2"><span class="wizard-step-no">2</span>寫下問題</li>
+          <li class="wizard-step" data-step="3"><span class="wizard-step-no">3</span>確認開始</li>
+        </ol>
+
+        <section class="wizard-panel" data-panel="1">
+          <p class="wizard-title">第一步：想請示哪個方向？</p>
+          <p class="wizard-note">選一個最接近你心事的方向就好，之後還可以回來修改。</p>
+          <div id="category-grid" class="category-grid"></div>
+          <div class="wizard-actions">
+            <button type="button" id="btn-wizard-next-1" class="btn-line">下　一　步</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel hidden" data-panel="2">
+          <p class="wizard-title">第二步：想請示什麼事？</p>
+          <p class="wizard-note">這一步可以留白。不想寫也沒關係，按「略過不填」，神明一樣會依你選的方向指點。</p>
+          <textarea id="home-question" rows="3" maxlength="80" placeholder="例如：我今年適合轉換跑道嗎？（可不填）"></textarea>
+          <div class="wizard-actions">
+            <button type="button" class="btn-line btn-quiet" data-wizard-back="1">上一步</button>
+            <button type="button" id="btn-wizard-skip" class="btn-line btn-quiet">略過不填</button>
+            <button type="button" id="btn-wizard-next-2" class="btn-line">下　一　步</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel hidden" data-panel="3">
+          <p class="wizard-title">第三步：確認後即可開始祈福</p>
+          <dl class="wizard-summary">
+            <div><dt>所問方向</dt><dd id="wizard-summary-category">—</dd></div>
+            <div><dt>請示問題</dt><dd id="wizard-summary-question">—</dd></div>
+          </dl>
+          <div class="wizard-actions">
+            <button type="button" class="btn-line btn-quiet" data-wizard-back="2">上一步</button>
+            <button id="btn-home-start" class="btn-line">開　始　祈　福</button>
+          </div>
+        </section>
       </div>
+           ============================================================ -->
 
-      <p class="mobile-form-label">寫下你想請示的問題</p>
-      <textarea id="home-question" rows="2" maxlength="80" placeholder="例如：我今年適合轉換跑道嗎？"></textarea>
-
-      <button id="btn-home-start" class="btn-line mt-6">開　始　祈　福</button>
-
-      <div class="lookup-section">
-        <div id="known-fortune-divider" class="home-divider"><div class="line"></div><span>已　知　籤　號</span><div class="line"></div></div>
-        <p class="lookup-mobile-note">已經拿到籤號？輸入籤號後，會依上方的問題與主題為你解籤。</p>
-        <div class="flex items-center justify-center gap-3 flex-wrap">
-          <input id="manual-no-input" type="number" min="1" max="60" placeholder="1-60" />
-          <button id="btn-manual-go" class="btn-line" style="padding:0.5rem 1.2rem;">查　詢　解　籤</button>
+      <!-- ===================== 求籤精靈（簡化版｜目前使用中） =====================
+           長輩友善：一頁只做一件事、字大、按鈕大，分類以整列大卡點選取代打字。 -->
+      <div id="home-wizard" class="wizard">
+        <div class="wizard-progress">
+          <div class="wizard-progress-head">
+            <span id="wizard-step-count">第 1 步／共 3 步</span>
+            <span id="wizard-step-name">問什麼</span>
+          </div>
+          <div class="wizard-progress-bar">
+            <span data-bar="1"></span><span data-bar="2"></span><span data-bar="3"></span>
+          </div>
         </div>
-        <p id="manual-no-error"></p>
+
+        <div class="wizard-card">
+          <section class="wizard-panel" data-panel="1">
+            <h2 class="wizard-title">想請示什麼事？</h2>
+            <p class="wizard-note">選一個最接近的就好</p>
+            <div id="category-grid" class="choice-list"></div>
+          </section>
+
+          <section class="wizard-panel hidden" data-panel="2">
+            <h2 class="wizard-title">想跟神明說什麼？</h2>
+            <p class="wizard-note">可以說，也可以不說</p>
+            <textarea id="home-question" rows="3" maxlength="80" placeholder="例如：我今年適合換工作嗎？"></textarea>
+          </section>
+
+          <section class="wizard-panel hidden" data-panel="3">
+            <h2 class="wizard-title">這樣對嗎？</h2>
+            <p class="wizard-note">確認以後就可以開始了</p>
+            <dl class="wizard-summary">
+              <div><dt>要問的事</dt><dd id="wizard-summary-category">—</dd></div>
+              <div><dt>想說的話</dt><dd id="wizard-summary-question">—</dd></div>
+            </dl>
+          </section>
+
+          <button type="button" id="btn-wizard-next" class="wizard-btn wizard-btn-primary">下一步 →</button>
+          <button id="btn-home-start" class="wizard-btn wizard-btn-primary hidden">開　始　求　籤</button>
+          <button type="button" id="btn-wizard-back" class="wizard-btn wizard-btn-ghost hidden">‹ 回上一步</button>
+        </div>
+
+        <p class="wizard-footnote" id="wizard-footnote">不用打字，用手指點選就可以了</p>
       </div>
+
+      <!-- 次要功能收合起來，首頁只保留求籤主動線 -->
+      <details class="home-more" id="home-more">
+        <summary id="home-more-summary">更多功能（今日運勢、籤詩收藏、我的資料、已知籤號）</summary>
+
+        <!-- 農曆日期與今日運勢小卡：純前端由 JS 依日期公式化產生，無需連線後端 -->
+        <div class="today-card" id="today-card"></div>
+        <div class="today-card-actions">
+          <button type="button" id="btn-share-today" class="mini-link-btn">📤 分享今日運勢</button>
+          <button type="button" id="btn-open-history" class="mini-link-btn">📜 我的籤詩收藏（<span id="history-count">0</span>）</button>
+        </div>
+
+        <!-- 向神明稟告：姓名／性別／生辰八字，僅寫入 localStorage，不上傳伺服器 -->
+        <div class="profile-toggle" id="btn-open-profile">🙏 向神明稟告（填寫我的基本資料）</div>
+
+        <div class="lookup-section">
+          <div id="known-fortune-divider" class="home-divider"><div class="line"></div><span>已　知　籤　號</span><div class="line"></div></div>
+          <p class="lookup-mobile-note">已經拿到籤號？輸入籤號後，會依你選的方向為你解籤；若已寫下問題，也會一併參考。</p>
+          <div class="flex items-center justify-center gap-3 flex-wrap">
+            <input id="manual-no-input" type="number" min="1" max="60" placeholder="1-60" />
+            <button id="btn-manual-go" class="btn-line" style="padding:0.5rem 1.2rem;">查　詢　解　籤</button>
+          </div>
+          <p id="manual-no-error"></p>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -990,9 +1196,9 @@
     <section class="glass-card quick-card">
       <p class="eyebrow">SEARCH DIVINATION</p>
       <h2 id="quick-title">查詢求籤</h2>
-      <p>輸入問題並選擇主題，系統會直接抽出一支籤。這次紀錄同樣會傳送到 Django。</p>
+      <p>選擇主題後即可直接抽出一支籤；問題可以留白不填，系統會依主題為你請示。</p>
       <p id="quick-fallback-notice" class="quick-fallback-notice hidden" role="alert"></p>
-      <textarea id="quick-question" maxlength="300" placeholder="例如：我該接受這份新工作嗎？"></textarea>
+      <textarea id="quick-question" maxlength="300" placeholder="例如：我該接受這份新工作嗎？（可不填）"></textarea>
       <div id="quick-category-grid" aria-label="求籤主題"></div>
       <div class="quick-actions">
         <button id="btn-quick-cancel" type="button">取消</button>
@@ -1312,9 +1518,31 @@ const CONFIG = {
   AMBIENT_SAMPLE_MS: 300,      // 環境亮度取樣間隔
   PARTICLE_REPEL_RADIUS: 90,   // 手部撥動金色香灰粒子的作用半徑（px）
 
-  // ---- 首頁分類清單：想增加/刪除/改名分類，直接編輯這個陣列即可，畫面會自動產生對應按鈕 ----
-  CATEGORIES: ['工作事業', '感情婚姻', '財運投資', '健康平安', '考試學業', '家庭生活', '綜合運勢'],
+  // ---- 首頁分類清單：想增加/刪除/改名分類，直接編輯這個陣列即可，畫面會自動產生對應大卡 ----
+  // label 需同時存在於 CATEGORY_API_MAP，才能對應到後端的分類代碼。
+  // 比賽用版本的七項分類（工作事業／感情婚姻／財運投資／健康平安／考試學業／家庭生活／綜合運勢）
+  // 仍保留在 CATEGORY_API_MAP 中，分享連結帶入舊分類時依然可以正確對應。
+  CATEGORIES: [
+    { label: '身體健康', emoji: '🌿', desc: '身體、看病、平安' },
+    { label: '家庭平安', emoji: '🏠', desc: '家人、子女、和睦' },
+    { label: '工作錢財', emoji: '💰', desc: '工作、生意、財運' },
+    { label: '感情姻緣', emoji: '💗', desc: '感情、對象、緣分' },
+    { label: '其他心事', emoji: '🙏', desc: '任何想問的事' },
+  ],
 };
+
+/* -------------------------------------------------------------------------
+   問題是選填欄位：使用者若不想寫（或寫不到兩個字），就依所選方向自動組出
+   一句請示語句，讓後端與 AI 仍有足夠脈絡可以解籤（後端 question 至少兩個字）。
+   ------------------------------------------------------------------------- */
+function isBlankQuestion(rawText){
+  return (rawText || '').trim().length < 2;
+}
+function resolveQuestion(rawText, category){
+  if (!isBlankQuestion(rawText)) return rawText.trim();
+  const topic = category || CONFIG.CATEGORIES[0].label;
+  return `想請示${topic}方面目前的運勢，請神明指點該把握與留意的地方`;
+}
 
 /* Retained only as an archived visual prototype. Live fortune data comes from the API. */
 /* const FORTUNES = [
@@ -1509,6 +1737,16 @@ const els = {
   sceneHome: document.getElementById('scene-home'),
   categoryGrid: document.getElementById('category-grid'),
   homeQuestion: document.getElementById('home-question'),
+  homeWizard: document.getElementById('home-wizard'),
+  homeMore: document.getElementById('home-more'),
+  homeMoreSummary: document.getElementById('home-more-summary'),
+  btnWizardNext: document.getElementById('btn-wizard-next'),
+  btnWizardBack: document.getElementById('btn-wizard-back'),
+  wizardStepCount: document.getElementById('wizard-step-count'),
+  wizardStepName: document.getElementById('wizard-step-name'),
+  wizardFootnote: document.getElementById('wizard-footnote'),
+  wizardSummaryCategory: document.getElementById('wizard-summary-category'),
+  wizardSummaryQuestion: document.getElementById('wizard-summary-question'),
   btnHomeStart: document.getElementById('btn-home-start'),
   manualNoInput: document.getElementById('manual-no-input'),
   manualNoError: document.getElementById('manual-no-error'),
@@ -2543,10 +2781,13 @@ const GestureEngine = (() => {
 })();
 
 /* ========================================================================= 4. AppState + UIActions ========================================================================= */
+// 舊分類名稱一併保留，讓比賽用版本與既有分享連結帶入的分類仍能對應到後端代碼；
+// 目前畫面使用的五項放在最後，CATEGORY_LABELS 反查時會以這五項為顯示名稱。
 const CATEGORY_API_MAP = {
   '工作事業': 'career', '感情婚姻': 'love', '財運投資': 'wealth', '健康平安': 'health',
   '考試學業': 'study', '家庭生活': 'family', '綜合運勢': 'other', '求財運': 'wealth',
-  '問姻緣': 'love', '拼事業': 'career', '求健康': 'health', '學業功名': 'study'
+  '問姻緣': 'love', '拼事業': 'career', '求健康': 'health', '學業功名': 'study',
+  '身體健康': 'health', '家庭平安': 'family', '工作錢財': 'career', '感情姻緣': 'love', '其他心事': 'other'
 };
 const CATEGORY_LABELS = Object.fromEntries(Object.entries(CATEGORY_API_MAP).map(([label, value]) => [value, label]));
 const pageParams = new URLSearchParams(window.location.search);
@@ -2647,7 +2888,7 @@ const DivinationApi = (() => {
 
 const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   || (navigator.maxTouchPoints > 1 && window.matchMedia('(pointer:coarse)').matches && window.innerWidth < 900);
-const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, isFortuneLookup:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, shareToken:null, mobileShakeReady:false, userQuery:{ category:'綜合運勢', question:'' } };
+const AppState = { current:'incense', drawSubState:'shake', selectedStickCx:100, bwaTossing:false, isFortuneLookup:false, currentFortune:null, interpretation:null, tutorialPeek:false, sessionId:null, shareToken:null, mobileShakeReady:false, userQuery:{ category:'其他心事', question:'' } };
 
 // 手機抽籤使用裝置動作感測，不會請求鏡頭；iOS 需在使用者點擊後明確授權。
 const MobileShake = (() => {
@@ -2729,11 +2970,16 @@ const MobileShake = (() => {
 
 if (isLookupOnly) {
   document.getElementById('oracle-eyebrow').textContent = 'FORTUNE LOOKUP · AI INTERPRETATION';
-  document.getElementById('oracle-title').textContent = '線　上　查　籤';
-  document.getElementById('oracle-intro').textContent = '輸入已知籤號與問題，擲筊請示後由 AI 為你解籤';
+  document.getElementById('oracle-title').textContent = '線上查籤';
+  document.getElementById('oracle-intro').textContent = '輸入已知籤號，擲筊請示後由 AI 為你解籤（問題可不填）';
   document.querySelector('#known-fortune-divider span').textContent = '輸　入　籤　號';
   els.btnHomeStart.hidden = true;
   els.btnManualGo.textContent = '查　詢　解　籤';
+  // 查籤模式不需要三步驟流程，只保留「選擇方向」，並直接展開籤號輸入區
+  els.homeWizard.classList.add('is-lookup');
+  els.homeWizard.querySelector('[data-panel="1"] .wizard-note').textContent = '選好以後，在下面輸入籤號就可以了';
+  els.homeMoreSummary.textContent = '其他功能（籤詩收藏、我的資料）';
+  els.homeMore.open = true;
 }
 
 // 提早解析網址參數（分享連結可能帶入的籤號/分類），確保後續首頁初始化時就能讀到
@@ -3088,7 +3334,7 @@ const UIActions = (() => {
   }
 
   // v16：健康平安／感情婚姻等高敏感隱私類別清單，供分享按鈕收斂與文案柔化判斷使用
-  const SENSITIVE_CATEGORIES = ['健康平安', '感情婚姻', '求健康', '問姻緣'];
+  const SENSITIVE_CATEGORIES = ['健康平安', '感情婚姻', '求健康', '問姻緣', '身體健康', '感情姻緣'];
 
   function applySensitiveUX(category){
     const isSensitive = SENSITIVE_CATEGORIES.includes(category);
@@ -3347,6 +3593,7 @@ const UIActions = (() => {
     continueChatEntryOrigin.after(els.continueChatEntry);
     document.body.classList.remove('shared-session');
     els.sceneHome.classList.remove('hidden');
+    if (window.HomeWizard) window.HomeWizard.reset();
     AppState.current = 'home';
     AppState.bwaTossing = false;
     GestureEngine.resetIncenseProgress();
@@ -3361,36 +3608,131 @@ const UIActions = (() => {
 })();
 
 /* =========================================================================
+   首頁求籤精靈：把「選方向 → 寫問題 → 確認開始」拆成三步，一次只呈現一件事。
+   第二步為選填，使用者可直接略過，由 resolveQuestion 依方向補上請示語句。
+   ========================================================================= */
+/* -------------------------------------------------------------------------
+   【比賽用版本｜目前停用】舊版 HomeWizard：搭配步驟圓點列與「上一步／略過不填／下一步」
+   三顆小按鈕。要切回比賽版時，把這段還原成程式碼、停用下方的簡化版，
+   並把 els 中的 btnWizardSkip / btnWizardNext1 / btnWizardNext2 一併加回。
+
+   const HomeWizard = (() => {
+     const LAST_STEP = 3;
+     let current = 1;
+     const panels = () => els.homeWizard.querySelectorAll('.wizard-panel');
+     const steps = () => els.homeWizard.querySelectorAll('.wizard-step');
+
+     function refreshSummary(){
+       const raw = els.homeQuestion.value;
+       els.wizardSummaryCategory.textContent = AppState.userQuery.category;
+       els.wizardSummaryQuestion.textContent = isBlankQuestion(raw) ? '未填寫，將依所選方向請示' : raw.trim();
+       els.wizardSummaryQuestion.classList.toggle('is-auto', isBlankQuestion(raw));
+     }
+
+     function go(step){
+       current = Math.min(Math.max(step, 1), LAST_STEP);
+       panels().forEach(panel => panel.classList.toggle('hidden', Number(panel.dataset.panel) !== current));
+       steps().forEach(item => {
+         const no = Number(item.dataset.step);
+         item.classList.toggle('is-active', no === current);
+         item.classList.toggle('is-done', no < current);
+       });
+       if (current === 3) refreshSummary();
+       if (current === 2) requestAnimationFrame(() => els.homeQuestion.focus());
+     }
+
+     function init(){
+       els.btnWizardNext1.addEventListener('click', () => go(2));
+       els.btnWizardNext2.addEventListener('click', () => go(3));
+       els.btnWizardSkip.addEventListener('click', () => { els.homeQuestion.value = ''; go(3); });
+       els.homeWizard.querySelectorAll('[data-wizard-back]').forEach(btn => {
+         btn.addEventListener('click', () => go(Number(btn.dataset.wizardBack)));
+       });
+     }
+
+     return { init, go, reset: () => go(1), refreshSummary };
+   })();
+   ------------------------------------------------------------------------- */
+
+const HomeWizard = (() => {
+  const STEPS = [
+    { name: '問什麼', footnote: '不用打字，用手指點選就可以了' },
+    { name: '想說的話', footnote: '這一步可以留白，不想打字就直接按下一步' },
+    // 最後一步的按鈕文字會依模式改成「手動抽籤」「搖一搖求籤」，說明文字跟著一起換
+    { name: '確認開始', footnote: () => `按下「${els.btnHomeStart.textContent.replace(/\s/g, '')}」，就可以向神明請示了` },
+  ];
+  let current = 1;
+  const panels = () => els.homeWizard.querySelectorAll('.wizard-panel');
+  const bars = () => els.homeWizard.querySelectorAll('.wizard-progress-bar span');
+
+  function refreshSummary(){
+    const raw = els.homeQuestion.value;
+    els.wizardSummaryCategory.textContent = AppState.userQuery.category || CONFIG.CATEGORIES[0].label;
+    els.wizardSummaryQuestion.textContent = isBlankQuestion(raw) ? '沒有特別想說的' : raw.trim();
+    els.wizardSummaryQuestion.classList.toggle('is-auto', isBlankQuestion(raw));
+  }
+
+  function go(step){
+    current = Math.min(Math.max(step, 1), STEPS.length);
+    panels().forEach(panel => panel.classList.toggle('hidden', Number(panel.dataset.panel) !== current));
+    bars().forEach(bar => bar.classList.toggle('is-filled', Number(bar.dataset.bar) <= current));
+    els.wizardStepCount.textContent = `第 ${current} 步／共 ${STEPS.length} 步`;
+    els.wizardStepName.textContent = STEPS[current - 1].name;
+    const footnote = STEPS[current - 1].footnote;
+    els.wizardFootnote.textContent = typeof footnote === 'function' ? footnote() : footnote;
+    // 最後一步才換成「開始求籤」；第一步沒有上一步可回
+    const isLast = current === STEPS.length;
+    els.btnWizardNext.classList.toggle('hidden', isLast);
+    els.btnHomeStart.classList.toggle('hidden', !isLast);
+    els.btnWizardBack.classList.toggle('hidden', current === 1);
+    if (isLast) refreshSummary();
+  }
+
+  function init(){
+    els.btnWizardNext.addEventListener('click', () => go(current + 1));
+    els.btnWizardBack.addEventListener('click', () => go(current - 1));
+    go(1);
+  }
+
+  return { init, go, reset: () => go(1), refreshSummary };
+})();
+window.HomeWizard = HomeWizard;
+
+/* =========================================================================
    首頁：動態產生分類按鈕、記錄使用者選擇的分類與問題
    ========================================================================= */
 (function setupHomeScene(){
+  HomeWizard.init();
+  // 分類以整列大卡呈現：圖示＋主標＋說明＋右側勾選圈，觸控區整列都可點
   CONFIG.CATEGORIES.forEach((cat, i) => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'category-pill' + (i === 0 ? ' selected' : '');
-    btn.textContent = cat;
+    btn.className = 'choice-row' + (i === 0 ? ' selected' : '');
+    btn.dataset.category = cat.label;
+    btn.innerHTML =
+      `<span class="choice-icon" aria-hidden="true">${cat.emoji}</span>` +
+      `<span class="choice-text"><span class="choice-label">${cat.label}</span><span class="choice-desc">${cat.desc}</span></span>` +
+      `<span class="choice-check" aria-hidden="true">✓</span>`;
     btn.addEventListener('click', () => {
-      els.categoryGrid.querySelectorAll('.category-pill').forEach(p => { p.classList.remove('selected'); p.classList.remove('pulse-select'); });
+      els.categoryGrid.querySelectorAll('.choice-row').forEach(row => row.classList.remove('selected'));
       btn.classList.add('selected');
-      void btn.offsetWidth;
-      btn.classList.add('pulse-select');
       if (navigator.vibrate) navigator.vibrate(15);
-      AppState.userQuery.category = cat;
+      AppState.userQuery.category = cat.label;
     });
     els.categoryGrid.appendChild(btn);
   });
-  AppState.userQuery.category = CONFIG.CATEGORIES[0];
+  AppState.userQuery.category = CONFIG.CATEGORIES[0].label;
 
   // 若透過分享連結帶入籤號/分類參數進入，預先帶入首頁對應欄位
   if (AppState.pendingSharedCategory){
-    const match = Array.from(els.categoryGrid.querySelectorAll('.category-pill')).find(p => p.textContent === AppState.pendingSharedCategory);
-    if (match){ els.categoryGrid.querySelectorAll('.category-pill').forEach(p => p.classList.remove('selected')); match.classList.add('selected'); AppState.userQuery.category = AppState.pendingSharedCategory; }
+    const match = Array.from(els.categoryGrid.querySelectorAll('.choice-row')).find(row => row.dataset.category === AppState.pendingSharedCategory);
+    if (match){ els.categoryGrid.querySelectorAll('.choice-row').forEach(row => row.classList.remove('selected')); match.classList.add('selected'); AppState.userQuery.category = AppState.pendingSharedCategory; }
   }
   if (AppState.pendingSharedFortuneNo){ els.manualNoInput.value = AppState.pendingSharedFortuneNo; }
 
   els.btnHomeStart.addEventListener('click', async () => {
-    AppState.userQuery.question = els.homeQuestion.value.trim();
-    if (AppState.userQuery.question.length < 2){ showToast('請先輸入至少兩個字的問題'); return; }
+    // 問題為選填：未填寫時依所選方向自動補上請示語句
+    AppState.userQuery.question = resolveQuestion(els.homeQuestion.value, AppState.userQuery.category);
     try {
       els.btnHomeStart.disabled = true;
       if (isMobileDevice && !isManualOnly) {
@@ -3422,16 +3764,16 @@ const UIActions = (() => {
     }
   });
 
-  let quickCategory = CONFIG.CATEGORIES[0];
+  let quickCategory = CONFIG.CATEGORIES[0].label;
   CONFIG.CATEGORIES.forEach((category, index) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'quick-category' + (index === 0 ? ' selected' : '');
-    button.textContent = category;
+    button.textContent = category.label;
     button.addEventListener('click', () => {
       els.quickCategoryGrid.querySelectorAll('.quick-category').forEach(item => item.classList.remove('selected'));
       button.classList.add('selected');
-      quickCategory = category;
+      quickCategory = category.label;
     });
     els.quickCategoryGrid.appendChild(button);
   });
@@ -3458,8 +3800,8 @@ const UIActions = (() => {
   });
   els.quickModal.addEventListener('click', event => { if (event.target === els.quickModal) closeQuickDivination(); });
   els.btnQuickSubmit.addEventListener('click', async () => {
-    const question = els.quickQuestion.value.trim();
-    if (question.length < 2){ showToast('請先輸入至少兩個字的問題'); return; }
+    // 問題同樣為選填：留白時依所選主題自動補上請示語句
+    const question = resolveQuestion(els.quickQuestion.value, quickCategory);
     try {
       els.btnQuickSubmit.disabled = true;
       els.btnQuickSubmit.textContent = '查詢中…';
@@ -3509,12 +3851,7 @@ const UIActions = (() => {
   els.btnManualGo.addEventListener('click', async () => {
     const n = validateManualNo();
     if (n === null) return;
-    const question = els.homeQuestion.value.trim();
-    if (question.length < 2){
-      showToast('請先輸入至少兩個字的問題，才能依問題進行 AI 解籤');
-      els.homeQuestion.focus();
-      return;
-    }
+    const question = resolveQuestion(els.homeQuestion.value, AppState.userQuery.category);
     try {
       els.btnManualGo.disabled = true;
       els.btnManualGo.textContent = '解 籤 中…';
@@ -4067,7 +4404,7 @@ async function restoreSharedSession(){
     AppState.interpretation = session.interpretation;
     AppState.userQuery = {
       question: session.question || '',
-      category: CATEGORY_LABELS[session.category] || '綜合運勢'
+      category: CATEGORY_LABELS[session.category] || '其他心事'
     };
     document.body.classList.add('shared-session');
     els.sceneHome.classList.add('hidden');
@@ -4096,13 +4433,12 @@ if (AppState.sharedSessionId) {
     sessionStorage.removeItem('temple-oracle-manual-fallback');
     els.btnHomeStart.textContent = '手 動 抽 籤';
     if (fallbackMessage) setTimeout(() => showToast(fallbackMessage), 0);
-    requestAnimationFrame(() => els.homeQuestion.focus());
   }
   if (isLookupOnly) requestAnimationFrame(() => els.manualNoInput.focus());
 } else if (isMobileDevice) {
   document.body.classList.add('mobile-shake-mode');
   els.btnHomeStart.textContent = '搖　一　搖　求　籤';
-  document.getElementById('oracle-intro').textContent = '寫下心中的問題後，搖動手機籤筒即可請示';
+  document.getElementById('oracle-intro').textContent = '依步驟選好方向，搖動手機籤筒即可請示';
   els.loading.style.display = 'none';
 } else {
   const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });

@@ -3,11 +3,14 @@ const htmlUrl = new URL('./index.html', import.meta.url).href
 </script>
 
 <template>
+  <!-- allow/allowfullscreen：讓首頁裡的教學影片可以要求瀏覽器全螢幕 -->
   <iframe
     class="temple-landing-frame"
     :src="htmlUrl"
     title="籤好運首頁"
     frameborder="0"
+    allow="fullscreen"
+    allowfullscreen
   ></iframe>
 </template>
 

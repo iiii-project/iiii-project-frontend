@@ -95,6 +95,43 @@
   .nav-toggle{ display:none; width:40px; height:40px; border-radius:12px; border:1px solid var(--gold-line); background:var(--cream-edge); align-items:center; justify-content:center; cursor:pointer; }
   .nav-toggle svg{ width:18px; height:18px; }
 
+  /* ===================== 操作教學影片：全畫面播放 + 第一次造訪詢問 ===================== */
+  .tutorial-overlay{
+    position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center;
+    background:#0d0906;
+  }
+  .tutorial-overlay[hidden]{ display:none; }
+  .tutorial-overlay video{ width:100%; height:100%; object-fit:contain; background:#0d0906; }
+  .tutorial-close{
+    position:absolute; top:max(18px, env(safe-area-inset-top)); right:18px; z-index:2;
+    min-height:44px; padding:0 18px; border-radius:999px; cursor:pointer;
+    border:1px solid rgba(255,255,255,0.55); background:rgba(20,14,10,0.62); color:#fdf7ec;
+    font-family:"Noto Serif TC",serif; font-size:14px; letter-spacing:0.1em;
+  }
+  .tutorial-close:hover{ background:rgba(166,58,58,0.85); border-color:transparent; }
+
+  .tutorial-ask{
+    position:fixed; inset:0; z-index:9998; display:flex; align-items:center; justify-content:center;
+    padding:24px; background:rgba(40,28,20,0.55); backdrop-filter:blur(6px);
+  }
+  .tutorial-ask[hidden]{ display:none; }
+  .tutorial-ask-card{
+    width:min(460px, 100%); padding:2.2rem 1.9rem 1.8rem; border-radius:20px; text-align:center;
+    border:1px solid var(--gold-line); background:var(--cream); box-shadow:0 18px 50px rgba(60,40,20,0.28);
+  }
+  .tutorial-ask-eyebrow{ margin:0; font-size:11px; letter-spacing:0.24em; color:var(--jiang-hong); }
+  .tutorial-ask-card h2{ margin:0.7rem 0 0; font-size:25px; font-weight:700; letter-spacing:0.04em; color:var(--ink); }
+  .tutorial-ask-note{ margin:0.8rem 0 0; font-size:14.5px; line-height:1.9; color:var(--ink-soft); }
+  .tutorial-ask-actions{ margin-top:1.5rem; display:grid; gap:10px; }
+  .tutorial-btn{
+    width:100%; min-height:54px; border-radius:14px; border:1px solid transparent; cursor:pointer;
+    font-family:"Noto Serif TC",serif; font-size:17px; font-weight:600; letter-spacing:0.1em;
+  }
+  .tutorial-btn-primary{ background:var(--jiang-hong-deep); color:#fffaf2; box-shadow:0 8px 20px rgba(122,38,38,0.22); }
+  .tutorial-btn-primary:hover{ background:#8f2f2f; }
+  .tutorial-btn-ghost{ background:var(--cream-edge); color:var(--ink-soft); }
+  .tutorial-btn-ghost:hover{ background:#eadfc9; }
+
   /* ===================== Hero：簽廓天際線 + 香煙裊裊（本頁簽名式視覺） ===================== */
   .hero{ position:relative; padding:178px 0 0; overflow:hidden; }
   .hero-inner{ position:relative; z-index:3; text-align:center; padding-bottom:120px; }
@@ -105,7 +142,8 @@
     font-size:clamp(40px, 7vw, 76px); font-weight:900; letter-spacing:0.14em; margin:0; line-height:1.3;
     color:var(--ink);
   }
-  .hero h1 span{ color:var(--jiang-hong); }
+  .hero h1 .accent{ color:var(--jiang-hong); }
+  .hero-title-narrow{ display:none; }
   .hero p.lede{
     max-width:480px; margin:26px auto 0; font-size:15px; line-height:2; color:var(--ink-soft); letter-spacing:0.04em;
   }
@@ -201,7 +239,9 @@
   .footer-links a:hover{ color:var(--jiang-hong); }
 
   /* ===================== 籤好運：一鏡到底 3D 廟宇飛行（Three.js scroll-driven camera） ===================== */
-  .journey{ position:relative; background:#f6dfa8; }
+  /* padding:0 覆蓋 section 的上下 110px：那兩條留白會露出底色，變成主視覺下方一塊突兀的黃色。
+     底色也改成與 3D 場景天空同色（SKY_DAY #fdeecb），捲動交界處不會出現色差。 */
+  .journey{ position:relative; padding:0; background:#fdeecb; }
   .journey-track{ position:relative; height:750vh; }
   .journey-viewport{ position:sticky; top:0; height:100vh; overflow:hidden; }
   #temple3d{ width:100%; height:100%; display:block; }
@@ -257,6 +297,56 @@
     .journey-track{ height:450vh; }
     .scene-caption p{ max-width:260px; }
   }
+
+  /* =====================================================================
+     手機版簡化：導覽列只留主要動線、標題改緊排、按鈕整排寬、長段落收短
+     ===================================================================== */
+  @media (max-width: 620px){
+    /* 導覽列：只留「求籤」「教學影片」與漢堡選單，其餘入口都在選單裡，避免擠出畫面 */
+    [data-nav-secondary]{ display:none !important; }
+    .nav-row{ height:64px; gap:10px; }
+    .brand{ gap:9px; min-width:0; }
+    .brand svg, .brand img{ width:36px; height:36px; }
+    .brand .name{ font-size:16px; letter-spacing:0.06em; }
+    .brand .sub{ display:none; }
+    .nav-icons{ gap:8px; }
+    .icon-btn{ width:40px; height:40px; }
+    .nav-toggle{ width:40px; height:40px; }
+
+    /* 首頁主視覺：標題改不加全形空格的緊排版，兩顆行動按鈕改整排寬。
+       主視覺撐滿一個畫面高度，下方的 3D 廟宇飛行才會剛好從摺線開始、一進場就滿版，
+       不會只露出上緣一小條天空。 */
+    .hero{ padding-top:88px; min-height:100vh; min-height:100svh; display:flex; flex-direction:column; justify-content:center; }
+    .hero-inner{ padding-bottom:0; width:100%; }
+    .hero .eyebrow{ margin-bottom:12px; font-size:10px; letter-spacing:0.26em; }
+    .hero h1{ font-size:34px; letter-spacing:0.06em; line-height:1.55; }
+    .hero-title-wide{ display:none; }
+    .hero-title-narrow{ display:inline; }
+    .hero p.lede{ margin-top:18px; font-size:14.5px; line-height:1.95; }
+    .hero-ctas{ margin-top:26px; gap:10px; flex-direction:column; align-items:stretch; }
+    .hero-ctas .btn{ width:100%; justify-content:center; min-height:54px; padding:14px 18px; font-size:15px; letter-spacing:0.16em; }
+
+    /* 3D 廟宇飛行：手機縮短捲動距離，從五個畫面高降到兩個多 */
+    .journey-track{ height:260vh; }
+    .journey-caption h3{ font-size:20px; letter-spacing:0.08em; }
+    .journey-caption p{ font-size:12.5px; line-height:1.8; }
+
+    /* 內文區塊標題縮一級，避免全形空格把標題撐成多行 */
+    .section-head h2{ font-size:24px !important; letter-spacing:0.04em; line-height:1.6; }
+    .section-head p{ font-size:14px; line-height:1.9; }
+
+    /* 教學彈窗與影片：單欄大按鈕、留出瀏海與底部安全區 */
+    .tutorial-ask{ padding:16px; }
+    .tutorial-ask-card{ padding:1.7rem 1.2rem 1.4rem; border-radius:18px; }
+    .tutorial-ask-card h2{ font-size:21px; line-height:1.6; }
+    .tutorial-ask-note{ margin-top:0.6rem; font-size:13.5px; line-height:1.85; }
+    .tutorial-ask-actions{ margin-top:1.2rem; }
+    .tutorial-btn{ min-height:52px; font-size:16px; letter-spacing:0.06em; }
+    .tutorial-close{
+      top:max(12px, env(safe-area-inset-top)); right:12px;
+      min-height:42px; padding:0 14px; font-size:13px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -280,7 +370,7 @@
     </nav>
 
     <div class="nav-icons">
-      <div style="position:relative;">
+      <div style="position:relative;" data-nav-secondary>
         <button class="icon-btn" id="deity-toggle" aria-haspopup="true" aria-expanded="false" title="神明信仰">
           <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6"><circle cx="50" cy="50" r="35"/><path d="M30,50 L70,50 M50,30 L50,70"/></svg>
         </button>
@@ -296,15 +386,15 @@
         <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><path d="M28,40 L30,60 M40,34 L40,60 M50,34 L50,60 M60,36 L58,60 M70,42 L66,60"/></svg>
       </a>
 
-      <a class="icon-btn" href="/temple-map" target="_top" title="台灣廟宇地圖">
-        <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M20,30 L40,20 L60,30 L80,20 L80,70 L60,80 L40,70 L20,80 Z"/><path d="M40,20 L40,70 M60,30 L60,80"/></svg>
-      </a>
+      <button class="icon-btn" type="button" data-open-tutorial title="觀看操作教學影片">
+        <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="26" width="68" height="48" rx="8"/><path d="M43,44 L60,50 L43,56 Z" fill="currentColor" stroke-linejoin="round"/></svg>
+      </button>
 
-      <a class="icon-btn" href="/donation" target="_top" title="功德捐款">
+      <a class="icon-btn" data-nav-secondary href="/donation" target="_top" title="功德捐款">
         <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"><path d="M50,25 L50,75 M25,50 L75,50"/></svg>
       </a>
 
-      <a class="icon-btn" href="/history" target="_top" title="登入與我的紀錄">
+      <a class="icon-btn" data-nav-secondary href="/history" target="_top" title="登入與我的紀錄">
         <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="36" r="14"/><path d="M24,78 C28,60 40,54 50,54 C60,54 72,60 76,78"/></svg>
       </a>
 
@@ -322,18 +412,41 @@
     <a href="#features" style="padding:12px 0; font-size:14px; letter-spacing:0.1em;">全部功能</a>
     <a href="/temple-oracle-v17" target="_top" style="padding:12px 0; font-size:14px; letter-spacing:0.1em; color:var(--jiang-hong);">鏡頭儀式求籤 →</a>
     <a href="/temple-oracle-v17?mode=lookup" target="_top" style="padding:12px 0; font-size:14px; letter-spacing:0.1em; color:var(--jiang-hong);">線上查籤 →</a>
-    <a href="/temple-map" target="_top" style="padding:12px 0; font-size:14px; letter-spacing:0.1em;">台灣廟宇地圖</a>
+    <button type="button" data-open-tutorial style="padding:12px 0; font-size:14px; letter-spacing:0.1em; background:none; border:0; color:inherit; font-family:inherit; text-align:left; cursor:pointer;">▶ 觀看操作教學</button>
     <a href="/donation" target="_top" style="padding:12px 0; font-size:14px; letter-spacing:0.1em;">功德捐款</a>
     <a href="/history" target="_top" style="padding:12px 0; font-size:14px; letter-spacing:0.1em;">登入與我的紀錄</a>
   </nav>
 </header>
+
+<!-- ===================== 操作教學影片：鋪滿整個畫面播放 ===================== -->
+<div class="tutorial-overlay" id="tutorial-overlay" role="dialog" aria-modal="true" aria-label="操作教學影片" hidden>
+  <button class="tutorial-close" type="button" id="tutorial-close">✕　關閉影片</button>
+  <video id="tutorial-video" src="/videos/tutorial.mp4" controls playsinline preload="metadata"></video>
+</div>
+
+<!-- ===================== 第一次造訪：詢問要不要看教學（以 cookie 記住已詢問） ===================== -->
+<div class="tutorial-ask" id="tutorial-ask" role="dialog" aria-modal="true" aria-labelledby="tutorial-ask-title" hidden>
+  <div class="tutorial-ask-card">
+    <p class="tutorial-ask-eyebrow">歡迎第一次來到籤好運</p>
+    <h2 id="tutorial-ask-title">要先看操作教學嗎？</h2>
+    <p class="tutorial-ask-note">一段短片，帶你走一次怎麼求籤。<br>不看也沒關係，之後隨時可以再打開。</p>
+    <div class="tutorial-ask-actions">
+      <button type="button" id="tutorial-ask-yes" class="tutorial-btn tutorial-btn-primary">好，播給我看</button>
+      <button type="button" id="tutorial-ask-no" class="tutorial-btn tutorial-btn-ghost">不用，我自己逛</button>
+    </div>
+  </div>
+</div>
 
 <div id="top"></div>
 
 <section class="hero">
   <div class="wrap hero-inner">
     <p class="eyebrow">TAIWAN TEMPLE CULTURE ONLINE</p>
-    <h1>把　廟　埕　的　安　定<br>帶　到　你　的　<span>心 裡</span></h1>
+    <!-- 寬版用全形空格排字；手機改用不加空格的緊排版本，避免標題斷成四行 -->
+    <h1>
+      <span class="hero-title-wide">把　廟　埕　的　安　定<br>帶　到　你　的　<span class="accent">心 裡</span></span>
+      <span class="hero-title-narrow">把廟埕的安定<br>帶到你的<span class="accent">心裡</span></span>
+    </h1>
     <p class="lede">從農曆時令、神明信仰到求籤問事，籤好運把台灣廟宇裡熟悉的儀式感，
       轉化成隨時能靠近的線上體驗——先看看廟宇文化，再決定要不要求一支籤。</p>
     <div class="hero-ctas">
@@ -515,6 +628,74 @@
     mobileNav.style.display = isOpen ? 'none' : 'flex';
   });
   mobileNav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { mobileNav.style.display = 'none'; }));
+
+  /* ---- 手機版標題緊排：內文標題用全形空格排版，窄螢幕會被撐成兩三行不好讀，
+         窄螢幕時把 U+3000 拿掉，回到寬螢幕再放回去。
+         （首頁主標題另外在 HTML 裡準備了寬／窄兩個版本，不走這裡） ---- */
+  (function tightenHeadingsOnNarrowScreens(){
+    const headings = document.querySelectorAll('.section-head h2, .journey-caption h3, .scene-caption h3');
+    headings.forEach(el => { el.dataset.wideText = el.innerHTML; });
+    const narrow = window.matchMedia('(max-width: 620px)');
+    function applyHeadingSpacing(){
+      headings.forEach(el => {
+        el.innerHTML = narrow.matches ? el.dataset.wideText.replace(/　/g, '') : el.dataset.wideText;
+      });
+    }
+    applyHeadingSpacing();
+    narrow.addEventListener('change', applyHeadingSpacing);
+  })();
+
+  /* ---- 操作教學影片：導覽列的 ▶ 按鈕可隨時開啟；
+         第一次造訪時先詢問要不要看，答過之後用 cookie 記住，不再重複詢問。---- */
+  (function setupTutorialVideo(){
+    const COOKIE_NAME = 'temple_tutorial_prompted';
+    const COOKIE_DAYS = 365;
+    const overlay = document.getElementById('tutorial-overlay');
+    const video = document.getElementById('tutorial-video');
+    const ask = document.getElementById('tutorial-ask');
+
+    const hasCookie = (name) => document.cookie.split('; ').some(row => row.startsWith(name + '='));
+    function writeCookie(name, value, days){
+      const expires = new Date(Date.now() + days * 86400000).toUTCString();
+      document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
+    }
+
+    function openTutorial(){
+      overlay.hidden = false;
+      document.body.style.overflow = 'hidden';
+      // 先鋪滿整個畫面，再盡量要求瀏覽器全螢幕；被 iframe 或瀏覽器政策擋下時，overlay 本身已是全畫面
+      const requestFullscreen = overlay.requestFullscreen || overlay.webkitRequestFullscreen;
+      if (requestFullscreen){
+        try { const result = requestFullscreen.call(overlay); if (result && result.catch) result.catch(() => {}); }
+        catch (error) { /* 忽略：不支援全螢幕時仍以 overlay 呈現 */ }
+      }
+      video.currentTime = 0;
+      const played = video.play();
+      if (played && played.catch) played.catch(() => {});
+    }
+
+    function closeTutorial(){
+      video.pause();
+      overlay.hidden = true;
+      document.body.style.overflow = '';
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    }
+
+    document.querySelectorAll('[data-open-tutorial]').forEach(btn => btn.addEventListener('click', () => {
+      mobileNav.style.display = 'none';
+      openTutorial();
+    }));
+    document.getElementById('tutorial-close').addEventListener('click', closeTutorial);
+    video.addEventListener('ended', closeTutorial);
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !overlay.hidden) closeTutorial(); });
+
+    // 不論選「好」或「不用」都算問過了，之後不再跳出
+    function dismissAsk(){ ask.hidden = true; writeCookie(COOKIE_NAME, '1', COOKIE_DAYS); }
+    document.getElementById('tutorial-ask-yes').addEventListener('click', () => { dismissAsk(); openTutorial(); });
+    document.getElementById('tutorial-ask-no').addEventListener('click', dismissAsk);
+
+    if (!hasCookie(COOKIE_NAME)) ask.hidden = false;
+  })();
 
   // 滾動出現動畫
   const io = new IntersectionObserver((entries) => {
@@ -892,11 +1073,26 @@
     }
     window.addEventListener('scroll', readScroll, { passive:true });
 
+    // 直向手機的水平視角會被壓成 25 度左右的窄縫，鏡頭常常只拍到一整片牆或地板。
+    // 以 16:9 的水平視角為基準，畫面越窄就把垂直視角放得越開（上限 86 度避免魚眼），
+    // 讓手機也能看到整座廟宇而不是一塊色塊。
+    // 只在直向（aspect < 1）介入，橫向／桌機的取景與原本完全一致
+    const BASE_FOV = 52, MAX_FOV = 86;
+    let portraitTiltRad = 0;
+    function fovForAspect(aspect){
+      if (aspect >= 1) return BASE_FOV;
+      const halfHorizontal = Math.tan(BASE_FOV * Math.PI / 360);
+      const fov = 2 * Math.atan(halfHorizontal / aspect) * 180 / Math.PI;
+      return Math.min(MAX_FOV, fov);
+    }
     function resize(){
       const w = canvas.clientWidth || canvas.parentElement.clientWidth;
       const h = canvas.clientHeight || canvas.parentElement.clientHeight;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
+      camera.fov = fovForAspect(camera.aspect);
+      // 多出來的視角取四分之一當俯角，主體約上移一成畫面高度
+      portraitTiltRad = Math.max(0, camera.fov - BASE_FOV) * 0.25 * Math.PI / 180;
       camera.updateProjectionMatrix();
     }
     window.addEventListener('resize', resize);
@@ -931,6 +1127,9 @@
       camera.position.copy(camPath.getPointAt(p));
       const look = lookPath.getPointAt(p);
       camera.lookAt(look);
+      // 直向畫面放寬視角後，多出來的視野上下對半分，廟宇被壓在畫面中間、上半部全是天空。
+      // 往下俯一點，把主體推到畫面上半，多出來的地面則被下方說明卡蓋住。
+      if (portraitTiltRad) camera.rotateX(-portraitTiltRad);
 
       // 黃昏過渡：後段光線轉暖、天空染橘
       const dusk = Math.min(Math.max((progress - 0.72) / 0.24, 0), 1);
