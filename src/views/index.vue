@@ -60,6 +60,9 @@ function step() {
       : 0
 }
 
+// 玉皇大帝：去背後的插畫，取代原本的手繪 SVG
+const jadeEmperorSrc = new URL('../assets/images/jade-emperor.png', import.meta.url).href
+
 // 入殿音效：實際錄好的廟宇音檔，點擊當下才播（瀏覽器要有使用者手勢才允許）
 const ascendSoundUrl = new URL('../assets/audio/temple-ascend.m4a', import.meta.url).href
 let ascendSound: HTMLAudioElement | null = null
@@ -208,20 +211,6 @@ onBeforeUnmount(() => {
           <stop offset="0%" stop-color="#8fa9ad" />
           <stop offset="100%" stop-color="#c3d0cb" />
         </linearGradient>
-        <linearGradient id="gImperial" x1="0" y1="0" x2="0.4" y2="1">
-          <stop offset="0%" stop-color="#fff7e4" />
-          <stop offset="42%" stop-color="#e6c274" />
-          <stop offset="100%" stop-color="#9c3131" />
-        </linearGradient>
-        <linearGradient id="gCrown" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#fdf0cd" />
-          <stop offset="100%" stop-color="#c9922f" />
-        </linearGradient>
-        <linearGradient id="gJade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#f2f8ee" />
-          <stop offset="100%" stop-color="#a8c9b4" />
-        </linearGradient>
-
         <!-- 祥雲（如意雲頭） -->
         <symbol id="ruyi" viewBox="0 0 300 120">
           <path
@@ -337,101 +326,6 @@ onBeforeUnmount(() => {
           </g>
         </symbol>
 
-        <!-- 玉皇大帝：冕旒垂面、手執玉圭，下襬沒入雲霧 -->
-        <symbol id="jadeEmperor" viewBox="0 0 400 560">
-          <!-- 背光 -->
-          <circle cx="200" cy="158" r="152" fill="url(#gHalo)" />
-          <circle cx="200" cy="158" r="128" fill="none" stroke="rgba(212,175,55,0.42)" stroke-width="1.6" />
-          <circle cx="200" cy="158" r="106" fill="none" stroke="rgba(212,175,55,0.26)" stroke-width="1" />
-
-          <!-- 龍袍身：肩窄襬寬 -->
-          <path
-            d="M200,196 C228,196 248,212 254,238 L286,478
-               C264,494 230,502 200,502 C170,502 136,494 114,478
-               L146,238 C152,212 172,196 200,196 Z"
-            fill="url(#gImperial)"
-          />
-          <!-- 衣褶 -->
-          <path d="M172,256 C164,322 160,396 162,474" fill="none" stroke="rgba(255,244,214,0.26)" stroke-width="2.5" />
-          <path d="M228,256 C236,322 240,396 238,474" fill="none" stroke="rgba(255,244,214,0.26)" stroke-width="2.5" />
-          <path d="M200,360 C188,398 184,440 186,482 M200,360 C212,398 216,440 214,482"
-                fill="none" stroke="rgba(255,244,214,0.18)" stroke-width="2" />
-          <!-- 下襬金線 -->
-          <path d="M118,470 C150,486 250,486 282,470" fill="none" stroke="rgba(212,175,55,0.55)" stroke-width="3" />
-
-          <!-- 廣袖：覆於袍身之前，向外垂展 -->
-          <path
-            d="M152,228 C120,248 94,300 80,360 C72,398 70,428 72,452
-               C100,446 124,432 138,414 C130,360 134,296 154,258 Z"
-            fill="url(#gImperial)"
-          />
-          <path
-            d="M248,228 C280,248 306,300 320,360 C328,398 330,428 328,452
-               C300,446 276,432 262,414 C270,360 266,296 246,258 Z"
-            fill="url(#gImperial)"
-          />
-          <path d="M96,376 C112,392 126,402 140,408 M304,376 C288,392 274,402 260,408"
-                fill="none" stroke="rgba(255,244,214,0.32)" stroke-width="2.5" />
-
-          <!-- 雲肩與交領 -->
-          <path d="M200,198 C228,200 250,214 258,240 C238,250 216,254 200,254
-                   C184,254 162,250 142,240 C150,214 172,200 200,198 Z"
-                fill="rgba(255,246,220,0.45)" />
-          <path d="M200,202 L180,244 L200,284 L220,244 Z" fill="#fdf5e2" opacity="0.9" />
-
-          <!-- 玉帶 -->
-          <path d="M146,330 L254,330" stroke="url(#gCrown)" stroke-width="15" stroke-linecap="round" />
-          <path d="M164,330 h12 M194,330 h12 M224,330 h12" stroke="rgba(168,201,180,0.9)" stroke-width="9" stroke-linecap="round" />
-
-          <!-- 玉圭與雙手 -->
-          <path d="M188,254 L200,236 L212,254 L212,352 L188,352 Z" fill="url(#gJade)" />
-          <path d="M200,244 L200,348" stroke="rgba(255,255,255,0.55)" stroke-width="2" />
-          <path d="M176,302 C184,294 216,294 224,302 C224,315 215,320 200,320
-                   C185,320 176,315 176,302 Z" fill="#f3ddb8" />
-          <path d="M200,296 L200,318" stroke="rgba(180,140,96,0.45)" stroke-width="1.6" />
-          <path d="M184,306 h10 M206,306 h10" stroke="rgba(180,140,96,0.35)" stroke-width="1.4" stroke-linecap="round" />
-
-          <!-- 頸與面容 -->
-          <path d="M200,176 L200,200" stroke="#eccb90" stroke-width="22" stroke-linecap="round" />
-          <ellipse cx="200" cy="152" rx="31" ry="35" fill="#f3ddb8" />
-          <ellipse cx="168" cy="154" rx="6.5" ry="9.5" fill="#eccb90" />
-          <ellipse cx="232" cy="154" rx="6.5" ry="9.5" fill="#eccb90" />
-          <path d="M184,142 C189,137 196,137 199,142" fill="none" stroke="#6f5744" stroke-width="2.2" stroke-linecap="round" />
-          <path d="M201,142 C204,137 211,137 216,142" fill="none" stroke="#6f5744" stroke-width="2.2" stroke-linecap="round" />
-          <path d="M187,152 C191,149 195,149 198,152" fill="none" stroke="#6f5744" stroke-width="1.8" stroke-linecap="round" />
-          <path d="M202,152 C205,149 209,149 213,152" fill="none" stroke="#6f5744" stroke-width="1.8" stroke-linecap="round" />
-          <!-- 髭：兩撇八字鬍 -->
-          <path d="M198,166 C192,164 184,166 179,172" fill="none" stroke="#7a6250" stroke-width="3" stroke-linecap="round" opacity="0.8" />
-          <path d="M202,166 C208,164 216,166 221,172" fill="none" stroke="#7a6250" stroke-width="3" stroke-linecap="round" opacity="0.8" />
-          <path d="M194,173 C197,175 203,175 206,173" fill="none" stroke="#8a6a52" stroke-width="2" stroke-linecap="round" opacity="0.7" />
-          <!-- 長鬚：分綹垂落 -->
-          <path d="M186,180 C186,208 190,238 194,262 C197,274 200,280 200,286
-                   C200,280 203,274 206,262 C210,238 214,208 214,180
-                   C208,190 192,190 186,180 Z" fill="#8d7660" opacity="0.42" />
-          <g fill="none" stroke="#7a6250" stroke-linecap="round" opacity="0.5">
-            <path d="M191,186 C190,214 193,244 197,268" stroke-width="2" />
-            <path d="M200,188 C200,218 200,248 200,282" stroke-width="2" />
-            <path d="M209,186 C210,214 207,244 203,268" stroke-width="2" />
-            <path d="M180,178 C176,204 179,230 186,250" stroke-width="2.4" />
-            <path d="M220,178 C224,204 221,230 214,250" stroke-width="2.4" />
-          </g>
-
-          <!-- 冕冠：冠身 + 冕板 -->
-          <path d="M174,108 C174,92 226,92 226,108 L226,126 C226,134 174,134 174,126 Z" fill="#8a4a28" />
-          <path d="M174,116 L226,116" fill="none" stroke="url(#gCrown)" stroke-width="6" />
-          <path d="M150,94 L250,86 L254,100 L154,108 Z" fill="url(#gCrown)" />
-          <path d="M150,94 L250,86" fill="none" stroke="rgba(255,250,232,0.85)" stroke-width="2" />
-          <!-- 旒：僅垂於兩側，留出面容 -->
-          <g stroke-linecap="round" stroke-dasharray="0.1 12" opacity="0.8">
-            <path d="M160,104 L160,164" stroke="#f0e0b0" stroke-width="6" />
-            <path d="M175,102 L175,156" stroke="#cfe0d2" stroke-width="6" />
-            <path d="M225,98 L225,156" stroke="#cfe0d2" stroke-width="6" />
-            <path d="M240,96 L240,164" stroke="#f0e0b0" stroke-width="6" />
-          </g>
-          <!-- 冠簪 -->
-          <path d="M168,120 L232,120" fill="none" stroke="rgba(255,250,232,0.6)" stroke-width="1.6" />
-        </symbol>
-
         <!-- 仙鶴 -->
         <symbol id="crane" viewBox="0 0 220 120">
           <path d="M96,68 C74,58 46,58 22,72 C46,64 72,66 90,76 Z" fill="#fdfbf4" />
@@ -468,7 +362,7 @@ onBeforeUnmount(() => {
       <!-- 中央玉皇大帝：置於霧氣與雲帶之後，時隱時現 -->
       <div class="sovereign">
         <span class="sovereign-float">
-          <svg viewBox="0 0 400 560"><use href="#jadeEmperor" width="400" height="560" /></svg>
+          <img :src="jadeEmperorSrc" alt="" class="sovereign-img" />
         </span>
       </div>
 
@@ -731,8 +625,9 @@ body.celestial-home-open {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: clamp(300px, 34vw, 500px);
+  width: clamp(200px, 23vw, 335px);
   transform: translate3d(-50%, -62%, 0);
+  transform-origin: 50% 20%;
   pointer-events: none;
   filter: blur(1.7px);
   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 58%, rgba(0, 0, 0, 0.42) 80%, transparent 96%);
@@ -746,7 +641,8 @@ body.celestial-home-open {
   display: block;
   animation: sovereign-float 15s ease-in-out infinite;
 }
-.sovereign svg {
+.sovereign svg,
+.sovereign img {
   width: 100%;
   height: auto;
   display: block;
@@ -1482,7 +1378,7 @@ body.celestial-home-open {
 
   /* 直式螢幕：玉皇大帝放大一點、往下挪，臉才不會頂在畫面外 */
   .sovereign {
-    width: min(80vw, 360px);
+    width: min(54vw, 241px);
     transform: translate3d(-50%, -56%, 0);
   }
 
