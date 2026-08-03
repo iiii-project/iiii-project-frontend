@@ -1,0 +1,509 @@
+/* =========================================================================
+   flow-controller — 插香 → 搖籤/抽籤 → 擲筊 場景切換與流程狀態機
+
+   來源：temple_oracle_v17.html 的 UIActions 模組（2749–3361行，共806行）。
+   這是整個抽取工作裡「改動最多」的一支檔案，因為原始 UIActions 把AR核心流程
+   跟大量周邊功能（結果畫面文字排版、平安符產生器、快速解籤表單、手動查籤……）
+   混在同一個IIFE裡。以下清楚列出取捨：
+
+   【原封不動保留的函式】
+     showScene（僅保留incense/draw/bwa三段，result交由callbacks.onSequenceComplete）
+     flashOnce, darken
+     completeIncense, completeDraw
+     resetBwaVisual, playLandingSounds, playClickBwaAnimation
+     tossBwa, resolveBwaResult, gradeTier
+     playInkTransition（原本是模組外的獨立函式，邏輯相同一併搬入）
+
+   【刻意省略、交給新前端自行處理的部分（皆為周邊功能，非AR核心）】
+     - showResultScene() 内部的文字渲染/書法動畫/平安符——交由 sequence-complete
+       事件把資料整包丟出去，畫面完全由新前端決定怎麼呈現
+     - SincereStreak.increment()（誠心次數統計，屬於「籤詩收藏」周邊功能）
+     - castLookupBwa()（「已知籤號查詢」模式專用，這是首頁的手動查籤周邊功能，
+       不是插香→搖籤→擲筊的核心儀式路徑，這次v1沒有搬）
+     - castClickBwa() 內原本判斷 AppState.isFortuneLookup 導向 castLookupBwa
+       的那個分支，已一併移除（因為上面那支沒搬，這個分支目前用不到）
+
+   【行為調整（不是原封不動，這裡明確列出）】
+     - 原始 goHome() 會一併關掉 profile/vow/history/chat 等周邊 modal，
+       這裡的 reset() 只保留AR核心場景相關的重置，周邊 modal 由新前端自己管理。
+     - 原本用 `window.location.search` 的 mode（manual/lookup/interpret）與
+       `isMobileDevice` 全域變數做流程分支，這裡改成呼叫 start() 時由外部明確
+       傳入 requestedMode（'auto' | 'camera' | 'motion' | 'manual'），內部再依
+       裝置能力/鏡頭權限解析出最終 resolvedMode，透過 'input-mode-resolved'
+       事件回報給宿主頁面（取代原本壞掉的 window.parent.location.assign 寫法，
+       這一段在前面討論就已經先跟你確認過）。
+   ========================================================================= */
+import { isMobileDevice } from './mobile-shake.js';
+import { spawnLightBurst, screenShakeOnce } from './particle-system.js';
+
+/* 領籤過場：播放自製的 5.12 秒動畫（龍銜籤送到眼前）。
+   影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
+   載入失敗、解碼失敗、或播放卡住超過預期時間，都走 fallback。 */
+export const ORACLE_TRANSITION_SRC = '/videos/oracle-transition.mov';
+const ORACLE_TRANSITION_MS = 5120;   // 素材長度（拿不到 metadata 時的備用值）
+const REVEAL_LEAD_MS = 350;          // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
+const HARD_CAP_EXTRA_MS = 2500;      // 影片真的卡死時的保險
+
+export function preloadOracleTransition(els){
+  const video = els.transitionVideo;
+  if (!video || video.dataset.ready === '1' || video.dataset.failed === '1') return;
+  video.src = ORACLE_TRANSITION_SRC;
+  video.addEventListener('canplaythrough', () => { video.dataset.ready = '1'; }, { once:true });
+  video.addEventListener('error', () => { video.dataset.failed = '1'; }, { once:true });
+  video.load();
+}
+
+export function playOracleTransition(els, onCovered, hooks = {}){
+  const video = els.transitionVideo;
+  if (!video || video.dataset.failed === '1' || !video.canPlayType('video/mp4')){
+    playInkTransition(els, onCovered);
+    return;
+  }
+
+  let settled = false;
+  let revealed = false;
+  let capTimer = 0;
+
+  const reveal = () => {
+    if (revealed) return;
+    revealed = true;
+    if (onCovered) onCovered();
+  };
+
+  const cleanup = () => {
+    video.removeEventListener('timeupdate', onTimeUpdate);
+    video.removeEventListener('ended', onEnded);
+    if (capTimer) clearTimeout(capTimer);
+    // 過場結束，把 AR 的繪圖負載放回去
+    if (hooks.onEnd) hooks.onEnd();
+  };
+
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    reveal();
+    cleanup();
+    video.classList.remove('show');
+    video.classList.add('fade-out');
+    setTimeout(() => {
+      video.classList.remove('fade-out');
+      video.pause();
+      video.currentTime = 0;
+    }, 720);
+  };
+
+  const bail = () => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    video.classList.remove('show', 'fade-out');
+    playInkTransition(els, onCovered);
+  };
+
+  /* 揭曉時機改用影片自己的 currentTime，而不是 setTimeout。
+     牆上時鐘與影片時鐘會分岔——畫面掉格時影片會落後，
+     用計時器就會在影片還沒播完時就把籤詩掀出來。 */
+  function onTimeUpdate(){
+    const total = Number.isFinite(video.duration) && video.duration > 0
+      ? video.duration
+      : ORACLE_TRANSITION_MS / 1000;
+    if (video.currentTime >= total - REVEAL_LEAD_MS / 1000) reveal();
+  }
+  function onEnded(){ finish(); }
+
+  if (!video.src) video.src = ORACLE_TRANSITION_SRC;
+  video.currentTime = 0;
+  /* 開聲播放。瀏覽器只在頁面已有使用者互動時才允許非靜音自動播放，
+     走到這步使用者早就點過擲筊；若仍被擋，退成靜音再播一次，
+     不能直接放棄影片（否則「沒聲音」會變成「沒畫面」）。 */
+  video.muted = false;
+  video.volume = 0.9;
+  video.addEventListener('error', bail, { once:true });
+  video.addEventListener('timeupdate', onTimeUpdate);
+  video.addEventListener('ended', onEnded);
+
+  // 播放期間把 AR 的重繪工作停掉，讓解碼吃得到資源
+  if (hooks.onStart) hooks.onStart();
+
+  const tryPlay = video.play();
+  if (tryPlay && typeof tryPlay.catch === 'function'){
+    tryPlay.catch(() => {
+      video.muted = true;
+      const retry = video.play();
+      if (retry && typeof retry.catch === 'function') retry.catch(bail);
+    });
+  }
+
+  video.classList.remove('fade-out');
+  requestAnimationFrame(() => video.classList.add('show'));
+
+  const total = Number.isFinite(video.duration) && video.duration > 0
+    ? video.duration * 1000
+    : ORACLE_TRANSITION_MS;
+  capTimer = setTimeout(finish, total + HARD_CAP_EXTRA_MS);
+}
+
+export function playInkTransition(els, onCovered){
+  els.transitionOverlay.classList.remove('play');
+  void els.transitionOverlay.offsetWidth;
+  els.transitionOverlay.classList.add('play');
+  setTimeout(() => { if (onCovered) onCovered(); }, 320);
+  setTimeout(() => { els.transitionOverlay.classList.remove('play'); }, 950);
+}
+
+export function createFlowController({ els, state, api, gestureEngine, bwaScene, particleSystem, audioEngine, mobileShake, rootEl, emit }) {
+
+  /* 過場影片播放時，AR 這邊的 MediaPipe 推論、攝影機畫布重繪、
+     粒子與 three.js 迴圈全都還在滿載跑，會跟影片解碼搶資源造成掉格。
+     這裡在過場期間把它們停掉，結束再放回去。 */
+  const transitionLoadHooks = {
+    onStart(){
+      state.transitionActive = true;
+      if (particleSystem.pause) particleSystem.pause();
+      if (bwaScene.pause) bwaScene.pause();
+    },
+    onEnd(){
+      state.transitionActive = false;
+      if (particleSystem.resume) particleSystem.resume();
+      if (bwaScene.resume) bwaScene.resume();
+    },
+  };
+
+  function showScene(name){
+    [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach(s => s.classList.add('hidden'));
+    if (name !== 'draw') mobileShake.stop();
+    state.current = name;
+
+    if (name === 'incense'){
+      els.sceneIncense.classList.remove('hidden');
+      gestureEngine.resetIncenseProgress();
+      const q = state.userQuery;
+      els.incenseHint.textContent = q.question
+        ? `請雙手合十，默念：「${q.question}」`
+        : `請雙手合十，默念關於「${q.category}」的問題`;
+    }
+    if (name === 'draw'){
+      els.sceneDraw.classList.remove('hidden');
+      state.drawSubState = 'shake';
+      Array.from(els.sticksGroup.querySelectorAll('.stick')).forEach(s => s.classList.remove('selected'));
+      gestureEngine.resetShakeProgress(); gestureEngine.resetPinch();
+      const useMobileShake = state.resolvedMode === 'motion' || (isMobileDevice() && state.resolvedMode !== 'manual');
+      els.drawHint.textContent = state.resolvedMode === 'manual'
+        ? '準備好後，點擊籤筒抽出一支籤。'
+        : useMobileShake && state.mobileShakeReady
+          ? '拿起手機，上下搖動三次即可抽籤'
+          : useMobileShake
+            ? '未開啟動作感測，可直接抽籤。'
+            : '請對著籤筒握拳，上下搖晃';
+      // 手機正常流程只透過搖動抽籤；僅在感測器不可用時才顯示直接抽籤備援。
+      els.btnManualDraw.classList.toggle('hidden', !(state.resolvedMode === 'manual' || (useMobileShake && !state.mobileShakeReady)));
+      els.btnManualDraw.textContent = useMobileShake ? '直 接 抽 籤' : '手 動 抽 籤';
+      if (useMobileShake && state.mobileShakeReady) mobileShake.start();
+    }
+    if (name === 'bwa'){
+      els.sceneBwa.classList.remove('hidden');
+      /* 筊杯容器在隱藏狀態下 clientWidth/Height 都是 0，three.js 會以 0×0 建立
+         renderer。這裡等它顯示出來後觸發一次 resize，讓畫布重新取得正確尺寸。 */
+      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+      els.bwaResultPanel.classList.add('hidden');
+      const isClickBwaMode = state.resolvedMode === 'manual' || isMobileDevice();
+      els.btnClickBwa.classList.toggle('hidden', !isClickBwaMode);
+      els.bwaHint.textContent = isClickBwaMode ? '請點擊擲筊，向神明請示此籤。' : '單手微握，捧起筊杯';
+      if (!isClickBwaMode) {
+        resetBwaVisual();
+        gestureEngine.resetBwaTracking();
+      }
+      state.bwaTossing = false;
+    }
+  }
+
+  function flashOnce(){ els.flash.classList.remove('play'); void els.flash.offsetWidth; els.flash.classList.add('play'); }
+  function darken(on){ els.darken.classList.toggle('on', on); }
+
+  async function completeIncense(){
+    if (state.current !== 'incense') return;
+    state.current = 'transition';
+    try {
+      await api.prayer(state.sessionId);
+      emit('incense-complete');
+      playInkTransition(els, () => showScene('draw'));
+    } catch (error) {
+      state.current = 'incense';
+      emit('toast', { message: error.message || '無法完成祈求，請再試一次' });
+    }
+  }
+
+  async function completeDraw(){
+    if (state.current !== 'draw') return;
+    state.current = 'transition';
+    const rect = els.qianStick.getBoundingClientRect();
+    const cx = rect.left+rect.width/2, cy = rect.top;
+    els.qianStick.classList.add('punch');
+    spawnLightBurst(rootEl, cx, cy); screenShakeOnce(rootEl);
+    particleSystem.burst(cx, cy, 26); flashOnce();
+    try {
+      state.currentFortune = await api.draw(state.sessionId);
+      emit('draw-complete', { fortune: state.currentFortune });
+      setTimeout(() => playInkTransition(els, () => showScene('bwa')), 700);
+    } catch (error) {
+      state.current = 'draw';
+      emit('toast', { message: error.message || '無法抽籤，請再試一次' });
+    }
+  }
+
+  function resetBwaVisual(){
+    els.outputCanvas.classList.remove('dof-blur');
+    els.arDecoration.classList.remove('dof-blur');
+    bwaScene.resetIdle();
+  }
+
+  function playLandingSounds(coinA, coinB){
+    const play = (coin, delay) => setTimeout(() => { coin === 'flat' ? audioEngine.tap() : audioEngine.thud(); }, delay);
+    play(coinA, 0); play(coinB, 55);
+  }
+
+  function playClickBwaAnimation(result){
+    const sides = result.result === 'sheng' ? ['flat', 'domed'] : result.result === 'xiao' ? ['flat', 'flat'] : ['domed', 'domed'];
+    const [coinA, coinB] = sides;
+    return new Promise((resolve) => {
+      bwaScene.toss(coinA, coinB,
+        () => { playLandingSounds(coinA, coinB); if (navigator.vibrate) navigator.vibrate(20); },
+        () => setTimeout(resolve, 250)
+      );
+    });
+  }
+
+  // ============================================================
+  // 拋擲物理動畫：
+  // 依「聖筊／笑筊／陰筊」機率先由後端決定本次結果（coinA, coinB 分別代表
+  // 兩顆筊杯落地後是「凸面朝上」或「平面朝上」），交給 bwaScene 以真實的
+  // 3D 網格 + 重力公式 + 旋轉補間播放動畫，確保畫面呈現與文字訊息一致。
+  // ============================================================
+  async function tossBwa(sx, sy, vx, vy){
+    if (state.bwaTossing) return;
+    state.bwaTossing = true;
+    els.bwaHint.textContent = '筊杯擲出中…';
+    try {
+      const result = await api.blocks(state.sessionId);
+      const sides = result.result === 'sheng' ? ['flat', 'domed'] : result.result === 'xiao' ? ['flat', 'flat'] : ['domed', 'domed'];
+      const [coinA, coinB] = sides;
+      state.pendingBwaResult = { coinA, coinB, result };
+      bwaScene.toss(coinA, coinB,
+        () => { playLandingSounds(coinA, coinB); if (navigator.vibrate) navigator.vibrate(20); },
+        () => { setTimeout(() => { resolveBwaResult(); }, 250); }
+      );
+    } catch (error) {
+      state.bwaTossing = false;
+      els.bwaHint.textContent = '請單手微握，捧起筊杯';
+      emit('toast', { message: error.message || '無法完成擲筊，請再試一次' });
+    }
+  }
+
+  async function castClickBwa(){
+    if (state.bwaTossing || !state.sessionId) return;
+    state.bwaTossing = true;
+    els.btnClickBwa.disabled = true;
+    els.bwaHint.textContent = '正在請示…';
+    try {
+      const result = await api.blocks(state.sessionId);
+      await playClickBwaAnimation(result);
+      els.bwaResultPanel.classList.remove('hidden');
+
+      if (result.confirmed) {
+        flashOnce();
+        els.bwaResultTitle.textContent = '聖筊 · 神明允准';
+        els.bwaResultDesc.textContent = '聖筊，神明允准解籤。';
+        emit('bwa-result', { tier: 'sacred' });
+        try {
+          const session = await api.interpret(state.sessionId);
+          state.currentFortune = session.fortune;
+          state.interpretation = session.interpretation;
+        } catch (error) {
+          emit('toast', { message: error.message || 'AI 解籤暫時無法使用，先為你顯示籤詩內容' });
+        }
+        /* 手動（點擊）擲筊原本是直接跳到籤詩、連墨染都沒有。
+           改成與手勢路徑同一套：定格 1.2 秒 → 領籤過場影片 → 揭曉籤詩。 */
+        setTimeout(() => playOracleTransition(els, () => {
+          emit('sequence-complete', { fortune: state.currentFortune, interpretation: state.interpretation });
+        }, transitionLoadHooks), 1200);
+      } else {
+        if (result.result === 'sheng') {
+          els.bwaResultTitle.textContent = `第 ${result.attempt_number} 次聖筊`;
+          els.bwaResultDesc.textContent = `請再連續取得 ${result.remaining_attempts} 次聖筊。`;
+          els.bwaHint.textContent = '請再次點擊擲筊。';
+          emit('bwa-result', { tier: 'sheng-progress', attemptNumber: result.attempt_number, remainingAttempts: result.remaining_attempts });
+        } else {
+          els.bwaResultTitle.textContent = `${result.result_name} · 重新抽籤`;
+          els.bwaResultDesc.textContent = '本輪未能連續取得聖筊，正在重新抽出一支籤。';
+          state.currentFortune = await api.draw(state.sessionId);
+          els.bwaHint.textContent = '已抽出新籤，請重新開始擲筊。';
+          emit('bwa-result', { tier: 'other', resultName: result.result_name });
+        }
+      }
+    } catch (error) {
+      emit('toast', { message: error.message || '無法完成擲筊，請再試一次' });
+    } finally {
+      state.bwaTossing = false;
+      els.btnClickBwa.disabled = false;
+    }
+  }
+
+  async function resolveBwaResult(){
+    const { coinA, coinB, result } = state.pendingBwaResult || {coinA:'flat', coinB:'domed'};
+    let type;
+    if (coinA !== coinB) type='sheng'; else if (coinA==='flat') type='xiao'; else type='yin';
+
+    els.bwaResultPanel.classList.remove('hidden');
+    els.bwaResultPanel.classList.remove('reveal');
+    void els.bwaResultPanel.offsetWidth;
+    els.bwaResultPanel.classList.add('reveal');
+    state.bwaTossing = false;
+
+    if (result?.confirmed){
+      const pos = bwaScene.getScreenPos();
+      particleSystem.burst(pos.x, pos.y);
+      spawnLightBurst(rootEl, pos.x, pos.y);
+      flashOnce();
+      els.bwaResultTitle.textContent = '聖筊 · 神明允准';
+      els.bwaResultDesc.textContent = '聖筊，神明允准解籤。';
+      emit('bwa-result', { tier: 'sacred' });
+      // 結果「定格放大」停留 1.8 秒，讓使用者看清楚判定結果，再進入墨染過場
+      try {
+        const session = await api.interpret(state.sessionId);
+        state.currentFortune = session.fortune;
+        state.interpretation = session.interpretation;
+        // 結果定格 1.2 秒後接領籤過場（影片本身開頭就有醞釀，不需要等太久）
+        setTimeout(() => playOracleTransition(els, () => {
+          emit('sequence-complete', { fortune: state.currentFortune, interpretation: state.interpretation });
+        }, transitionLoadHooks), 1200);
+      } catch (error) {
+        emit('toast', { message: error.message || '無法取得 AI 解籤，請稍後重試' });
+      }
+    } else if (result?.result === 'sheng'){
+      els.bwaResultTitle.textContent = `第 ${result.attempt_number} 次聖筊`;
+      els.bwaResultDesc.textContent = `請再連續取得 ${result.remaining_attempts} 次聖筊。`;
+      emit('bwa-result', { tier: 'sheng-progress', attemptNumber: result.attempt_number, remainingAttempts: result.remaining_attempts });
+      setTimeout(() => {
+        els.bwaResultPanel.classList.add('hidden');
+        resetBwaVisual();
+        gestureEngine.resetBwaTracking();
+        els.bwaHint.textContent = '單手微握，捧起筊杯';
+      }, 2200);
+    } else {
+      els.bwaResultTitle.textContent = `${result?.result_name || '非聖筊'} · 重新抽籤`;
+      els.bwaResultDesc.textContent = '本輪未能連續取得聖筊，正在重新抽出一支籤。';
+      emit('bwa-result', { tier: 'other', resultName: result?.result_name });
+      darken(true);
+      api.draw(state.sessionId)
+        .then((fortune) => { state.currentFortune = fortune; })
+        .then(() => setTimeout(() => { darken(false); playInkTransition(els, () => showScene('draw')); }, 2000))
+        .catch((error) => {
+          darken(false);
+          emit('toast', { message: error.message || '無法重新抽籤，請再試一次' });
+        });
+    }
+  }
+
+  // 依吉凶等級文字判斷背景效果分級（上→金光閃爍／中→淡雅／下→墨色沉穩）
+  function gradeTier(grade){
+    if (grade.includes('上')) return 'tier-auspicious';
+    if (grade.includes('下')) return 'tier-caution';
+    return 'tier-neutral';
+  }
+
+  // 重置AR核心場景相關狀態（原始 goHome() 的AR部分；周邊 modal 的關閉交還給新前端自己處理）
+  function reset(){
+    [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach(s => s.classList.add('hidden'));
+    state.current = 'idle';
+    state.bwaTossing = false;
+    gestureEngine.resetIncenseProgress();
+    gestureEngine.resetShakeProgress();
+    gestureEngine.resetPinch();
+    gestureEngine.resetBwaTracking();
+    mobileShake.stop();
+  }
+
+  // ============================================================
+  // 對外唯一入口：整個插香→搖籤→擲筊儀式的啟動點。
+  // 這裡是新增的整合邏輯（原始碼裡這段散落在 btnHomeStart 的點擊事件、
+  // 以及檔案最尾端的 Camera/Hands bootstrap 兩處，這裡合併成一個函式，
+  // 方便Web Component呼叫），內部判斷順序與原始碼行為一致：
+  //   requestedMode === 'manual' → 一律走純點擊路徑，略過插香手勢偵測（優先權最高，
+  //                                 即使同時在手機上也以此為準）
+  //   手機裝置（且非manual） → 一律走 devicemotion 搖晃路徑，略過插香手勢偵測
+  //   其餘（桌機） → 走攝影機手勢路徑（含插香偵測），若鏡頭權限被拒絕
+  //                  則自動降級為純點擊路徑（取代原本的 window.parent.location.assign）
+  // ============================================================
+  async function start({ question, category, requestedMode = 'auto', startCamera }){
+    state.userQuery = { question, category };
+    state.current = 'creating';
+
+    const session = await api.create(question, category);
+    state.sessionId = session.session_id;
+    state.shareToken = session.share_token;
+    state.interpretation = null;
+
+    const mobile = isMobileDevice();
+
+    /* 'motion'：不看 User-Agent，強制走搖晃路徑。
+       原始碼只用 UA 判斷裝置、無法覆蓋（README 有記錄這個限制），
+       這裡補上，讓宿主可以依畫面寬度（而非 UA）決定手機版就用搖的。 */
+    if (requestedMode === 'motion'){
+      state.resolvedMode = 'motion';
+      state.mobileShakeReady = await mobileShake.requestAccess();
+      emit('input-mode-resolved', { mode: 'motion', motionGranted: state.mobileShakeReady, forced: true });
+      await api.prayer(state.sessionId);
+      showScene('draw');
+      if (!state.mobileShakeReady) emit('toast', { message: '這個裝置沒有動作感測，已提供直接抽籤。' });
+      return;
+    }
+
+    if (requestedMode === 'manual'){
+      state.resolvedMode = 'manual';
+      emit('input-mode-resolved', { mode: 'manual' });
+      await api.prayer(state.sessionId);
+      showScene('draw');
+      return;
+    }
+
+    if (mobile){
+      state.resolvedMode = 'motion';
+      state.mobileShakeReady = await mobileShake.requestAccess();
+      emit('input-mode-resolved', { mode: 'motion', motionGranted: state.mobileShakeReady });
+      await api.prayer(state.sessionId);
+      showScene('draw');
+      if (!state.mobileShakeReady) emit('toast', { message: '未開啟動作感測，已提供直接抽籤。' });
+      return;
+    }
+
+    // 桌機：嘗試攝影機手勢路徑，交由外部（index.js）啟動 MediaPipe camera
+    try {
+      await startCamera();
+      state.resolvedMode = 'camera';
+      emit('input-mode-resolved', { mode: 'camera' });
+      showScene('incense');
+    } catch (error) {
+      // 對應原本「鏡頭權限被拒絕/無法啟動鏡頭」時的 window.parent.location.assign 寫法：
+      // 這裡改為元件內部直接切到手動點擊模式，不做任何頁面跳轉。原本這裡還有一段
+      // sessionStorage.setItem('temple-oracle-manual-fallback', 訊息文字) 給下一頁讀取顯示，
+      // 因為不跳頁了，改成直接透過 toast 事件把同樣的訊息文字傳出去。
+      const permissionDenied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
+      state.resolvedMode = 'manual';
+      emit('input-mode-resolved', {
+        mode: 'manual',
+        reason: permissionDenied ? 'permission-denied' : 'camera-error'
+      });
+      emit('toast', {
+        message: permissionDenied ? '鏡頭權限已被拒絕，已切換為手動抽籤。' : '無法啟動鏡頭，已切換為手動抽籤。'
+      });
+      await api.prayer(state.sessionId);
+      showScene('draw');
+    }
+  }
+
+  return {
+    start, reset, showScene,
+    completeIncense, completeDraw, tossBwa, castClickBwa,
+    gradeTier,
+  };
+}

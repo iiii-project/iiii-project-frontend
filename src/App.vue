@@ -33,7 +33,11 @@ watch(
   </template>
   <main :class="{ 'immersive-main': isImmersiveRoute }">
     <RouterView v-slot="{ Component }">
-      <Transition :name="isImmersiveRoute ? '' : 'page-fade'" mode="out-in">
+      <!-- 沉浸式頁面自己有光幕與雲霧轉場，不再包 router 層的 Transition：
+           mode="out-in" 會先卸載舊頁、再用 requestAnimationFrame 掛上新頁，
+           一旦那個 frame 沒發生（例如分頁沒在合成畫面），main 就會永遠空著變成白畫面。 -->
+      <component :is="Component" v-if="isImmersiveRoute" />
+      <Transition v-else name="page-fade" mode="out-in">
         <component :is="Component" />
       </Transition>
     </RouterView>

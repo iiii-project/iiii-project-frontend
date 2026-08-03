@@ -1,0 +1,299 @@
+/* =========================================================================
+   AR核心場景樣式表
+   來源：temple_oracle_v17.html 17–717行的大型 <style> 區塊，只抽出AR三場景
+   （插香/搖籤抽籤/擲筊）實際會用到的規則，逐一核對後複製，數值未更動。
+
+   分成三部分：
+   1. CSS變數（:root）— 直接照抄，讓元件在Shadow DOM內仍能使用相同色票
+   2. 原始自訂class/id — 逐一核對後複製（glass-card、gold-text、scene、
+      qian-tong系列、incense系列、bwa系列、fingertip-marker系列……）
+   3. Tailwind utility class等價寫死 — 因為Shadow DOM無法吃到外部Tailwind CDN，
+      這些class是把原始HTML上用到的Tailwind utility（px-14/py-6/text-2xl/
+      md:text-3xl/tracking-[0.5em]……）換算成固定CSS規則，數值皆為Tailwind
+      官方預設刻度（本專案的Tailwind CDN沒有自訂config，換算無二義性）。
+      響應式（md: 768px以上）斷點也保留成對應的 @media 規則，手機/桌機都會
+      跟原本顯示效果一致。
+   ========================================================================= */
+
+/* ---------- 1. CSS 變數 ---------- */
+:host{
+  --jiang-hong: #a63a3a;
+  --jiang-hong-deep: #7a2626;
+  --wu-mu-hei: #f5efe2;
+  --morandi-stone: #fdfbf6;
+  --morandi-dust: #9c8b76;
+  --gold: #d4af37;
+  --gold-soft: #f2e2b3;
+  --gold-line: rgba(212,175,55,0.4);
+  --ink: #3a2c22;
+  --ink-soft: #6f5d4c;
+  --cream: #fbf9f5;
+
+  display: block;
+  position: fixed;
+  inset: 0;
+  font-family: "Noto Serif TC", serif;
+  color: var(--ink);
+  font-weight: 300;
+  overflow: hidden;
+}
+
+.ar-oracle-root{ position:fixed; inset:0; }
+
+@keyframes screenShake{
+  0%{ transform:translate(0,0); } 20%{ transform:translate(-7px,4px) rotate(-0.3deg); }
+  40%{ transform:translate(6px,-5px) rotate(0.3deg); } 60%{ transform:translate(-5px,3px) rotate(-0.2deg); }
+  80%{ transform:translate(3px,-2px) rotate(0.15deg); } 100%{ transform:translate(0,0); }
+}
+.ar-oracle-root.screen-shake{ animation: screenShake 0.45s ease; }
+
+/* ---------- 2. 原始自訂 class / id（逐一核對複製）---------- */
+#output_canvas{ position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; z-index:1; filter:saturate(0.85) contrast(1.0) brightness(1.05); transition: filter 0.35s ease; }
+#vignette{
+  position:fixed; inset:0; z-index:2; pointer-events:none;
+  background:
+    radial-gradient(ellipse at center, rgba(0,0,0,0) 42%, rgba(15,11,10,0.32) 74%, rgba(10,7,6,0.68) 100%),
+    linear-gradient(to bottom, rgba(10,7,6,0.32) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 78%, rgba(10,7,6,0.38) 100%);
+}
+
+#ar-decoration{ position:fixed; inset:0; z-index:3; pointer-events:none; overflow:hidden; mix-blend-mode: screen; transition: filter 0.35s ease; }
+#ar-decoration svg, #ar-decoration img{ position:absolute; filter: drop-shadow(0 0 6px rgba(212,175,55,0.25)); }
+.ar-cloud-tl{ top:3vh; left:2vw; width:min(20vw,220px); opacity:0.55; animation: arFloat 9s ease-in-out infinite; }
+.ar-cloud-tr{ top:4vh; right:2vw; width:min(17vw,190px); opacity:0.5; animation: arFloat 11s ease-in-out infinite 1s; transform:scaleX(-1); }
+.ar-coins-bl{ bottom:4vh; left:3vw; width:min(9vw,90px); opacity:0.3; animation: arFloat 8s ease-in-out infinite 0.5s; }
+.ar-scroll-br{ bottom:3vh; right:3vw; width:min(7vw,70px); opacity:0.3; animation: arFloat 10s ease-in-out infinite 1.5s; }
+.ar-dragon-l{ top:14vh; left:0.5vw; height:72vh; opacity:0.14; animation: arDrift 16s ease-in-out infinite; }
+.ar-dragon-r{ top:14vh; right:0.5vw; height:72vh; opacity:0.14; transform:scaleX(-1); animation: arDrift 16s ease-in-out infinite 2s; }
+@keyframes arFloat{ 0%,100%{ transform: translateY(0) rotate(0deg);} 50%{ transform: translateY(-10px) rotate(2deg);} }
+@keyframes arDrift{ 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(14px);} }
+#ar-decoration.dof-blur, #output_canvas.dof-blur{ filter: blur(7px) brightness(0.85) saturate(0.6); }
+
+#particle_canvas{ position:fixed; inset:0; z-index:4; pointer-events:none; width:100vw; height:100vh; }
+
+.glass-card{
+  position:relative; border-radius: 28px; border: 1px solid var(--gold-line);
+  background: linear-gradient(180deg, rgba(255,255,255,0.72), rgba(253,250,244,0.88));
+  backdrop-filter: blur(22px) saturate(1.1);
+  box-shadow: 0 24px 60px rgba(120,90,50,0.18), inset 0 1px 0 rgba(255,255,255,0.6);
+  color: var(--ink);
+}
+.ornament-row{ display:flex; align-items:center; justify-content:center; gap:10px; }
+.ornament-row svg{ opacity:0.8; }
+.hairline{ height:1px; width:36px; margin:0 auto; background: var(--gold); opacity:0.75; }
+.eyebrow{ font-size:11px; letter-spacing:0.5em; color:var(--morandi-dust); text-transform:uppercase; font-weight:400; }
+.gold-text{ background:linear-gradient(180deg, #fbf1d8 0%, var(--gold) 55%, #b8933f 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.scene{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; pointer-events:none; }
+.hidden{ display:none !important; }
+
+/* ===================== 畫面一：電子籤筒 ===================== */
+#qian-tong-zone{ position:relative; width:min(24vw, 210px); height:min(46vh, 380px); margin-bottom: 4vh; filter: drop-shadow(0 18px 30px rgba(0,0,0,0.55)); }
+#qian-tong-zone.shaking{ animation: tongJitter 0.14s ease-in-out infinite; }
+@keyframes tongJitter{
+  0%{ transform: translateX(0) rotate(0deg);} 25%{ transform: translateX(-3px) rotate(-1.2deg);}
+  50%{ transform: translateX(2px) rotate(1deg);} 75%{ transform: translateX(-2px) rotate(-0.6deg);} 100%{ transform: translateX(0) rotate(0deg);}
+}
+#shake-progress-ring{
+  position:absolute; inset:-14px; border-radius:50%;
+  background: conic-gradient(var(--gold) calc(var(--p,0)*1%), rgba(212,175,55,0.12) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  opacity:0; transition: opacity 0.3s ease;
+}
+#shake-progress-ring.on{ opacity:1; }
+#qian-tong{ position:absolute; bottom:0; left:0; right:0; top:0; transition: filter 0.5s ease; }
+#qian-tong svg{ width:100%; height:100%; overflow:visible; }
+#qian-tong.aligned{ animation: breatheGlow 1.8s ease-in-out infinite; }
+@keyframes breatheGlow{ 0%,100%{ filter: drop-shadow(0 0 0px rgba(255,207,122,0)); } 50%{ filter: drop-shadow(0 0 26px rgba(255,207,122,0.85)); } }
+
+.stick{ transform-box: fill-box; transform-origin: bottom center; }
+#sticks.is-shaking .stick{ animation: stickShake 0.16s ease-in-out infinite; }
+#sticks.is-shaking .stick:nth-child(2){ animation-delay: 0.02s; }
+#sticks.is-shaking .stick:nth-child(3){ animation-delay: 0.04s; }
+#sticks.is-shaking .stick:nth-child(4){ animation-delay: 0.01s; }
+#sticks.is-shaking .stick:nth-child(5){ animation-delay: 0.03s; }
+@keyframes stickShake{ 0%,100%{ transform: rotate(0deg) translateY(0);} 50%{ transform: rotate(3deg) translateY(-2px);} }
+.stick.selected{ animation: stickSelectedPulse 1s ease-in-out infinite !important; filter: drop-shadow(0 0 14px rgba(255,207,122,0.95)); }
+@keyframes stickSelectedPulse{ 0%,100%{ transform: translateY(-10px) rotate(0deg);} 50%{ transform: translateY(-16px) rotate(0deg);} }
+
+.qian-stick{ position:absolute; bottom:52%; width:16px; height:168px; transform-origin:bottom center; }
+.qian-stick svg{ width:100%; height:100%; overflow:visible; }
+.qian-stick .stick-tip{
+  position:absolute; top:-16px; left:50%; transform:translateX(-50%); width:24px; height:24px; border-radius:50%;
+  background: radial-gradient(circle, var(--gold-soft) 0%, var(--gold) 45%, transparent 75%); opacity:0; filter: blur(1px);
+}
+.qian-stick.pinched .stick-tip{ animation: burstGlow 0.6s ease-out infinite; }
+@keyframes burstGlow{ 0%{ opacity:0.4; transform:translateX(-50%) scale(0.8);} 50%{ opacity:1; transform:translateX(-50%) scale(1.6);} 100%{ opacity:0.4; transform:translateX(-50%) scale(0.8);} }
+.qian-stick.punch{ animation: punchScale 0.25s ease-out; }
+@keyframes punchScale{ 0%{ filter:brightness(1);} 40%{ filter:brightness(1.8) drop-shadow(0 0 20px #fff4dc);} 100%{ filter:brightness(1);} }
+
+.light-burst{ position:absolute; width:240px; height:240px; transform:translate(-50%,-50%) scale(0.2); opacity:0; pointer-events:none; z-index:60; }
+.light-burst.play{ animation: burstRay 0.75s cubic-bezier(.2,.8,.3,1) forwards; }
+@keyframes burstRay{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(0.2) rotate(0deg);} 22%{ opacity:1;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(2) rotate(20deg);} }
+
+.fingertip-marker{
+  position:absolute; z-index:15; width:14px; height:14px; border-radius:50%;
+  background:radial-gradient(circle, var(--gold-soft), var(--gold)); box-shadow:0 0 10px 3px rgba(255,207,122,0.7);
+  pointer-events:none; transform:translate(-50%,-50%); transition: opacity 0.15s ease;
+}
+.pinch-line{ position:absolute; z-index:14; height:1px; background:var(--gold-soft); box-shadow:0 0 6px rgba(255,207,122,0.8); pointer-events:none; transform-origin:0 0; }
+.fist-indicator{
+  position:absolute; z-index:15; width:34px; height:34px; border-radius:50%; border:2px solid var(--gold-soft);
+  opacity:0; pointer-events:none; transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(255,207,122,0.6); transition: opacity 0.15s ease;
+}
+.cup-indicator{
+  position:absolute; z-index:15; width:46px; height:46px; border-radius:50%; border:2px dashed var(--gold-soft);
+  opacity:0; pointer-events:none; transform:translate(-50%,-50%); transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+/* ===================== 畫面二：捧筊與拋擲（Three.js 3D 渲染）===================== */
+#bwa-three-container{ position:fixed; inset:0; z-index:11; pointer-events:none; }
+#bwa-three-container canvas{ display:block; width:100%; height:100%; }
+
+.divider-gold{ height:1px; width:44px; margin:1rem auto; background: var(--gold); opacity:0.7; }
+.fade-in{ animation: fadeIn 0.7s ease both; }
+@keyframes fadeIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+
+.btn-line{
+  pointer-events:auto; padding:0.65rem 2.2rem; border-radius:999px; cursor:pointer; background: transparent;
+  color:var(--jiang-hong); font-weight:500; letter-spacing:0.35em; font-size:13px; border:1px solid var(--jiang-hong);
+  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+.btn-line:hover{ background: rgba(166,58,58,0.08); box-shadow:0 4px 14px rgba(166,58,58,0.15); }
+.btn-line:active{ transform:scale(0.97); }
+.btn-line:disabled{ opacity:0.4; cursor:not-allowed; }
+.btn-line:disabled:hover{ background:transparent; box-shadow:none; }
+
+/* ===================== 擲筊結果標籤 ===================== */
+#bwa-result-panel{
+  z-index:40 !important;
+  background: rgba(12,9,8,0.82) !important;
+  backdrop-filter: blur(26px) saturate(1.2) !important;
+  box-shadow: 0 0 0 1px rgba(255,215,0,0.65), 0 0 40px rgba(212,175,55,0.35), 0 24px 70px rgba(0,0,0,0.7) !important;
+}
+#bwa-result-panel.reveal{ animation: resultFreezeZoom 0.6s cubic-bezier(.2,.8,.25,1.1) both; }
+@keyframes resultFreezeZoom{
+  0%{ transform: scale(0.82); opacity:0; }
+  55%{ transform: scale(1.06); opacity:1; }
+  100%{ transform: scale(1); opacity:1; }
+}
+
+.flash-white{ position:fixed; inset:0; z-index:50; background:#fff4dc; opacity:0; pointer-events:none; }
+@keyframes flashOnce{ 0%{opacity:0;} 15%{opacity:0.85;} 100%{opacity:0;} }
+.flash-white.play{ animation: flashOnce 0.55s ease-out; }
+.screen-darken{ position:fixed; inset:0; z-index:49; background:#000; opacity:0; pointer-events:none; transition: opacity 0.8s ease; }
+.screen-darken.on{ opacity:0.72; }
+
+/* ===================== 誠心機制：插香 / 合十默念 ===================== */
+#scene-incense{ justify-content:center; align-items:center; }
+#incense-anchor{
+  position:fixed; left:50%; top:62%; width:54px; height:180px; z-index:20; pointer-events:none;
+  transform:translate3d(-50%,-50%,0); transform-origin:50% 85%; will-change:left,top,transform;
+}
+#incense-stick{ position:relative; width:14px; height:180px; margin:0 auto; }
+#incense-stick .stick-body{ position:absolute; bottom:0; left:0; width:100%; height:140px; background:linear-gradient(180deg,#e9c46a,#8a5a30); border-radius:2px; }
+#incense-stick .stick-tip{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:8px; height:8px; border-radius:50%; background:radial-gradient(circle,#ffcf7a,#c94b40); box-shadow:0 0 14px rgba(255,160,80,0.9); }
+#incense-progress-ring{
+  position:absolute; inset:-20px; border-radius:50%;
+  background: conic-gradient(var(--gold) calc(var(--p,0)*1%), rgba(212,175,55,0.1) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  opacity:0; transition: opacity 0.3s ease;
+}
+#incense-progress-ring.on{ opacity:1; }
+#incense-hint.sensing{ animation: incenseBreathe 1.1s ease-in-out infinite; }
+@keyframes incenseBreathe{
+  0%,100%{ opacity:0.7; text-shadow:0 0 0px rgba(255,207,122,0); }
+  50%{ opacity:1; text-shadow:0 0 14px rgba(255,207,122,0.85); }
+}
+#incense-stick.sensing .stick-tip{ animation: incenseTipPulse 0.9s ease-in-out infinite; }
+@keyframes incenseTipPulse{
+  0%,100%{ box-shadow:0 0 14px rgba(255,160,80,0.9); transform:translateX(-50%) scale(1); }
+  50%{ box-shadow:0 0 28px rgba(255,207,122,1); transform:translateX(-50%) scale(1.35); }
+}
+
+/* ===================== 墨染 / 金線過場效果 ===================== */
+/* 領籤過場影片。素材是直式 720x1280，但桌機是 16:9 橫畫面：
+   用 cover 會把龍與籤枝裁掉（縱向構圖只剩中間一條），
+   所以改成 contain 完整呈現，左右空白由跟影片同色的米白底填滿。
+   影片本身背景就是 #fbf9f5，兩者接在一起看不出邊界。 */
+#oracle-transition-video{
+  position:fixed; inset:0; z-index:72; width:100%; height:100%;
+  object-fit:contain;
+  background:
+    radial-gradient(120% 90% at 50% 42%, #fffdf6 0%, #fbf9f5 46%, #f3ece0 100%);
+  opacity:0; pointer-events:none;
+  will-change: opacity;              /* 提升成獨立圖層，淡入淡出不會連動重繪整頁 */
+  transition: opacity 260ms ease-out;
+}
+#oracle-transition-video.show{ opacity:1; }
+#oracle-transition-video.fade-out{ transition: opacity 700ms ease-in; opacity:0; }
+
+/* 直式螢幕（手機）比例本來就吻合，讓它鋪滿裁掉極少的邊 */
+@media (max-aspect-ratio: 3/4){
+  #oracle-transition-video{ object-fit:cover; }
+}
+
+#transition-overlay{ position:fixed; inset:0; z-index:70; pointer-events:none; display:flex; align-items:center; justify-content:center; }
+#transition-overlay .ink-blot{
+  width:40px; height:40px; border-radius:50%; background:radial-gradient(circle, var(--wu-mu-hei) 60%, var(--jiang-hong-deep) 100%);
+  transform:scale(0); opacity:0;
+}
+#transition-overlay .gold-ring{
+  position:absolute; width:40px; height:40px; border-radius:50%; border:1.5px solid var(--gold-soft);
+  transform:scale(0); opacity:0;
+}
+#transition-overlay.play .ink-blot{ animation: inkExpand 0.85s cubic-bezier(.6,0,.3,1) forwards; }
+#transition-overlay.play .gold-ring{ animation: goldRingExpand 0.95s cubic-bezier(.5,0,.3,1) forwards; }
+@keyframes inkExpand{
+  0%{ transform:scale(0); opacity:0; } 35%{ transform:scale(45); opacity:1; }
+  70%{ transform:scale(48); opacity:1; } 100%{ transform:scale(60); opacity:0; }
+}
+@keyframes goldRingExpand{
+  0%{ transform:scale(0); opacity:0; } 40%{ transform:scale(42); opacity:0.9; } 100%{ transform:scale(58); opacity:0; }
+}
+
+/* 拋擲瞬間的動態模糊（原始碼第360行附近，供 tossBwa 快速拋擲時使用；
+   保留選擇器命名一致，數值原封不動） */
+.qian-stick.punch, #qian-stick.punch{ will-change: filter; }
+
+/* ---------- 3. Tailwind utility class 等價寫死 ---------- */
+/* 以下數值皆為 Tailwind 預設刻度（本專案 Tailwind CDN 無自訂 config），
+   md: 對應 Tailwind 預設斷點 768px。 */
+.px-14{ padding-left:3.5rem; padding-right:3.5rem; }
+.py-6{ padding-top:1.5rem; padding-bottom:1.5rem; }
+.py-8{ padding-top:2rem; padding-bottom:2rem; }
+.text-center{ text-align:center; }
+.mt-2{ margin-top:0.5rem; }
+.mt-4{ margin-top:1rem; }
+.opacity-80{ opacity:0.8; }
+.font-light{ font-weight:300; }
+.font-normal{ font-weight:400; }
+.max-w-md{ max-width:28rem; }
+.justify-between{ justify-content:space-between; }
+.justify-center{ justify-content:center; }
+.items-center{ align-items:center; }
+.leading-relaxed{ line-height:1.625; }
+.tracking-wide{ letter-spacing:0.025em; }
+.text-xl{ font-size:1.25rem; line-height:1.75rem; }
+
+/* 原始 class 帶有 Tailwind 任意值語法（如 top-[10vh]、tracking-[0.5em]），
+   這裡直接等價換算成固定值的具名 class，數值與原始完全相同： */
+.ar-top-10{ top:10vh; }
+.ar-top-7vh{ top:7vh; }
+.ar-bottom-9vh{ bottom:9vh; }
+.ar-py-8vh{ padding-top:8vh; padding-bottom:8vh; }
+.text-13px{ font-size:13px; }
+.tracking-05em{ letter-spacing:0.5em; }
+.tracking-03em{ letter-spacing:0.3em; }
+.tracking-015em{ letter-spacing:0.15em; }
+.absolute{ position:absolute; }
+
+/* text-2xl md:text-3xl（合十/擲筊標題）與 text-xl md:text-2xl（擲筊副標） */
+.text-2xl-md{ font-size:1.5rem; line-height:2rem; }
+.text-xl-md{ font-size:1.25rem; line-height:1.75rem; }
+@media (min-width:768px){
+  .text-2xl-md{ font-size:1.875rem; line-height:2.25rem; } /* md:text-3xl */
+  .text-xl-md{ font-size:1.5rem; line-height:2rem; }       /* md:text-2xl */
+  .text-13px-md-sm{ font-size:0.875rem; line-height:1.25rem; } /* md:text-sm */
+}
+.text-13px-md-sm{ font-size:13px; }

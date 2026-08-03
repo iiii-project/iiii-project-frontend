@@ -1,23 +1,25 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { toUserMessage } from '@/api/client'
-import { createDivination, listFortuneSets } from '@/api/divinationApi'
-import type { Category, DivinationSession } from '@/types/divination'
+import type { Category } from '@/types/divination'
+// 註冊 <temple-ar-oracle>（插香 → 搖籤 → 擲筊 的 AR 引擎）
+import '@/ar/temple-ar-oracle/index.js'
 
 const router = useRouter()
 
 // 沿用舊版（v17）的五個方向與說明文案
-const CATEGORIES: { value: Category; label: string; emoji: string; hint: string }[] = [
-  { value: 'health', label: '身體健康', emoji: '🌿', hint: '身體、看病、平安' },
-  { value: 'family', label: '家庭平安', emoji: '🏠', hint: '家人、子女、和睦' },
-  { value: 'career', label: '工作錢財', emoji: '💰', hint: '工作、生意、財運' },
-  { value: 'love', label: '感情姻緣', emoji: '💗', hint: '感情、對象、緣分' },
-  { value: 'other', label: '其他心事', emoji: '🙏', hint: '任何想問的事' }
+/* arLabel 是傳給 AR 引擎的分類名稱。引擎內部的 CATEGORY_API_MAP 只認得它自己那份
+   中文對照表，這裡的顯示名稱（身體健康／家庭平安…）不在表內，若直接傳過去會全部
+   被歸成 other，所以另外標一組引擎看得懂的值。 */
+const CATEGORIES: { value: Category; label: string; emoji: string; hint: string; arLabel: string }[] = [
+  { value: 'health', label: '身體健康', emoji: '🌿', hint: '身體、看病、平安', arLabel: '健康平安' },
+  { value: 'family', label: '家庭平安', emoji: '🏠', hint: '家人、子女、和睦', arLabel: '家庭生活' },
+  { value: 'career', label: '工作錢財', emoji: '💰', hint: '工作、生意、財運', arLabel: '工作事業' },
+  { value: 'love', label: '感情姻緣', emoji: '💗', hint: '感情、對象、緣分', arLabel: '感情婚姻' },
+  { value: 'other', label: '其他心事', emoji: '🙏', hint: '任何想問的事', arLabel: '綜合運勢' }
 ]
 
 const STEPS = ['選方向', '說心事', '確認送出']
-const ANON_KEY = 'temple-oracle-anonymous-user-id'
 const QUESTION_MAX = 200
 
 /* ── 語音輸入：瀏覽器內建的語音辨識（Chrome / Edge / Safari 走 webkit 前綴）──
@@ -62,21 +64,31 @@ function getRecognitionCtor(): SpeechRecognitionCtor | null {
   return scope.SpeechRecognition ?? scope.webkitSpeechRecognition ?? null
 }
 
-function anonymousUserId(): string {
-  let value = localStorage.getItem(ANON_KEY)
-  if (!value) {
-    value = crypto.randomUUID()
-    localStorage.setItem(ANON_KEY, value)
-  }
-  return value
-}
-
 const step = ref(1)
 const category = ref<Category | null>(null)
 const question = ref('')
 const errorMessage = ref('')
 const loadingLabel = ref('')
-const session = ref<DivinationSession | null>(null)
+/* AR 儀式（插香 → 搖籤 → 擲筊）的狀態。場次由 AR 引擎自己建立，
+   所以這裡不再另外呼叫 createDivination，避免同一次求籤開出兩個場次。 */
+interface ArFortune { no: number; ganzhi: string; grade: string; poem: string; explain: string; modern: string }
+interface ArInterpretation {
+  overall_meaning?: string
+  relation_to_question?: string
+  suggested_actions?: string[]
+  warnings?: string[]
+  offline?: boolean
+}
+interface TempleArOracleEl extends HTMLElement {
+  start(options: { question?: string; category?: string; inputMode?: string }): Promise<void>
+  destroy(): void
+}
+
+const arEl = ref<TempleArOracleEl | null>(null)
+const arNotice = ref('')
+const isOffline = ref(false)
+const fortune = ref<ArFortune | null>(null)
+const interpretation = ref<ArInterpretation | null>(null)
 
 const isBusy = computed(() => loadingLabel.value !== '')
 const chosen = computed(() => CATEGORIES.find((item) => item.value === category.value) ?? null)
@@ -178,12 +190,12 @@ function toggleRecording() {
   else startRecording()
 }
 
-let submitDelay = 0
 onBeforeUnmount(() => {
-  if (submitDelay) window.clearTimeout(submitDelay)
   if (mistTimer) window.clearTimeout(mistTimer)
   recognition?.abort()
   recognition = null
+  setBodyLock(false)
+  unbindAr()
 })
 
 function goStep(next: number) {
@@ -209,45 +221,97 @@ function confirmQuestion() {
   goStep(3)
 }
 
-// 收集完成，送出建立求籤的 API
+/* ── AR 儀式事件 ──
+   引擎會把整段儀式跑完，最後用 sequence-complete 把籤詩與解籤丟出來。
+   後端連不上時引擎會自動改用離線籤詩，一樣會走到 sequence-complete，
+   所以這裡不需要為了離線寫第二套流程。 */
+function onArToast(event: Event) {
+  const detail = (event as CustomEvent<{ message?: string }>).detail
+  if (detail?.message) arNotice.value = detail.message
+}
+
+function onArOffline(event: Event) {
+  const detail = (event as CustomEvent<{ message?: string }>).detail
+  isOffline.value = true
+  if (detail?.message) arNotice.value = detail.message
+}
+
+function setBodyLock(on: boolean) {
+  document.body.classList.toggle('ar-ritual-open', on)
+}
+
+function onArComplete(event: Event) {
+  const detail = (event as CustomEvent<{ fortune?: ArFortune; interpretation?: ArInterpretation }>).detail
+  fortune.value = detail?.fortune ?? null
+  interpretation.value = detail?.interpretation ?? null
+  if (detail?.interpretation?.offline) isOffline.value = true
+  setBodyLock(false)
+  step.value = 5
+}
+
+function bindAr(el: TempleArOracleEl) {
+  el.addEventListener('toast', onArToast)
+  el.addEventListener('offline', onArOffline)
+  el.addEventListener('sequence-complete', onArComplete)
+}
+
+function unbindAr() {
+  const el = arEl.value
+  if (!el) return
+  el.removeEventListener('toast', onArToast)
+  el.removeEventListener('offline', onArOffline)
+  el.removeEventListener('sequence-complete', onArComplete)
+  try { el.destroy() } catch { /* 元件可能已卸載 */ }
+}
+
+// 收集完成 → 進入 AR 儀式
 async function submit() {
   if (isBusy.value) return
   errorMessage.value = ''
-  loadingLabel.value = '正在焚香稟告神明'
+  arNotice.value = ''
+  /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
+     一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
+  step.value = 4
+  await nextTick()
+  const el = arEl.value
+  if (!el) {
+    errorMessage.value = '無法載入求籤場景，請重新整理頁面再試一次。'
+    return
+  }
+  bindAr(el)
+  setBodyLock(true)
   try {
-    const sets = await listFortuneSets()
-    const set = sets.find((item) => item.is_default) ?? sets[0]
-    if (!set) throw new Error('no fortune set available')
-
-    const [created] = await Promise.all([
-      createDivination({
-        fortune_set_code: set.code,
-        question: askedQuestion.value,
-        category: category.value ?? 'other',
-        categories: [category.value ?? 'other'],
-        interaction_mode: 'click',
-        anonymous_user_id: anonymousUserId()
-      }),
-      // 讓香爐動畫至少完整跑一輪，避免畫面一閃而過
-      new Promise((resolve) => {
-        submitDelay = window.setTimeout(resolve, 1800)
-      })
-    ])
-
-    session.value = created
-    step.value = 4
+    /* 手機（含把視窗縮窄的桌機）一律用搖的；桌機維持 auto，
+       會先試鏡頭手勢，失敗才降級成點擊。 */
+    const useShake = window.matchMedia('(max-width: 640px)').matches
+    await el.start({
+      question: askedQuestion.value,
+      category: chosen.value?.arLabel ?? '綜合運勢',
+      inputMode: useShake ? 'motion' : 'auto'
+    })
   } catch (error) {
-    errorMessage.value = toUserMessage(error)
-  } finally {
-    loadingLabel.value = ''
+    // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況
+    errorMessage.value = error instanceof Error ? error.message : '無法開始求籤，請稍後再試。'
   }
 }
 
+function quitRitual() {
+  setBodyLock(false)
+  unbindAr()
+  arEl.value = null
+  arNotice.value = ''
+  step.value = 3
+}
+
 function restart() {
+  unbindAr()
+  fortune.value = null
+  interpretation.value = null
+  isOffline.value = false
+  arNotice.value = ''
   step.value = 1
   category.value = null
   question.value = ''
-  session.value = null
   errorMessage.value = ''
 }
 </script>
@@ -422,11 +486,51 @@ function restart() {
         </div>
       </section>
 
-      <!-- 送出完成 -->
-      <section v-else class="panel center">
-        <p class="kicker">已 送 出</p>
-        <h2>心意已經稟告神明</h2>
-        <p class="lede">這次請示已經建立，後面的求籤流程之後再接上。</p>
+      <!-- 步驟四：AR 儀式。引擎內部是 position:fixed 的整頁設計，
+           必須掛在 body 底下全螢幕，放進面板會被 backdrop-filter 的
+           containing block 困住（筊杯與提示框會錯位跑到面板外）。 -->
+      <section v-else-if="step === 4" class="panel center">
+        <p class="kicker">第 四 步 · {{ chosen?.label }}</p>
+        <h2>儀式進行中</h2>
+        <p class="lede">請在全螢幕畫面中完成合十、搖籤與擲筊。</p>
+      </section>
+
+      <!-- 步驟五：籤詩與解籤 -->
+      <section v-else class="panel">
+        <p class="kicker">第 五 步 · 神 明 回 應</p>
+        <p v-if="isOffline" class="ar-notice offline">
+          目前連不上伺服器，以下是離線的預設籤詩與解說；恢復連線後可重新求籤取得 AI 解籤。
+        </p>
+
+        <div v-if="fortune" class="fortune">
+          <div class="fortune-head">
+            <span class="fortune-no">第 {{ fortune.no }} 籤</span>
+            <span v-if="fortune.ganzhi" class="fortune-ganzhi">{{ fortune.ganzhi }}</span>
+            <span v-if="fortune.grade" class="fortune-grade">{{ fortune.grade }}</span>
+          </div>
+          <p class="poem">{{ fortune.poem }}</p>
+          <p v-if="fortune.explain" class="fortune-text">{{ fortune.explain }}</p>
+          <p v-if="fortune.modern" class="fortune-text modern">{{ fortune.modern }}</p>
+        </div>
+
+        <div v-if="interpretation" class="reading">
+          <h3>解 籤</h3>
+          <p v-if="interpretation.overall_meaning">{{ interpretation.overall_meaning }}</p>
+          <p v-if="interpretation.relation_to_question" class="reading-q">{{ interpretation.relation_to_question }}</p>
+          <template v-if="interpretation.suggested_actions?.length">
+            <h4>可以這樣做</h4>
+            <ul>
+              <li v-for="(item, i) in interpretation.suggested_actions" :key="`a${i}`">{{ item }}</li>
+            </ul>
+          </template>
+          <template v-if="interpretation.warnings?.length">
+            <h4>要留意的地方</h4>
+            <ul class="warn">
+              <li v-for="(item, i) in interpretation.warnings" :key="`w${i}`">{{ item }}</li>
+            </ul>
+          </template>
+        </div>
+
         <dl class="summary">
           <div>
             <dt>所問方向</dt>
@@ -439,15 +543,8 @@ function restart() {
               <span v-if="!hasTypedQuestion" class="dd-note">（未填寫，以所選方向請示）</span>
             </dd>
           </div>
-          <div>
-            <dt>請示編號</dt>
-            <dd class="mono">{{ session?.session_id }}</dd>
-          </div>
-          <div>
-            <dt>目前狀態</dt>
-            <dd>{{ session?.status }}</dd>
-          </div>
         </dl>
+
         <div class="row">
           <button class="btn ghost" type="button" @click="restart">再問一題</button>
           <button class="btn primary" type="button" @click="router.push('/celestial')">回 首 頁</button>
@@ -456,8 +553,72 @@ function restart() {
 
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
     </main>
+
+    <!-- AR 儀式全螢幕層 -->
+    <Teleport to="body">
+      <div v-if="step === 4" class="ar-fullscreen">
+        <temple-ar-oracle ref="arEl" api-base="/api/v1"></temple-ar-oracle>
+        <p v-if="arNotice" class="ar-toast">{{ arNotice }}</p>
+        <button class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
+      </div>
+    </Teleport>
   </div>
 </template>
+
+<style>
+/* AR 儀式全螢幕層：Teleport 到 body，所以這段不能是 scoped。
+   引擎根節點本身是 position:fixed，這層只負責背景、離開鈕與層級。 */
+body.ar-ritual-open { overflow: hidden; }
+
+.ar-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #120d0a;
+}
+.ar-fullscreen temple-ar-oracle {
+  display: block;
+  width: 100%;
+  height: 100%;
+  --gold: #d4af37;
+  --jiang-hong: #a63a3a;
+  --ink: #3a2c22;
+}
+.ar-exit {
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top));
+  right: 14px;
+  z-index: 80;
+  padding: 9px 18px;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  border-radius: 999px;
+  background: rgba(24, 14, 10, 0.72);
+  color: #f2e2b3;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.ar-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 80;
+  transform: translateX(-50%);
+  max-width: min(88vw, 460px);
+  margin: 0;
+  padding: 11px 18px;
+  border-radius: 999px;
+  background: rgba(24, 14, 10, 0.82);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: #f2e2b3;
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+  backdrop-filter: blur(6px);
+}
+</style>
 
 <style scoped>
 .oracle-page {
@@ -848,6 +1009,69 @@ function restart() {
 .mic-wave i:nth-child(3) { height: 18px; animation-delay: 0.24s; }
 .mic-wave i:nth-child(4) { height: 12px; animation-delay: 0.36s; }
 .mic-wave i:nth-child(5) { height: 8px; animation-delay: 0.48s; }
+
+.ar-notice {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(212, 175, 55, 0.14);
+  border: 1px solid var(--gold-line);
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--ink-soft);
+}
+.ar-notice.offline { background: rgba(166, 58, 58, 0.1); border-color: rgba(166, 58, 58, 0.3); }
+
+/* ── 籤詩與解籤 ── */
+.fortune {
+  margin-top: 18px;
+  padding: 18px 16px;
+  border-radius: 14px;
+  background: rgba(255, 252, 244, 0.75);
+  border: 1px solid var(--gold-line);
+}
+.fortune-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.fortune-no { font-size: 18px; font-weight: 700; color: var(--jiang-hong-deep); }
+.fortune-ganzhi { font-size: 14px; letter-spacing: 0.2em; color: var(--ink-soft); }
+.fortune-grade {
+  margin-left: auto;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(212, 175, 55, 0.2);
+  color: #7a5410;
+}
+.poem {
+  margin: 14px 0 0;
+  white-space: pre-line;
+  font-size: 17px;
+  line-height: 2.1;
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: var(--jiang-hong-deep);
+}
+.fortune-text { margin: 14px 0 0; font-size: 14px; line-height: 1.95; color: var(--ink-soft); }
+.fortune-text.modern { color: rgba(91, 70, 53, 0.85); }
+
+.reading { margin-top: 20px; }
+.reading h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  color: var(--jiang-hong);
+}
+.reading h4 {
+  margin: 16px 0 6px;
+  font-size: 13.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+.reading p { margin: 0 0 10px; font-size: 14.5px; line-height: 1.95; color: var(--ink-soft); }
+.reading-q { padding-left: 12px; border-left: 2px solid var(--gold-line); }
+.reading ul { margin: 0; padding-left: 20px; }
+.reading li { font-size: 14px; line-height: 1.9; color: var(--ink-soft); }
+.reading ul.warn li { color: rgba(166, 58, 58, 0.9); }
 
 .optional-note {
   display: block;

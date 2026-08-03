@@ -6,7 +6,8 @@ export default defineConfig(() => {
   const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://iiibackend.dev-serve.me'
 
   return {
-  plugins: [vue()],
+  // <temple-ar-oracle> 是原生 Web Component，要告訴 Vue 別把它當成未註冊的元件
+  plugins: [vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'temple-ar-oracle' } } })],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
