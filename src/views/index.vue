@@ -1460,10 +1460,93 @@ body.celestial-home-open {
   100% { transform: scaleY(1); transform-origin: bottom; opacity: 0; }
 }
 
+/* 觸控裝置不要留下卡住的 hover 效果 */
+@media (hover: none) {
+  .btn:hover,
+  .btn-primary:hover,
+  .btn-ghost:hover,
+  .link-btn:hover {
+    transform: none;
+    background: inherit;
+  }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-ghost:active { transform: scale(0.98); }
+}
+
 @media (max-width: 640px) {
+  .celestial-home {
+    /* 手機瀏覽器的網址列會吃掉 100vh，用 dvh 才不會被截 */
+    height: 100dvh;
+  }
   .flyer { width: calc(var(--size, 300px) * 0.62); }
-  .actions { gap: 12px; }
-  .btn { padding: 15px 30px; font-size: 13px; }
+
+  /* 直式螢幕：玉皇大帝放大一點、往下挪，臉才不會頂在畫面外 */
+  .sovereign {
+    width: min(80vw, 360px);
+    transform: translate3d(-50%, -56%, 0);
+  }
+
+  .celestial-hero { padding: 0 22px; }
+  .celestial-eyebrow { font-size: 11px; letter-spacing: 0.34em; text-indent: 0.34em; }
+  .celestial-eyebrow::before,
+  .celestial-eyebrow::after { width: 22px; margin: 0 10px 4px; }
+  .subtitle { margin-top: 20px; letter-spacing: 0.24em; text-indent: 0.24em; }
+  .desc { margin-top: 14px; font-size: 14px; line-height: 1.95; }
+
+  /* 按鈕改成整排，單手好按 */
+  .actions {
+    margin-top: 34px;
+    gap: 12px;
+    width: 100%;
+    max-width: 320px;
+    flex-direction: column;
+  }
+  .btn {
+    width: 100%;
+    padding: 16px 24px;
+    font-size: 14px;
+  }
+  .tutorial-link { margin-top: 18px; }
+  .link-btn { font-size: 12.5px; }
+
+  .scroll-hint { bottom: calc(18px + env(safe-area-inset-bottom)); }
+  .scroll-hint i { height: 30px; }
+
+  /* 教學影片：留出上下安全距離，控制列才點得到 */
+  .tutorial-overlay { padding: 3vh 4vw calc(3vh + env(safe-area-inset-bottom)); }
+  .tutorial-box { border-radius: 14px; }
+  .tutorial-video { max-height: 64vh; }
+  .tutorial-close { width: 34px; height: 34px; top: 8px; right: 8px; }
+}
+
+/* 直式且螢幕偏矮：把上下留白再收一點 */
+@media (max-width: 640px) and (max-height: 700px) {
+  .desc { display: none; }
+  .actions { margin-top: 26px; }
+}
+
+/* 螢幕高度不足（手機橫放、矮視窗）：只留標題與兩顆按鈕 */
+@media (max-height: 560px) {
+  .celestial-eyebrow { display: none; }
+  .title { font-size: clamp(38px, 13vh, 72px); }
+  .subtitle {
+    margin-top: 12px;
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-indent: 0.22em;
+  }
+  .desc { display: none; }
+  .actions {
+    margin-top: 20px;
+    flex-direction: row;
+    width: auto;
+    max-width: none;
+  }
+  .btn { width: auto; padding: 12px 28px; font-size: 13px; }
+  .tutorial-link { margin-top: 12px; }
+  .scroll-hint { display: none; }
+  .sovereign { transform: translate3d(-50%, -52%, 0); }
+  .tutorial-video { max-height: 74vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {

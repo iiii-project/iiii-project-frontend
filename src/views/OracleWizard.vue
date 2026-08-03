@@ -1000,10 +1000,62 @@ function restart() {
   100% { transform: translateX(320%); }
 }
 
+/* 觸控裝置不要留下卡住的 hover 效果 */
+@media (hover: none) {
+  .btn:hover, .mic:hover, .choice-row:hover, .link-btn:hover {
+    transform: none;
+  }
+  .btn:active, .choice-row:active { transform: scale(0.99); }
+}
+
 @media (max-width: 640px) {
-  .panel { padding: 30px 22px 28px; border-radius: 18px; }
+  /* 手機只留一層 14px 的邊界，內容才不會被三層 padding 擠成細長條 */
+  .oracle-page {
+    min-height: 100dvh;
+    padding: 0 14px calc(28px + env(safe-area-inset-bottom));
+  }
+  /* 讀出瀏海與底部安全區，內容不會被系統列蓋住 */
+  .oracle-bar {
+    padding: calc(16px + env(safe-area-inset-top)) 0 8px;
+    gap: 12px;
+  }
+  .oracle-main {
+    max-width: none;
+    margin: 0;
+    padding: 10px 0 0;
+  }
+  .panel { padding: 26px 20px 24px; border-radius: 18px; }
+  h2 { font-size: 24px; }
+  .lede { font-size: 14px; line-height: 1.9; }
+
+  /* 步驟列只留數字，但目前這一步把名稱顯示出來 */
+  .steps { gap: 6px 10px; }
   .steps li span { display: none; }
-  .btn { padding: 14px 26px; }
+  .steps li.on span {
+    display: inline;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+
+  /* 選項列加高，手指好按 */
+  .choice-row { padding: 16px 16px; gap: 14px; }
+
+  .ask { min-height: 150px; }
+  .ask-tools { flex-wrap: wrap; gap: 10px; }
+  .mic { padding: 12px 20px 12px 14px; }
+  .mic-label { font-size: 12.5px; letter-spacing: 0.14em; text-indent: 0.14em; }
+
+  /* 主要動作整排排下來，拇指好按；主要按鈕放最下面 */
+  .row {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 22px;
+  }
+  .btn {
+    width: 100%;
+    padding: 15px 24px;
+  }
+  .summary dd { font-size: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
