@@ -90,6 +90,12 @@ const isOffline = ref(false)
 const fortune = ref<ArFortune | null>(null)
 const interpretation = ref<ArInterpretation | null>(null)
 
+/* 解籤結果頁的 Live2D 小夥伴：獨立服務（live2d-frontend + live2d-backend），
+   用 iframe 嵌入即可，不需要共用 Vue/React 執行環境。網址可用環境變數覆蓋，
+   本機開發預設打 live2d-frontend 的網頁版 dev server（vite dev:web，預設 3000）。 */
+const LIVE2D_COMPANION_URL = import.meta.env.VITE_LIVE2D_FRONTEND_URL || 'http://localhost:3000'
+const showCompanion = computed(() => step.value >= 5)
+
 const isBusy = computed(() => loadingLabel.value !== '')
 const chosen = computed(() => CATEGORIES.find((item) => item.value === category.value) ?? null)
 
@@ -562,6 +568,19 @@ function restart() {
         <button class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
       </div>
     </Teleport>
+
+    <!-- 解籤結果的 Live2D 小夥伴：獨立服務，用透明背景的 iframe 浮在畫面右下角 -->
+    <Teleport to="body">
+      <div v-if="showCompanion" class="live2d-companion">
+        <iframe
+          :src="LIVE2D_COMPANION_URL"
+          class="live2d-companion-frame"
+          title="求籤小夥伴"
+          allow="microphone; autoplay"
+          loading="lazy"
+        ></iframe>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -617,6 +636,30 @@ body.ar-ritual-open { overflow: hidden; }
   line-height: 1.7;
   text-align: center;
   backdrop-filter: blur(6px);
+}
+
+/* 解籤結果頁的 Live2D 小夥伴：固定在右下角，不擋到籤詩卡片，行動裝置縮小並降低高度避免蓋住整段文字 */
+.live2d-companion {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  width: min(340px, 46vw);
+  height: min(460px, 62vh);
+  pointer-events: none;
+}
+.live2d-companion-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+}
+@media (max-width: 640px) {
+  .live2d-companion {
+    width: min(220px, 58vw);
+    height: min(320px, 42vh);
+  }
 }
 </style>
 
