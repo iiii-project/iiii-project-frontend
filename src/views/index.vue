@@ -759,6 +759,9 @@ body.celestial-home-open {
   z-index: 12;
   -webkit-mask-image: none;
   mask-image: none;
+  /* 平時的錨點是 50% 20%（讓靜態構圖的頭部定在雲霧上緣），
+     但放大時會以頭為軸往下擴張，破題的動勢會歪掉，轉場期間拉回中心。 */
+  transform-origin: 50% 50%;
   animation: ascend 1.5s cubic-bezier(0.42, 0, 0.3, 1) forwards;
 }
 .is-ascending .sovereign-float,
@@ -1184,27 +1187,29 @@ body.celestial-home-open {
     opacity: 0.95;
     filter: blur(0.4px);
   }
-  /* 撞上標題的瞬間：與字同高，才看得出是祂把字撞碎的 */
+  /* 撞上標題的瞬間：與字同高，才看得出是祂把字撞碎的。
+     底圖從 500px 縮成 335px 之後，原本的 2 倍會讓祂在撞擊當下就吞掉整個標題，
+     這裡依新尺寸重算成 1.15 倍。 */
   21% {
-    transform: translate3d(-50%, -60%, 0) scale(2);
+    transform: translate3d(-50%, -60%, 0) scale(1.15);
     opacity: 1;
     filter: blur(0);
   }
-  /* 撞破後先維持一下，讓碎片在乾淨的背景上飛出去 */
+  /* 撞破後先維持一下，讓碎片在還看得清的背景上飛出去 */
   42% {
-    transform: translate3d(-50%, -58%, 0) scale(2.7);
+    transform: translate3d(-50%, -58%, 0) scale(1.9);
     opacity: 1;
     filter: blur(0);
   }
   /* 再一口氣衝滿畫面 */
   72% {
-    transform: translate3d(-50%, -55%, 0) scale(5.2);
+    transform: translate3d(-50%, -55%, 0) scale(3.8);
     opacity: 1;
     filter: blur(0);
   }
   /* 就地化去，雲霧隨後才捲上來 */
   100% {
-    transform: translate3d(-50%, -52%, 0) scale(7.5);
+    transform: translate3d(-50%, -52%, 0) scale(5.8);
     opacity: 0;
     filter: blur(10px);
   }

@@ -342,8 +342,29 @@ export function createBwaScene(state) {
     }
   }
 
+  /* 點擊命中測試：把畫面座標轉成 NDC 後對兩只筊杯發射線。
+     手指比滑鼠粗，所以除了正中心，還在 ±22px 內取樣幾個點，
+     擦邊也算命中，不然手機上很難點得準。 */
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+
+  function hitTest(clientX, clientY) {
+    if (!renderer || !camera || !cupA || !cupB) return false;
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+    const targets = [cupA, cupB];
+    const offsets = [[0, 0], [-22, 0], [22, 0], [0, -22], [0, 22]];
+    for (const [dx, dy] of offsets) {
+      pointer.x = ((clientX + dx - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY + dy - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      if (raycaster.intersectObjects(targets, true).length > 0) return true;
+    }
+    return false;
+  }
+
   return {
-    init, setHoldPosition, resetIdle, getScreenPos: () => lastScreenPos, toss, destroy,
+    init, setHoldPosition, resetIdle, getScreenPos: () => lastScreenPos, toss, destroy, hitTest,
     // 過場影片播放期間暫停 three.js 迴圈
     pause(){ if (loopRafId) { cancelAnimationFrame(loopRafId); loopRafId = 0; } },
     resume(){ if (!loopRafId && renderer) loopRafId = requestAnimationFrame(loop); },

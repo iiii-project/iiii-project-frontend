@@ -20,11 +20,20 @@ export function toUserMessage(error: unknown): string {
   const axiosError = error as AxiosError<ApiErrorBody>
   const status = axiosError.response?.status
   const body = axiosError.response?.data
+
+  /* 5xx 多半不是我們的 API 回的，而是中間的閘道（例如 Cloudflare 的錯誤頁），
+     那種 JSON 裡的欄位是說明文件網址之類的東西，直接顯示給使用者只會看到一串 URL。
+     所以伺服器錯誤一律走下面的通用訊息，不去解析內容。 */
+  if (status && status >= 500) return '伺服器暫時無法回應，資料已保留，請稍後重試。'
+
   const details = body?.error?.details || Object.fromEntries(
     Object.entries(body || {}).filter(([key]) => !['error', 'message', 'detail'].includes(key))
   )
   if (details && typeof details === 'object') {
-    const messages = Object.values(details).flatMap((value) => Array.isArray(value) ? value : [value])
+    const messages = Object.values(details)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      // 濾掉網址與非字串，避免把技術性內容丟到畫面上
+      .filter((value): value is string => typeof value === 'string' && !/^https?:\/\//.test(value))
     if (messages.length) return messages.join(' ')
   }
   const apiMessage = body?.error?.message || body?.message || body?.detail

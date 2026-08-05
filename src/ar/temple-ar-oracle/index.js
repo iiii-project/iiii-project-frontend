@@ -97,6 +97,7 @@ class TempleArOracle extends HTMLElement {
       qianTong: $('qian-tong'),
       btnManualDraw: $('btn-manual-draw'),
       bwaHint: $('bwa-hint'),
+      bwaThreeContainer: $('bwa-three-container'),
       btnClickBwa: $('btn-click-bwa'),
       bwaThreeContainer: $('bwa-three-container'),
       bwaResultPanel: $('bwa-result-panel'),
@@ -174,6 +175,16 @@ class TempleArOracle extends HTMLElement {
 
     this._els.btnManualDraw.addEventListener('click', () => this._flow.completeDraw());
     this._els.btnClickBwa.addEventListener('click', () => this._flow.castClickBwa());
+
+    /* 手動／搖籤模式：直接點筊杯就擲出。
+       容器平時是 pointer-events:none，只有 flow-controller 掛上 .tossable 時才收得到事件；
+       命中判定交給 bwa-scene 的射線測試（含手指的容錯範圍）。 */
+    this._els.bwaThreeContainer.addEventListener('pointerdown', (event) => {
+      if (!this._state.clickBwaMode || this._state.current !== 'bwa' || this._state.bwaTossing) return;
+      if (!this._bwaScene.hitTest(event.clientX, event.clientY)) return;
+      event.preventDefault();
+      this._flow.castClickBwa();
+    });
 
     // 初次載入即嘗試把 attribute 值同步進 state.userQuery（真正建立場次要等 start() 呼叫）
     this._syncAttributesToState();

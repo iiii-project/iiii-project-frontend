@@ -117,3 +117,12 @@ export async function listHistory(anonymousUserId?: string): Promise<HistoryItem
 export async function deleteHistoryItem(sessionId: string): Promise<void> {
   await apiClient.delete(`/divinations/${sessionId}/`)
 }
+
+/* 掃 QR 進來時用：依 session id 取回那一次求籤（籤詩 + AI 解籤）。
+   後端已有 GET /divinations/<uuid>/ 這個端點。 */
+export async function getDivination(sessionId: string): Promise<DivinationSession> {
+  const { data } = await apiClient.get<ApiResponse<DivinationSession> | DivinationSession>(
+    `/divinations/${sessionId}/`
+  )
+  return unwrap(data)
+}

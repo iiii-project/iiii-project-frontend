@@ -3,10 +3,13 @@ import { createRouter, createWebHistory } from 'vue-router'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: () => import('@/views/TempleLandingPage.vue'), meta: { immersive: true } },
-    // 仙境主視覺（新版首頁候選，確認後可把 '/' 指到這支）
-    { path: '/celestial', name: 'celestial', component: () => import('@/views/index.vue'), meta: { immersive: true } },
+    /* 首頁＝仙境主視覺。桌機走 index.vue，手機由它切換到 MobileHome（推廟門版）。 */
+    { path: '/', name: 'home', component: () => import('@/views/index.vue'), meta: { immersive: true } },
+    // 舊網址：先前對外用過 /celestial，保留轉址避免既有連結失效
+    { path: '/celestial', redirect: '/' },
     // 全新 Vue 版求籤流程（與首頁分屬兩支檔案）
+    // 掃 QR 取籤：先推廟門，再顯示那一次的籤詩
+    { path: '/fortune/:sessionId', name: 'fortune-share', component: () => import('@/views/FortuneShare.vue'), meta: { immersive: true } },
     { path: '/oracle', name: 'oracle', component: () => import('@/views/OracleWizard.vue'), meta: { immersive: true } },
     // Preserve bookmarked legacy URLs without ever reopening the retired dark flow.
     { path: '/mode', redirect: '/temple-oracle-v17' },

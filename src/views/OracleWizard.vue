@@ -2,10 +2,17 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Category } from '@/types/divination'
+import { useFontScale } from '@/utils/fontScale'
+import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
+import FontScaleControl from '@/components/FontScaleControl.vue'
+import FortunePoem from '@/components/FortunePoem.vue'
+import FortuneReading from '@/components/FortuneReading.vue'
 // 註冊 <temple-ar-oracle>（插香 → 搖籤 → 擲筊 的 AR 引擎）
 import '@/ar/temple-ar-oracle/index.js'
 
 const router = useRouter()
+// 籤詩字級由右上角控制，設定跨頁共用（見 utils/fontScale）
+const { scaleStyle } = useFontScale()
 
 // 沿用舊版（v17）的五個方向與說明文案
 /* arLabel 是傳給 AR 引擎的分類名稱。引擎內部的 CATEGORY_API_MAP 只認得它自己那份
@@ -246,19 +253,55 @@ function setBodyLock(on: boolean) {
   document.body.classList.toggle('ar-ritual-open', on)
 }
 
+/* 籤詩結果頁的 QR：掃了會開 /fortune/<sessionId>，
+   在手機上先推廟門、再顯示這一支籤。 */
+const shareUrl = ref('')
+const qrDataUrl = ref('')
+
+/* 離線模式時引擎會自己捏一個 offline-<timestamp> 的編號，後端查無此筆，
+   照樣產 QR 只會得到一個掃了永遠載不到的死連結，所以這種情況不給 QR。 */
+const canShare = ref(false)
+
+async function buildShareQr(id: string) {
+  canShare.value = Boolean(id) && !id.startsWith('offline-')
+  if (!canShare.value) return
+  shareUrl.value = fortuneShareUrl(id)
+  try {
+    qrDataUrl.value = await makeQrDataUrl(shareUrl.value, 320)
+  } catch {
+    qrDataUrl.value = '' // 產不出來就只顯示網址，不擋畫面
+  }
+}
+
+/* 解籤比過場慢得多（實測 ~21 秒），所以籤詩會先出，
+   等這個事件回來再把 AI 解籤填進畫面。 */
+const waitingInterpretation = ref(false)
+
+function onArInterpretation(event: Event) {
+  const detail = (event as CustomEvent<{ interpretation?: ArInterpretation; fortune?: ArFortune; offline?: boolean }>).detail
+  if (detail?.fortune) fortune.value = detail.fortune
+  if (detail?.interpretation) interpretation.value = detail.interpretation
+  isOffline.value = Boolean(detail?.offline)
+  waitingInterpretation.value = false
+}
+
 function onArComplete(event: Event) {
-  const detail = (event as CustomEvent<{ fortune?: ArFortune; interpretation?: ArInterpretation }>).detail
+  const detail = (event as CustomEvent<{ sessionId?: string; fortune?: ArFortune; interpretation?: ArInterpretation }>).detail
   fortune.value = detail?.fortune ?? null
   interpretation.value = detail?.interpretation ?? null
+  waitingInterpretation.value = !detail?.interpretation
   if (detail?.interpretation?.offline) isOffline.value = true
   setBodyLock(false)
   step.value = 5
+  void buildShareQr(detail?.sessionId ?? '')
 }
 
 function bindAr(el: TempleArOracleEl) {
   el.addEventListener('toast', onArToast)
   el.addEventListener('offline', onArOffline)
   el.addEventListener('sequence-complete', onArComplete)
+  // 解籤晚於過場才回來，補發的事件也要接
+  el.addEventListener('interpretation-ready', onArInterpretation)
 }
 
 function unbindAr() {
@@ -267,6 +310,7 @@ function unbindAr() {
   el.removeEventListener('toast', onArToast)
   el.removeEventListener('offline', onArOffline)
   el.removeEventListener('sequence-complete', onArComplete)
+  el.removeEventListener('interpretation-ready', onArInterpretation)
   try { el.destroy() } catch { /* 元件可能已卸載 */ }
 }
 
@@ -362,16 +406,19 @@ function restart() {
       <div class="cloud c3"></div>
     </div>
 
+    <!-- 籤詩字級：只在看籤的那一步出現，免得跟步驟列擠在同一個角落 -->
+    <FontScaleControl v-if="step === 5" />
+
     <header class="oracle-bar">
-      <button class="link-btn" type="button" @click="router.push('/celestial')">← 回首頁</button>
-      <ol class="steps">
+      <button class="link-btn" type="button" @click="router.push('/')">← 回首頁</button>
+      <ol v-if="step < 5" class="steps">
         <li v-for="(name, index) in STEPS" :key="name" :class="{ on: step === index + 1, done: step > index + 1 }">
           <i>{{ index + 1 }}</i><span>{{ name }}</span>
         </li>
       </ol>
     </header>
 
-    <main class="oracle-main">
+    <main class="oracle-main" :class="{ wide: step === 5 }">
       <!-- 等待動畫：香煙裊裊，取代轉圈圈 -->
       <div v-if="isBusy" class="waiting" role="status" aria-live="polite">
         <svg class="censer" viewBox="0 0 240 260">
@@ -473,6 +520,8 @@ function restart() {
         <p class="kicker">第 三 步</p>
         <h2>確認要向神明請示的內容</h2>
         <p class="lede">再看一次，確定沒問題就誠心送出。</p>
+        <!-- 掃碼把籤帶走 -->
+
         <dl class="summary">
           <div>
             <dt>所問方向</dt>
@@ -501,59 +550,71 @@ function restart() {
         <p class="lede">請在全螢幕畫面中完成合十、搖籤與擲筊。</p>
       </section>
 
-      <!-- 步驟五：籤詩與解籤 -->
-      <section v-else class="panel">
+      <!-- 步驟五：籤詩與解籤。
+           籤詩自己一欄（逐字落下），白話與解籤收進右欄的分頁——
+           解籤動輒好幾百字，全部貼成一長條沒有人會讀完。 -->
+      <section v-else class="panel result" :style="scaleStyle">
         <p class="kicker">第 五 步 · 神 明 回 應</p>
         <p v-if="isOffline" class="ar-notice offline">
           目前連不上伺服器，以下是離線的預設籤詩與解說；恢復連線後可重新求籤取得 AI 解籤。
         </p>
 
-        <div v-if="fortune" class="fortune">
-          <div class="fortune-head">
-            <span class="fortune-no">第 {{ fortune.no }} 籤</span>
-            <span v-if="fortune.ganzhi" class="fortune-ganzhi">{{ fortune.ganzhi }}</span>
-            <span v-if="fortune.grade" class="fortune-grade">{{ fortune.grade }}</span>
+        <div class="result-grid">
+          <!-- 左：這支籤本身 -->
+          <div v-if="fortune" class="fortune-paper">
+            <FortunePoem
+              variant="paper"
+              :poem="fortune.poem"
+              :number="fortune.no"
+              :ganzhi="fortune.ganzhi"
+              :level="fortune.grade"
+            />
           </div>
-          <p class="poem">{{ fortune.poem }}</p>
-          <p v-if="fortune.explain" class="fortune-text">{{ fortune.explain }}</p>
-          <p v-if="fortune.modern" class="fortune-text modern">{{ fortune.modern }}</p>
-        </div>
 
-        <div v-if="interpretation" class="reading">
-          <h3>解 籤</h3>
-          <p v-if="interpretation.overall_meaning">{{ interpretation.overall_meaning }}</p>
-          <p v-if="interpretation.relation_to_question" class="reading-q">{{ interpretation.relation_to_question }}</p>
-          <template v-if="interpretation.suggested_actions?.length">
-            <h4>可以這樣做</h4>
-            <ul>
-              <li v-for="(item, i) in interpretation.suggested_actions" :key="`a${i}`">{{ item }}</li>
-            </ul>
-          </template>
-          <template v-if="interpretation.warnings?.length">
-            <h4>要留意的地方</h4>
-            <ul class="warn">
-              <li v-for="(item, i) in interpretation.warnings" :key="`w${i}`">{{ item }}</li>
-            </ul>
-          </template>
-        </div>
+          <!-- 右：讀的部分 -->
+          <div class="result-side">
+            <FortuneReading
+              :translation="fortune?.explain"
+              :explanation="fortune?.modern"
+              :interpretation="interpretation"
+              :pending="waitingInterpretation"
+            />
 
-        <dl class="summary">
-          <div>
-            <dt>所問方向</dt>
-            <dd>{{ chosen?.emoji }} {{ chosen?.label }}</dd>
+            <div v-if="canShare" class="take-away">
+              <div class="qr-frame">
+                <img v-if="qrDataUrl" :src="qrDataUrl" alt="掃描以在手機上開啟這支籤" width="150" height="150" />
+                <div v-else class="qr-fallback">QR 產生中…</div>
+              </div>
+              <div class="take-away-text">
+                <h4>把 這 支 籤 帶 走</h4>
+                <p>用手機掃描，推開廟門就能收下這支籤，隨時回來看。</p>
+                <p v-if="shareUrl" class="share-url">{{ shareUrl }}</p>
+              </div>
+            </div>
+
+            <p v-else class="take-away-offline">
+              這次是離線籤詩，沒有留下線上紀錄，暫時無法用 QR 帶走；連線恢復後重新求籤即可。
+            </p>
+
+            <dl class="summary compact">
+              <div>
+                <dt>所問方向</dt>
+                <dd>{{ chosen?.emoji }} {{ chosen?.label }}</dd>
+              </div>
+              <div>
+                <dt>要問的事</dt>
+                <dd>
+                  {{ askedQuestion }}
+                  <span v-if="!hasTypedQuestion" class="dd-note">（未填寫，以所選方向請示）</span>
+                </dd>
+              </div>
+            </dl>
           </div>
-          <div>
-            <dt>要問的事</dt>
-            <dd>
-              {{ askedQuestion }}
-              <span v-if="!hasTypedQuestion" class="dd-note">（未填寫，以所選方向請示）</span>
-            </dd>
-          </div>
-        </dl>
+        </div>
 
         <div class="row">
           <button class="btn ghost" type="button" @click="restart">再問一題</button>
-          <button class="btn primary" type="button" @click="router.push('/celestial')">回 首 頁</button>
+          <button class="btn primary" type="button" @click="router.push('/')">回 首 頁</button>
         </div>
       </section>
 
@@ -895,6 +956,8 @@ body.ar-ritual-open { overflow: hidden; }
   max-width: 720px;
   margin: 0 auto;
 }
+/* 看籤那一步要放得下兩欄 */
+.oracle-main.wide { max-width: 1060px; }
 .panel {
   background: rgba(255, 253, 247, 0.82);
   border: 1px solid var(--gold-line);
@@ -1065,56 +1128,100 @@ body.ar-ritual-open { overflow: hidden; }
 }
 .ar-notice.offline { background: rgba(166, 58, 58, 0.1); border-color: rgba(166, 58, 58, 0.3); }
 
-/* ── 籤詩與解籤 ── */
-.fortune {
+/* ── 籤詩與解籤 ──
+   看籤這一步比前面幾步寬：左邊掛籤紙、右邊讀解籤，兩欄並排才不會變成
+   要一直往下捲的長條。 */
+.panel.result { max-width: none; }
+.result-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.86fr) minmax(0, 1.14fr);
+  gap: 28px;
+  align-items: start;
   margin-top: 18px;
-  padding: 18px 16px;
-  border-radius: 14px;
-  background: rgba(255, 252, 244, 0.75);
+}
+/* 籤紙：像掛起來的一張紙 */
+.fortune-paper {
+  position: relative;
+  border-radius: 16px;
   border: 1px solid var(--gold-line);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 240, 0.95), rgba(253, 246, 230, 0.9)),
+    rgba(255, 252, 244, 0.75);
+  box-shadow: 0 16px 34px rgba(120, 90, 50, 0.14);
+  overflow: hidden;
 }
-.fortune-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.fortune-no { font-size: 18px; font-weight: 700; color: var(--jiang-hong-deep); }
-.fortune-ganzhi { font-size: 14px; letter-spacing: 0.2em; color: var(--ink-soft); }
-.fortune-grade {
-  margin-left: auto;
-  font-size: 13px;
-  letter-spacing: 0.2em;
-  padding: 3px 12px;
-  border-radius: 999px;
-  background: rgba(212, 175, 55, 0.2);
-  color: #7a5410;
+/* 紙上的紅邊，籤紙的老樣子 */
+.fortune-paper::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 1px solid rgba(166, 58, 58, 0.22);
+  border-radius: 10px;
+  pointer-events: none;
 }
-.poem {
-  margin: 14px 0 0;
-  white-space: pre-line;
-  font-size: 17px;
-  line-height: 2.1;
-  letter-spacing: 0.1em;
-  text-align: center;
-  color: var(--jiang-hong-deep);
-}
-.fortune-text { margin: 14px 0 0; font-size: 14px; line-height: 1.95; color: var(--ink-soft); }
-.fortune-text.modern { color: rgba(91, 70, 53, 0.85); }
+.result-side { min-width: 0; }
 
-.reading { margin-top: 20px; }
-.reading h3 {
-  margin: 0 0 10px;
-  font-size: 15px;
-  letter-spacing: 0.28em;
+/* ── 把籤帶走（QR）──
+   原本這塊沒有任何樣式，QR 跟說明字就這樣裸貼在頁面上。 */
+.take-away {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px dashed var(--gold-line);
+  background: rgba(255, 252, 240, 0.7);
+}
+.qr-frame {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 118px;
+  height: 118px;
+  padding: 7px;
+  border-radius: 12px;
+  background: #fffdf6;
+  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.45), 0 8px 18px rgba(120, 90, 50, 0.12);
+}
+.qr-frame img { width: 100%; height: 100%; display: block; }
+.qr-fallback { font-size: 11.5px; letter-spacing: 0.1em; color: rgba(91, 70, 53, 0.55); text-align: center; }
+.take-away-text { min-width: 0; }
+.take-away-text h4 {
+  margin: 0 0 6px;
+  font-size: calc(13px * var(--fs, 1));
+  letter-spacing: 0.2em;
   color: var(--jiang-hong);
 }
-.reading h4 {
-  margin: 16px 0 6px;
-  font-size: 13.5px;
-  letter-spacing: 0.1em;
-  color: var(--ink);
+.take-away-text p {
+  margin: 0;
+  font-size: calc(13px * var(--fs, 1));
+  line-height: 1.9;
+  color: var(--ink-soft);
 }
-.reading p { margin: 0 0 10px; font-size: 14.5px; line-height: 1.95; color: var(--ink-soft); }
-.reading-q { padding-left: 12px; border-left: 2px solid var(--gold-line); }
-.reading ul { margin: 0; padding-left: 20px; }
-.reading li { font-size: 14px; line-height: 1.9; color: var(--ink-soft); }
-.reading ul.warn li { color: rgba(166, 58, 58, 0.9); }
+.share-url {
+  margin-top: 6px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px !important;
+  word-break: break-all;
+  color: rgba(91, 70, 53, 0.55) !important;
+}
+.take-away-offline {
+  margin: 22px 0 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(166, 58, 58, 0.07);
+  border: 1px solid rgba(166, 58, 58, 0.22);
+  font-size: calc(13px * var(--fs, 1));
+  line-height: 1.9;
+  color: var(--ink-soft);
+}
+
+/* 這一次問了什麼：收成小字附註，不跟籤詩搶注意力 */
+.summary.compact { margin-top: 18px; }
+.summary.compact > div { padding: 0.6rem 0.2rem; }
+.summary.compact dt { flex: 0 0 4.8em; font-size: calc(12.5px * var(--fs, 1)); }
+.summary.compact dd { font-size: calc(13.5px * var(--fs, 1)); color: var(--ink-soft); }
 
 .optional-note {
   display: block;
@@ -1323,6 +1430,18 @@ body.ar-ritual-open { overflow: hidden; }
     padding: 15px 24px;
   }
   .summary dd { font-size: 15px; }
+
+  /* 看籤：手機一欄，籤紙在上、解籤在下 */
+  .result-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+
+/* 平板寬度就已經放不下兩欄的籤紙，提早收成一欄 */
+@media (max-width: 900px) {
+  .result-grid { grid-template-columns: 1fr; gap: 20px; }
+  .take-away { gap: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

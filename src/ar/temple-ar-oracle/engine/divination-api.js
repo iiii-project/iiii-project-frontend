@@ -33,13 +33,23 @@ export function createDivinationApi(apiBase, options = {}) {
   const anonymousKey = 'temple-oracle-anonymous-user-id';
   const apiBaseUrl = apiBase || '/api/v1';
   const onOffline = typeof options.onOffline === 'function' ? options.onOffline : () => {};
-  const timeoutMs = options.timeoutMs || 8000;
+  /* 逾時要分級。實測解籤（AI 生成）在正式後端需要約 21 秒，
+     跟其他步驟共用 8 秒的話每次都會被 AbortController 中止，
+     然後被誤判成「連不上伺服器」而退進離線模式。 */
+  const timeoutMs = options.timeoutMs || 8000;           // 快速步驟：建立場次／祈禱／抽籤／擲筊
+  const interpretTimeoutMs = options.interpretTimeoutMs || 60000; // 解籤：留足 LLM 生成時間
 
   /* ── 離線備援狀態 ──
      一旦任何一支 API 連不上（斷網／逾時／5xx／CORS），就切進離線模式：
      整個儀式改由本地資料驅動繼續跑完，不讓使用者卡在中途。
      切換只發生一次，之後不再重試，避免每一步都等 8 秒逾時。 */
+  /* 離線狀態原本是單向鎖死的（設成 true 之後沒有任何地方會設回 false），
+     所以只要第一次請求剛好撞上後端重啟或短暫故障，整個頁面生命週期就永遠
+     走離線分支，後端恢復了也連不上。改成帶冷卻時間的「暫時離線」：
+     冷卻過了就讓下一次呼叫真的去試網路，成功就自動回到線上。 */
+  const OFFLINE_COOLDOWN_MS = 15000;
   let offline = false;
+  let offlineSince = 0;
   const local = {
     fortune: null,      // 本地抽到的籤
     shengStreak: 0,     // 連續聖筊次數
@@ -47,9 +57,25 @@ export function createDivinationApi(apiBase, options = {}) {
   };
 
   function goOffline(reason) {
+    offlineSince = Date.now();
     if (offline) return;
     offline = true;
     try { onOffline({ reason }); } catch (e) {}
+  }
+
+  function backOnline() {
+    if (!offline) return;
+    offline = false;
+    offlineSince = 0;
+    try { onOffline({ reason: 'recovered', online: true }); } catch (e) {}
+  }
+
+  /* 判斷這一次呼叫該不該走離線捷徑。
+     冷卻時間過了就回 false，讓呼叫端真的去打網路試一次。 */
+  function shouldSkipNetwork() {
+    if (!offline) return false;
+    if (Date.now() - offlineSince >= OFFLINE_COOLDOWN_MS) return false;
+    return true;
   }
 
   /* 抽籤袋：把 60 首洗成一袋，抽完整袋才重新洗。
@@ -136,10 +162,19 @@ export function createDivinationApi(apiBase, options = {}) {
 
   /* 加上逾時控制：原本沒有 AbortController，後端沒回應時會一直吊著，
      使用者會停在「正在請示…」不動。 */
-  async function request(path, options = {}){
+  /* 閘道層的暫時性錯誤要重試，不能一次失敗就永久離線。
+     後端是 gunicorn 2 workers × 4 threads，而解籤是同步呼叫 LLM、
+     一次佔住槽位約 21 秒，同時幾個人解籤就會把池子吃光，
+     於是連簡單查詢都排隊到 Cloudflare 回 502。這種 502/504 重試一次通常就過。
+     至於 API 文件寫明的 503 AI_SERVICE_UNAVAILABLE 是「AI 真的不可用」，
+     重試沒有意義，直接讓上層走離線解說。 */
+  const TRANSIENT_STATUS = new Set([408, 429, 500, 502, 504]);
+  const RETRY_DELAY_MS = 1200;
+
+  async function attempt(path, options, budget) {
     const accessToken = localStorage.getItem('ai-fortune-access-token');
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), budget);
     try {
       const response = await fetch(`${apiBaseUrl}${path}`, {
         ...options,
@@ -151,10 +186,30 @@ export function createDivinationApi(apiBase, options = {}) {
         }
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body?.error?.message || '後端暫時無法處理這次求籤');
+      if (!response.ok) {
+        const error = new Error(body?.error?.message || '後端暫時無法處理這次求籤');
+        error.status = response.status;
+        error.code = body?.error?.code;
+        error.retriable = TRANSIENT_STATUS.has(response.status);
+        throw error;
+      }
+      backOnline(); // 打通了就把離線狀態解除，後續步驟回到線上
       return body.data || body;
     } finally {
       clearTimeout(timer);
+    }
+  }
+
+  async function request(path, options = {}){
+    const budget = options.timeoutMs || timeoutMs;
+    try {
+      return await attempt(path, options, budget);
+    } catch (error) {
+      // 逾時（abort）與網路層失敗也算暫時性，一併重試一次
+      const transient = error.retriable || error.name === 'AbortError' || error.name === 'TypeError';
+      if (!transient) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      return attempt(path, options, budget);
     }
   }
 
@@ -192,7 +247,7 @@ export function createDivinationApi(apiBase, options = {}) {
     async create(question, category, interactionMode = 'motion', fortuneNumber = null) {
       lastQuestion = question;
       lastCategory = category;
-      if (offline) return { session_id: `offline-${Date.now()}`, share_token: null, offline: true };
+      if (shouldSkipNetwork()) return { session_id: `offline-${Date.now()}`, share_token: null, offline: true };
       try {
         return await create(question, category, interactionMode, fortuneNumber);
       } catch (error) {
@@ -202,7 +257,7 @@ export function createDivinationApi(apiBase, options = {}) {
     },
 
     async prayer(id) {
-      if (offline) return { status: 'praying', offline: true };
+      if (shouldSkipNetwork()) return { status: 'praying', offline: true };
       try {
         return await request(`/divinations/${id}/prayer-complete/`, { method: 'POST' });
       } catch (error) {
@@ -212,7 +267,7 @@ export function createDivinationApi(apiBase, options = {}) {
     },
 
     async draw(id) {
-      if (offline) return pickLocalFortune();
+      if (shouldSkipNetwork()) return pickLocalFortune();
       try {
         return mapFortune((await request(`/divinations/${id}/draw/`, { method: 'POST' })).fortune);
       } catch (error) {
@@ -222,7 +277,7 @@ export function createDivinationApi(apiBase, options = {}) {
     },
 
     async blocks(id) {
-      if (offline) return localBlocks();
+      if (shouldSkipNetwork()) return localBlocks();
       try {
         return await request(`/divinations/${id}/blocks/`, { method: 'POST' });
       } catch (error) {
@@ -232,7 +287,7 @@ export function createDivinationApi(apiBase, options = {}) {
     },
 
     async interpret(id) {
-      if (offline) {
+      if (shouldSkipNetwork()) {
         return {
           fortune: local.fortune || pickLocalFortune(),
           interpretation: localInterpretation(lastQuestion, lastCategory),
@@ -240,7 +295,8 @@ export function createDivinationApi(apiBase, options = {}) {
         };
       }
       try {
-        const session = await request(`/divinations/${id}/interpret/`, { method: 'POST' });
+        // 解籤走長逾時（實測 ~21 秒），不然每次都會被中止並誤判成離線
+        const session = await request(`/divinations/${id}/interpret/`, { method: 'POST', timeoutMs: interpretTimeoutMs });
         return { ...session, fortune: mapFortune(session.fortune) };
       } catch (error) {
         goOffline(error);

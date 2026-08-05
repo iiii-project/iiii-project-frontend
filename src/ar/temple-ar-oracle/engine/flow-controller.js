@@ -153,6 +153,45 @@ export function playInkTransition(els, onCovered){
 
 export function createFlowController({ els, state, api, gestureEngine, bwaScene, particleSystem, audioEngine, mobileShake, rootEl, emit }) {
 
+  /* 解籤（AI 生成）通常是整段流程裡最慢的一步。原本是「先等 interpret 回來，
+     才開始播領籤過場」，使用者會在定格畫面前面乾等。改成兩件事並行：
+     過場影片立刻開始播，interpret 在背景跑，等影片播到揭曉點時才會合。
+     若那時還沒回來，最多再多等 REVEAL_GRACE_MS，逾時就先顯示籤詩本文
+     （籤詩在擲筊前就已經抽出來了，只有 AI 解說會缺）。 */
+  const REVEAL_GRACE_MS = 2500;
+
+  function interpretInBackground() {
+    return api.interpret(state.sessionId)
+      .then((session) => {
+        state.currentFortune = session.fortune;
+        state.interpretation = session.interpretation;
+        /* 解籤實測要 ~21 秒，遠長於 5.1 秒的過場影片，所以揭曉不會等它。
+           這裡在它真的回來時再補發一次事件，讓畫面把解籤填進去。 */
+        emit('interpretation-ready', {
+          sessionId: state.sessionId,
+          fortune: state.currentFortune,
+          interpretation: state.interpretation,
+          offline: Boolean(session.offline),
+        });
+      })
+      .catch((error) => {
+        emit('toast', { message: error.message || 'AI 解籤暫時無法使用，先為你顯示籤詩內容' });
+      });
+  }
+
+  function finishAfter(pending) {
+    return async () => {
+      const grace = new Promise((resolve) => setTimeout(resolve, REVEAL_GRACE_MS));
+      // pending 理論上必有（只在聖筊分支呼叫），沒有時就純粹等寬限時間
+      await Promise.race([pending || grace, grace]);
+      emit('sequence-complete', {
+        sessionId: state.sessionId,
+        fortune: state.currentFortune,
+        interpretation: state.interpretation,
+      });
+    };
+  }
+
   /* 過場影片播放時，AR 這邊的 MediaPipe 推論、攝影機畫布重繪、
      粒子與 three.js 迴圈全都還在滿載跑，會跟影片解碼搶資源造成掉格。
      這裡在過場期間把它們停掉，結束再放回去。 */
@@ -206,9 +245,13 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
          renderer。這裡等它顯示出來後觸發一次 resize，讓畫布重新取得正確尺寸。 */
       requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
       els.bwaResultPanel.classList.add('hidden');
-      const isClickBwaMode = state.resolvedMode === 'manual' || isMobileDevice();
-      els.btnClickBwa.classList.toggle('hidden', !isClickBwaMode);
-      els.bwaHint.textContent = isClickBwaMode ? '請點擊擲筊，向神明請示此籤。' : '單手微握，捧起筊杯';
+      /* 手動模式改成「直接點筊杯」：不再另外給一顆擲筊按鈕，
+         筊杯容器打開 pointer-events，由 index.js 的 pointerdown 做命中判定。 */
+      const isClickBwaMode = state.resolvedMode === 'manual' || state.resolvedMode === 'motion' || isMobileDevice();
+      state.clickBwaMode = isClickBwaMode;
+      els.btnClickBwa.classList.add('hidden');
+      els.bwaThreeContainer.classList.toggle('tossable', isClickBwaMode);
+      els.bwaHint.textContent = isClickBwaMode ? '點擊筊杯，向神明請示此籤' : '單手微握，捧起筊杯';
       if (!isClickBwaMode) {
         resetBwaVisual();
         gestureEngine.resetBwaTracking();
@@ -287,7 +330,8 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
       const result = await api.blocks(state.sessionId);
       const sides = result.result === 'sheng' ? ['flat', 'domed'] : result.result === 'xiao' ? ['flat', 'flat'] : ['domed', 'domed'];
       const [coinA, coinB] = sides;
-      state.pendingBwaResult = { coinA, coinB, result };
+      /* 與點擊擲筊同樣的道理：聖筊一確定就先發解籤，讓落地動畫的時間去等 LLM */
+      state.pendingBwaResult = { coinA, coinB, result, pending: result.confirmed ? interpretInBackground() : null };
       bwaScene.toss(coinA, coinB,
         () => { playLandingSounds(coinA, coinB); if (navigator.vibrate) navigator.vibrate(20); },
         () => { setTimeout(() => { resolveBwaResult(); }, 250); }
@@ -304,8 +348,12 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     state.bwaTossing = true;
     els.btnClickBwa.disabled = true;
     els.bwaHint.textContent = '正在請示…';
+    els.bwaThreeContainer.classList.remove('tossable');
     try {
       const result = await api.blocks(state.sessionId);
+      /* 聖筊一確定就立刻發解籤請求，不等筊杯落地動畫與結果面板。
+         這幾秒本來是白等的，挪去跑 LLM 等於整段縮短同樣的時間。 */
+      const pending = result.confirmed ? interpretInBackground() : null;
       await playClickBwaAnimation(result);
       els.bwaResultPanel.classList.remove('hidden');
 
@@ -314,23 +362,15 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
         els.bwaResultTitle.textContent = '聖筊 · 神明允准';
         els.bwaResultDesc.textContent = '聖筊，神明允准解籤。';
         emit('bwa-result', { tier: 'sacred' });
-        try {
-          const session = await api.interpret(state.sessionId);
-          state.currentFortune = session.fortune;
-          state.interpretation = session.interpretation;
-        } catch (error) {
-          emit('toast', { message: error.message || 'AI 解籤暫時無法使用，先為你顯示籤詩內容' });
-        }
-        /* 手動（點擊）擲筊原本是直接跳到籤詩、連墨染都沒有。
-           改成與手勢路徑同一套：定格 1.2 秒 → 領籤過場影片 → 揭曉籤詩。 */
-        setTimeout(() => playOracleTransition(els, () => {
-          emit('sequence-complete', { fortune: state.currentFortune, interpretation: state.interpretation });
-        }, transitionLoadHooks), 1200);
+        /* 解籤與過場並行：不等 interpret 回來就先播影片，
+           影片播到揭曉點時才會合（見 finishAfter）。 */
+        setTimeout(() => playOracleTransition(els, finishAfter(pending), transitionLoadHooks), 1200);
       } else {
         if (result.result === 'sheng') {
           els.bwaResultTitle.textContent = `第 ${result.attempt_number} 次聖筊`;
           els.bwaResultDesc.textContent = `請再連續取得 ${result.remaining_attempts} 次聖筊。`;
-          els.bwaHint.textContent = '請再次點擊擲筊。';
+          els.bwaHint.textContent = '請再點一次筊杯。';
+          if (state.clickBwaMode) els.bwaThreeContainer.classList.add('tossable');
           emit('bwa-result', { tier: 'sheng-progress', attemptNumber: result.attempt_number, remainingAttempts: result.remaining_attempts });
         } else {
           els.bwaResultTitle.textContent = `${result.result_name} · 重新抽籤`;
@@ -345,11 +385,12 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     } finally {
       state.bwaTossing = false;
       els.btnClickBwa.disabled = false;
+    if (state.clickBwaMode && state.current === 'bwa') els.bwaThreeContainer.classList.add('tossable');
     }
   }
 
   async function resolveBwaResult(){
-    const { coinA, coinB, result } = state.pendingBwaResult || {coinA:'flat', coinB:'domed'};
+    const { coinA, coinB, result, pending } = state.pendingBwaResult || {coinA:'flat', coinB:'domed'};
     let type;
     if (coinA !== coinB) type='sheng'; else if (coinA==='flat') type='xiao'; else type='yin';
 
@@ -367,18 +408,9 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
       els.bwaResultTitle.textContent = '聖筊 · 神明允准';
       els.bwaResultDesc.textContent = '聖筊，神明允准解籤。';
       emit('bwa-result', { tier: 'sacred' });
-      // 結果「定格放大」停留 1.8 秒，讓使用者看清楚判定結果，再進入墨染過場
-      try {
-        const session = await api.interpret(state.sessionId);
-        state.currentFortune = session.fortune;
-        state.interpretation = session.interpretation;
-        // 結果定格 1.2 秒後接領籤過場（影片本身開頭就有醞釀，不需要等太久）
-        setTimeout(() => playOracleTransition(els, () => {
-          emit('sequence-complete', { fortune: state.currentFortune, interpretation: state.interpretation });
-        }, transitionLoadHooks), 1200);
-      } catch (error) {
-        emit('toast', { message: error.message || '無法取得 AI 解籤，請稍後重試' });
-      }
+      /* 解籤與過場並行，使用者不必在定格畫面前乾等 AI 回應。
+         pending 是擲筊結果剛回來時就發出的那一份請求（見 tossBwa）。 */
+      setTimeout(() => playOracleTransition(els, finishAfter(pending), transitionLoadHooks), 1200);
     } else if (result?.result === 'sheng'){
       els.bwaResultTitle.textContent = `第 ${result.attempt_number} 次聖筊`;
       els.bwaResultDesc.textContent = `請再連續取得 ${result.remaining_attempts} 次聖筊。`;
