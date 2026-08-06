@@ -27,3 +27,16 @@ declare module '@mediapipe/pose' {
     close(): void
   }
 }
+
+/* AR 引擎那份離線籤詩表是純 JS（原樣搬自舊版單頁），
+   查籤的離線備援會 import 它，這裡補上型別宣告。 */
+declare module '@/ar/temple-ar-oracle/engine/offline-fortunes.js' {
+  export const OFFLINE_FORTUNES: Array<{
+    no: number
+    ganzhi: string
+    grade: string
+    poem: string
+    explain: string
+    modern: string
+  }>
+}

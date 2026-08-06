@@ -2,6 +2,7 @@ import { apiClient } from './client'
 import type {
   BlockCast,
   Category,
+  Fortune,
   DivinationSession,
   FortuneSet,
   HistoryItem,
@@ -23,6 +24,14 @@ function unwrap<T>(response: T | ApiResponse<T>): T {
   return 'data' in Object(response) && 'success' in Object(response) ? (response as ApiResponse<T>).data : (response as T)
 }
 
+/* 查籤：依籤號取回籤詩本文。這支是公開端點，不需要場次、也不會留紀錄。 */
+export async function getFortuneByNumber(fortuneSetCode: string, number: number): Promise<Fortune> {
+  const { data } = await apiClient.get<ApiResponse<Fortune> | Fortune>(
+    `/fortune-sets/${fortuneSetCode}/fortunes/${number}/`
+  )
+  return unwrap(data)
+}
+
 export async function listFortuneSets(): Promise<FortuneSet[]> {
   const { data } = await apiClient.get<ApiResponse<ListResponse<FortuneSet>> | ListResponse<FortuneSet>>('/fortune-sets/')
   return unwrap(data).items
@@ -35,6 +44,9 @@ export async function createDivination(payload: {
   categories: Category[]
   interaction_mode: InteractionMode
   anonymous_user_id: string
+  /* 查籤用：直接指定籤號。後端收到就把這支籤釘在場次上、狀態直接是 confirmed，
+     所以不必再走祈求→抽籤→擲筊，可以立刻請 AI 解這支籤。 */
+  fortune_number?: number
 }): Promise<DivinationSession> {
   const { category, ...requestBody } = payload
   const { data } = await apiClient.post<ApiResponse<DivinationSession> | DivinationSession>('/divinations/', requestBody)

@@ -8,6 +8,13 @@ export default defineConfig(() => {
   return {
   // <temple-ar-oracle> 是原生 Web Component，要告訴 Vue 別把它當成未註冊的元件
   plugins: [vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'temple-ar-oracle' } } })],
+  build: {
+    /* 產出一份資產清單給 service worker 用（見 public/sw.js）。
+       離線要能用，SW 必須在「第一次上線瀏覽」就把 js/css 都存起來；
+       但檔名帶 hash，SW 沒辦法寫死，所以讓建置產出清單讓它去讀。
+       檔名刻意不用預設的 .vite/manifest.json——nginx 常常直接擋掉以點開頭的目錄。 */
+    manifest: 'asset-manifest.json'
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

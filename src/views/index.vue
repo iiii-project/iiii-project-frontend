@@ -489,14 +489,13 @@ onBeforeUnmount(() => {
       <p class="desc">合十靜心，於雲霧之間叩問神明。線上求籤、擲筊解惑，把廟埕的溫度帶到你身邊。</p>
       <div class="actions">
         <button class="btn btn-primary" type="button" :disabled="isAscending" @click="enterHall()">入 殿 求 籤</button>
-        <button class="btn btn-ghost" type="button" @click="go('/temple-oracle-v17?mode=lookup')">線 上 查 籤</button>
+        <button class="btn btn-ghost" type="button" @click="go('/lookup')">線 上 查 籤</button>
       </div>
       <div class="tutorial-link">
         <button class="link-btn" type="button" @click="openTutorial">
           <span class="play-dot" aria-hidden="true"></span>第一次來？看 90 秒求籤教學
         </button>
       </div>
-      <div class="scroll-hint"><i></i>向 下 探 訪</div>
     </main>
 
     <!-- 教學影片 -->
@@ -780,8 +779,7 @@ body.celestial-home-open {
 .is-ascending .celestial-eyebrow,
 .is-ascending .subtitle,
 .is-ascending .desc,
-.is-ascending .actions,
-.is-ascending .scroll-hint {
+.is-ascending .actions {
   animation: hero-out 0.4s ease-in forwards;
 }
 /* 先愈抖愈兇，0.46 秒被撞上時才炸成五截 */
@@ -1142,29 +1140,6 @@ body.celestial-home-open {
 }
 .tutorial-close:hover { background: rgba(122, 38, 38, 0.85); transform: scale(1.06); }
 
-.scroll-hint {
-  position: absolute;
-  bottom: 38px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11px;
-  letter-spacing: 0.42em;
-  text-indent: 0.42em;
-  color: rgba(91, 70, 53, 0.55);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  opacity: 0;
-  animation: reveal 1.4s 1.3s ease-out forwards;
-}
-.scroll-hint i {
-  width: 1px;
-  height: 44px;
-  background: linear-gradient(180deg, var(--gold-line), transparent);
-  animation: drop 2.4s ease-in-out infinite;
-}
-
 /* ===================== 動畫 ===================== */
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -1369,11 +1344,6 @@ body.celestial-home-open {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
-@keyframes drop {
-  0% { transform: scaleY(0); transform-origin: top; opacity: 0; }
-  40% { transform: scaleY(1); transform-origin: top; opacity: 1; }
-  100% { transform: scaleY(1); transform-origin: bottom; opacity: 0; }
-}
 
 /* 觸控裝置不要留下卡住的 hover 效果 */
 @media (hover: none) {
@@ -1424,9 +1394,6 @@ body.celestial-home-open {
   .tutorial-link { margin-top: 18px; }
   .link-btn { font-size: 12.5px; }
 
-  .scroll-hint { bottom: calc(18px + env(safe-area-inset-bottom)); }
-  .scroll-hint i { height: 30px; }
-
   /* 教學影片：留出上下安全距離，控制列才點得到 */
   .tutorial-overlay { padding: 3vh 4vw calc(3vh + env(safe-area-inset-bottom)); }
   .tutorial-box { border-radius: 14px; }
@@ -1459,14 +1426,13 @@ body.celestial-home-open {
   }
   .btn { width: auto; padding: 12px 28px; font-size: 13px; }
   .tutorial-link { margin-top: 12px; }
-  .scroll-hint { display: none; }
   .sovereign { transform: translate3d(-50%, -52%, 0); }
   .tutorial-video { max-height: 74vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .rays, .mist, .band, .flyer, .flyer .bob, .sway, .mote, .halo-glow,
-  .sovereign, .sovereign-float, .title .glyph, .scroll-hint i,
+  .sovereign, .sovereign-float, .title .glyph,
   .is-ascending, .title .shard, .glyph-face, .puff, .puff .churn,
   .fogbank, .swirl, .break-flash, .break-wave {
     animation: none !important;
@@ -1480,7 +1446,7 @@ body.celestial-home-open {
   .flyer.f4 { transform: translate3d(76vw, 0, 0); }
   .flyer.f5 { transform: translate3d(46vw, 0, 0); }
   .flyer.f6 { transform: translate3d(14vw, 0, 0); }
-  .celestial-eyebrow, .title, .subtitle, .desc, .actions, .scroll-hint {
+  .celestial-eyebrow, .title, .subtitle, .desc, .actions {
     opacity: 1;
     animation: none;
   }
