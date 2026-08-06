@@ -5,6 +5,7 @@ import type { Category } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
 import { useSpeechInput } from '@/utils/speech'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
+import AmuletButton from '@/components/AmuletButton.vue'
 import FontScaleControl from '@/components/FontScaleControl.vue'
 import FortunePoem from '@/components/FortunePoem.vue'
 import FortuneReading from '@/components/FortuneReading.vue'
@@ -569,6 +570,19 @@ function restart() {
             <p v-else class="take-away-offline">
               這次是離線籤詩，沒有留下線上紀錄，暫時無法用 QR 帶走；連線恢復後重新求籤即可。
             </p>
+
+            <!-- 平安符：符面依這一支籤而不同，可下載帶走 -->
+            <div v-if="fortune" class="amulet-row">
+              <AmuletButton
+                :data="{
+                  number: fortune.no,
+                  ganzhi: fortune.ganzhi,
+                  level: fortune.grade,
+                  poem: fortune.poem,
+                  note: fortune.modern || fortune.explain
+                }"
+              />
+            </div>
 
             <dl class="summary compact">
               <div>
@@ -1244,6 +1258,10 @@ body.ar-ritual-open { overflow: hidden; }
   line-height: 1.9;
   color: var(--ink-soft);
 }
+
+/* 平安符按鈕：跟 QR 同一個「帶走」的區塊，寬度給滿 */
+.amulet-row { margin-top: 16px; display: flex; }
+.amulet-row > * { flex: 1; }
 
 /* 這一次問了什麼：收成小字附註，不跟籤詩搶注意力 */
 .summary.compact { margin-top: 18px; }

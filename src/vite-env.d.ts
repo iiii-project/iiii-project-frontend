@@ -40,3 +40,19 @@ declare module '@/ar/temple-ar-oracle/engine/offline-fortunes.js' {
     modern: string
   }>
 }
+
+/* AR 引擎的流程控制器是純 JS。查籤頁只用到裡面的「領籤過場」，
+   沿用同一份實作（揭曉時機、影片載不到時退回墨染），所以補上這兩支的型別。 */
+declare module '@/ar/temple-ar-oracle/engine/flow-controller.js' {
+  interface TransitionEls {
+    transitionVideo: HTMLVideoElement
+    transitionOverlay: HTMLElement
+  }
+  export function preloadOracleTransition(els: TransitionEls): void
+  export function playOracleTransition(
+    els: TransitionEls,
+    onCovered?: () => void,
+    hooks?: { onStart?: () => void; onEnd?: () => void }
+  ): void
+  export function playInkTransition(els: TransitionEls, onCovered?: () => void): void
+}

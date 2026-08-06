@@ -12,6 +12,7 @@ import { toUserMessage } from '@/api/client'
 import { getDivination } from '@/api/divinationApi'
 import type { DivinationSession } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
+import AmuletButton from '../components/AmuletButton.vue'
 import FontScaleControl from '../components/FontScaleControl.vue'
 import FortunePoem from '../components/FortunePoem.vue'
 import FortuneReading from '../components/FortuneReading.vue'
@@ -102,7 +103,23 @@ onBeforeUnmount(() => {
         <p class="lede">正在向神明取回這支籤…</p>
       </template>
 
-      <button class="btn" type="button" @click="router.push('/')">回 首 頁 求 籤</button>
+      <div class="foot">
+        <!-- 平安符：符面依這一支籤而不同，可下載或長按存到相簿 -->
+        <AmuletButton
+          v-if="fortune"
+          class="foot-amulet"
+          ghost
+          label="平 安 符"
+          :data="{
+            number: fortune.number,
+            ganzhi: fortune.ganzhi,
+            level: fortune.fortune_level,
+            poem: fortune.poem,
+            note: fortune.translation
+          }"
+        />
+        <button class="btn" type="button" @click="router.push('/')">回 首 頁 求 籤</button>
+      </div>
     </main>
 
     <!-- 廟門：與首頁同一扇。推開才見籤 -->
@@ -227,12 +244,26 @@ body.fortune-share-open {
   color: var(--ink-soft);
 }
 
+/* 底部按鈕列：平安符與回首頁併排，一頁不捲動的前提下省高度 */
+.foot {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  max-width: 420px;
+  width: 100%;
+  margin: 12px auto 0;
+}
+.foot > * { flex: 1; min-width: 0; }
+.foot-amulet :deep(.amulet-trigger),
+.foot :deep(.amulet-trigger) { width: 100%; letter-spacing: 0.14em; text-indent: 0.14em; }
+
 .btn {
   flex: none;
   display: block;
   width: 100%;
   max-width: 320px;
-  margin: 12px auto 0;
+  margin: 0;
   padding: 14px 24px;
   border: 0;
   border-radius: 999px;

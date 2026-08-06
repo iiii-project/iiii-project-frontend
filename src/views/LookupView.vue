@@ -4,6 +4,7 @@
      第一步 籤號（或掃我們自己產的籤 QR）
      第二步 選方向
      第三步 說心事（可留白）→ 誠心送出
+     過場   龍銜籤（與求籤同一段動畫）
      結果   籤紙 + 籤書解釋 + AI 解籤 + 可帶走的 QR
 
    送出時建立場次並帶上 fortune_number：後端會把這支籤釘在場次上、狀態直接是
@@ -25,9 +26,11 @@ import { useFontScale } from '@/utils/fontScale'
 import { OFFLINE_MAX_NUMBER, offlineFortuneByNumber } from '@/utils/offlineFortunes'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
 import { useSpeechInput } from '@/utils/speech'
+import AmuletButton from '@/components/AmuletButton.vue'
 import FontScaleControl from '@/components/FontScaleControl.vue'
 import FortunePoem from '@/components/FortunePoem.vue'
 import FortuneReading from '@/components/FortuneReading.vue'
+import OracleTransition from '@/components/OracleTransition.vue'
 import QrScanner from '@/components/QrScanner.vue'
 
 const router = useRouter()
@@ -167,14 +170,17 @@ function goStep(next: number) {
 }
 
 // ── 結果 ──
+/* 領籤過場（龍銜籤）：跟求籤同一段動畫，在籤詩掀出來之前跑一次。 */
+const transitionEl = ref<InstanceType<typeof OracleTransition> | null>(null)
 const interpretation = ref<Interpretation | null>(null)
 const waitingInterpretation = ref(false)
 const aiNote = ref('')
 const shareUrl = ref('')
 const qrDataUrl = ref('')
 
-/* 送出：先建場次（快，拿到 session id 就有 QR），馬上把結果頁掀出來，
-   AI 解籤在背景跑，回來再補。使用者不必盯著轉圈圈等 20 秒。 */
+/* 送出：先建場次（快，拿到 session id 就有 QR），接著跑領籤過場，
+   AI 解籤在過場期間於背景跑——那 5 秒剛好拿來等它，揭曉時多半已經備好；
+   還沒回來也不擋，籤詩先出，解籤回來再補進分頁。 */
 async function submit() {
   const f = fortune.value
   const picked = category.value
@@ -185,7 +191,8 @@ async function submit() {
      AI 解籤與 QR 都要伺服器，這裡明白講一句，不要讓人以為壞了。 */
   if (isOffline.value) {
     aiNote.value = '目前沒有連線，以下是本地籤詩與籤書上的解釋。AI 解籤與可帶走的 QR 需要連上伺服器，恢復連線後再送出一次就有。'
-    step.value = 4
+    // 離線也要有過場：影片載不到時引擎會自動退成墨染，一樣有東西看
+    await revealWithTransition()
     return
   }
   isLoading.value = true
@@ -199,18 +206,27 @@ async function submit() {
       anonymous_user_id: '',
       fortune_number: f.number
     })
-    step.value = 4
+    /* QR 與 AI 解籤在過場開始前就發出去，讓那 5 秒的動畫時間拿去等它們，
+       揭曉的時候籤詩（多半連解籤）已經備好。 */
     void buildShareQr(session.session_id)
     void askAi(session.session_id)
+    await revealWithTransition()
   } catch (error) {
     /* 送出的這一刻才斷線：籤詩已經查到了，還是把結果頁給他，
        只是少了 AI 解籤與 QR。 */
     isOffline.value = true
     aiNote.value = `${toUserMessage(error)} 以下先為你顯示籤詩與籤書上的解釋。`
-    step.value = 4
+    await revealWithTransition()
   } finally {
     isLoading.value = false
   }
+}
+
+/* 跑完過場才把結果頁換上。過場元件在揭曉點（影片尾聲／墨染蓋滿）resolve，
+   所以畫面切換剛好落在動畫的那一格上，不會看到中間的空白。 */
+async function revealWithTransition() {
+  await transitionEl.value?.play()
+  step.value = 4
 }
 
 async function buildShareQr(sessionId: string) {
@@ -334,6 +350,9 @@ onBeforeUnmount(() => scannerEl.value?.stop())
   <div class="lookup-page" :style="scaleStyle">
     <div class="sky" aria-hidden="true"></div>
     <div class="godlight" aria-hidden="true"></div>
+
+    <!-- 領籤過場：送出之後、籤詩掀出來之前跑一次（與求籤同一段龍動畫） -->
+    <OracleTransition ref="transitionEl" />
 
     <!-- 字級：每一步都能調（籤詩以外的說明文字也一起放大），固定在右上角 -->
     <FontScaleControl />
@@ -544,6 +563,19 @@ onBeforeUnmount(() => scannerEl.value?.stop())
             </dd>
           </div>
         </dl>
+
+        <!-- 平安符：符面依這一支籤而不同（吉凶配色、印文、雲紋、八卦），可下載帶走 -->
+        <div class="row amulet-row">
+          <AmuletButton
+            :data="{
+              number: fortune.number,
+              ganzhi: fortune.ganzhi,
+              level: fortune.fortune_level,
+              poem: fortune.poem,
+              note: fortune.translation || fortune.general_meaning
+            }"
+          />
+        </div>
 
         <div class="row">
           <button class="btn ghost" type="button" @click="restart">查 別 支 籤</button>
@@ -989,6 +1021,9 @@ onBeforeUnmount(() => scannerEl.value?.stop())
 }
 
 .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+/* 平安符自己一列，寬度給滿，它是「帶走」這件事的主要動作 */
+.amulet-row { margin-top: 20px; }
+.amulet-row > * { flex: 1; }
 .btn {
   appearance: none;
   border: 0;
