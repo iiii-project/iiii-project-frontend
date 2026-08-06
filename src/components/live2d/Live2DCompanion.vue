@@ -47,6 +47,17 @@ const lastAIMessage = computed(() => {
 })
 const hasAIMessages = computed(() => chat.messages.some((m) => m.role === 'ai'))
 
+// aiState 內部值是英文狀態機代號，這裡轉成使用者看得懂、跟角色語氣搭的說法
+const STATE_LABELS: Record<string, string> = {
+  idle: '在旁邊陪你',
+  'thinking-speaking': '正在回應…',
+  interrupted: '被打斷了',
+  loading: '準備中…',
+  listening: '聽你說…',
+  waiting: '思考中…'
+}
+const stateLabel = computed(() => STATE_LABELS[aiState.aiState] ?? aiState.aiState)
+
 const inputValue = ref('')
 const isComposing = ref(false)
 
@@ -109,32 +120,35 @@ onBeforeUnmount(() => {
     <canvas id="canvas" ref="canvasRef" class="live2d-companion-canvas" :style="{ cursor: isDragging ? 'grabbing' : 'default' }" />
   </div>
 
-  <div class="live2d-input-subtitle">
-    <div v-if="hasAIMessages && lastAIMessage" class="live2d-input-subtitle__message">
-      {{ lastAIMessage }}
+  <div class="live2d-chat">
+    <div v-if="hasAIMessages && lastAIMessage" class="live2d-chat__bubble">
+      <span class="live2d-chat__bubble-tag">米粒</span>
+      <p class="live2d-chat__bubble-text">{{ lastAIMessage }}</p>
     </div>
 
-    <div class="live2d-input-subtitle__status">
-      <span class="live2d-input-subtitle__state">{{ aiState.aiState }}</span>
-      <div class="live2d-input-subtitle__actions">
-        <button type="button" class="live2d-icon-btn" title="麥克風" @click="handleMicToggle">
+    <div class="live2d-chat__status">
+      <span class="live2d-chat__state" :class="`is-${aiState.aiState}`">
+        <i class="live2d-chat__state-dot" aria-hidden="true"></i>{{ stateLabel }}
+      </span>
+      <div class="live2d-chat__actions">
+        <button type="button" class="live2d-chat__icon-btn" title="麥克風" @click="handleMicToggle">
           {{ micOn ? '🎤' : '🔇' }}
         </button>
-        <button type="button" class="live2d-icon-btn" title="打斷" @click="handleInterrupt">✋</button>
+        <button type="button" class="live2d-chat__icon-btn" title="打斷" @click="handleInterrupt">✋</button>
       </div>
     </div>
 
-    <div class="live2d-input-subtitle__input-row">
+    <div class="live2d-chat__input-row">
       <input
         v-model="inputValue"
-        class="live2d-input-subtitle__input"
-        placeholder="輸入您的訊息..."
+        class="live2d-chat__input"
+        placeholder="想問米粒什麼呢？"
         @input="handleInputChange"
         @keydown="handleKeyPress"
         @compositionstart="isComposing = true"
         @compositionend="isComposing = false"
       />
-      <button type="button" class="live2d-input-subtitle__send" title="送出" @click="handleSend">➤</button>
+      <button type="button" class="live2d-chat__send" title="送出" @click="handleSend">➤</button>
     </div>
   </div>
 </template>
@@ -152,83 +166,138 @@ onBeforeUnmount(() => {
   display: block;
 }
 
-.live2d-input-subtitle {
+/* ── 聊天面板：溫暖紙色調 + 圓角泡泡，跟解籤頁的籤紙/金線視覺呼應 ──
+   （這幾個顏色跟 OracleWizard.vue 的 --jiang-hong/--gold 系列同一組值——
+   這裡是 Teleport 到 body 的獨立元件，CSS 變數繼承不到，所以直接寫死。） */
+.live2d-chat {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
   z-index: 5;
-  background: rgba(24, 14, 10, 0.72);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  font-family: system-ui, sans-serif;
-  color: #f2e2b3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: 'Noto Serif TC', serif;
 }
 
-.live2d-input-subtitle__message {
-  padding: 8px 10px 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #f2e2b3;
-  max-height: 60px;
+.live2d-chat__bubble {
+  position: relative;
+  padding: 9px 12px 10px;
+  border-radius: 16px 16px 16px 6px;
+  background: linear-gradient(180deg, rgba(255, 253, 244, 0.96), rgba(253, 246, 230, 0.94));
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  box-shadow: 0 8px 18px rgba(120, 60, 40, 0.18);
+  max-height: 84px;
   overflow-y: auto;
 }
+.live2d-chat__bubble-tag {
+  display: inline-block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #a63a3a;
+  font-weight: 700;
+}
+.live2d-chat__bubble-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #3a2c22;
+}
 
-.live2d-input-subtitle__status {
+.live2d-chat__status {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
+  padding: 3px 4px;
 }
 
-.live2d-input-subtitle__actions {
+.live2d-chat__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #fff3d6;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.live2d-chat__state-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f2e2b3;
+  box-shadow: 0 0 0 0 rgba(242, 226, 179, 0.6);
+}
+.live2d-chat__state.is-listening .live2d-chat__state-dot,
+.live2d-chat__state.is-thinking-speaking .live2d-chat__state-dot,
+.live2d-chat__state.is-waiting .live2d-chat__state-dot {
+  background: #7ee787;
+  animation: live2d-state-breathe 1.4s ease-in-out infinite;
+}
+@keyframes live2d-state-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(126, 231, 135, 0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(126, 231, 135, 0); }
+}
+
+.live2d-chat__actions {
   display: flex;
-  gap: 6px;
+  gap: 5px;
 }
 
-.live2d-icon-btn {
-  border: none;
-  background: rgba(255, 255, 255, 0.08);
-  color: #f2e2b3;
-  border-radius: 6px;
-  width: 28px;
-  height: 28px;
-  font-size: 14px;
+.live2d-chat__icon-btn {
+  border: 1px solid rgba(255, 253, 244, 0.35);
+  background: rgba(255, 253, 244, 0.14);
+  color: #fff3d6;
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  line-height: 1;
   cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
-.live2d-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
+.live2d-chat__icon-btn:hover { background: rgba(255, 253, 244, 0.26); transform: translateY(-1px); }
+.live2d-chat__icon-btn:active { transform: scale(0.94); }
 
-.live2d-input-subtitle__input-row {
+.live2d-chat__input-row {
   display: flex;
   gap: 6px;
-  padding: 8px;
 }
 
-.live2d-input-subtitle__input {
+.live2d-chat__input {
   flex: 1;
   min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: #f2e2b3;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  background: rgba(255, 253, 244, 0.94);
+  color: #3a2c22;
   border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  font-family: inherit;
   outline: none;
+  box-shadow: inset 0 1px 2px rgba(120, 60, 40, 0.08);
 }
-.live2d-input-subtitle__input::placeholder {
-  color: rgba(242, 226, 179, 0.5);
+.live2d-chat__input::placeholder {
+  color: rgba(91, 70, 53, 0.55);
+}
+.live2d-chat__input:focus {
+  border-color: #d4af37;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.22);
 }
 
-.live2d-input-subtitle__send {
-  border: none;
-  background: #a63a3a;
+.live2d-chat__send {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 253, 240, 0.4);
+  background: radial-gradient(circle at 32% 28%, #f2e2b3, #a63a3a 78%);
   color: #fff5dd;
   border-radius: 999px;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
   cursor: pointer;
+  transition: transform 0.15s ease;
 }
+.live2d-chat__send:hover { transform: scale(1.06); }
+.live2d-chat__send:active { transform: scale(0.94); }
 </style>

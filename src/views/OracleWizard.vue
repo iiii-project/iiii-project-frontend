@@ -61,6 +61,21 @@ const interpretation = ref<ArInterpretation | null>(null)
 // 解籤結果頁的 Live2D 小夥伴，原本是 iframe 嵌入獨立的 live2d-frontend，現在角色渲染
 // 邏輯已經移植成原生 Vue 元件（Live2DCompanion），跟後端共用同一個 Django + Channels 服務。
 const showCompanion = computed(() => step.value >= 5)
+/* 小夥伴預設收起來，只露出一顆小按鈕；點過一次才真正掛載 Live2DCompanion（含 WS 連線、
+   Cubism 渲染），沒點開就完全不建立連線。之後開/合只是切換顯示，不重新連線、不掉聊天記錄。 */
+const companionOpened = ref(false)
+const companionVisible = ref(false)
+const hasGreetedCompanion = ref(false)
+
+function toggleCompanion() {
+  companionVisible.value = !companionVisible.value
+  if (!companionVisible.value) return
+  companionOpened.value = true
+  if (!hasGreetedCompanion.value) {
+    hasGreetedCompanion.value = true
+    greetCompanion()
+  }
+}
 
 const isBusy = computed(() => loadingLabel.value !== '')
 const chosen = computed(() => CATEGORIES.find((item) => item.value === category.value) ?? null)
@@ -181,10 +196,15 @@ function onArInterpretation(event: Event) {
   if (detail?.interpretation) interpretation.value = detail.interpretation
   isOffline.value = Boolean(detail?.offline)
   waitingInterpretation.value = false
+  /* 小夥伴可能在 AI 解籤還沒回來時就先被打開了（那時 greetCompanion 記住的
+     只有籤詩本文），解籤補到之後要再補記一次，不然角色答不出解籤內容。 */
+  if (hasGreetedCompanion.value) {
+    const context = buildSpokenNarration(fortune.value, interpretation.value)
+    if (context) sendWhenReady({ type: 'remember-context', text: context })
+  }
 }
 
-// 把籤詩解籤結果組成一段適合直接唸出來的文字，送給角色走 TTS——不經過角色自己的 LLM，
-// 確保念的內容跟畫面上顯示的解籤結果完全一致，不會被角色的人格「順便」改寫。
+// 把籤詩解籤結果組成一段文字，用來讓角色「知道」這次的籤詩內容（不是拿來念的）。
 function buildSpokenNarration(fortune: ArFortune | null, interpretation: ArInterpretation | null): string {
   const parts: string[] = []
   if (fortune) {
@@ -201,10 +221,16 @@ function buildSpokenNarration(fortune: ArFortune | null, interpretation: ArInter
   return parts.join(' ').trim()
 }
 
-function speakFortuneResult() {
-  const text = buildSpokenNarration(fortune.value, interpretation.value)
-  if (!text) return
-  sendWhenReady({ type: 'speak-text', text })
+/* 小夥伴第一次被打開時：只用嘴巴說一句招呼語（走 TTS），不會把整段籤詩念出來——
+   但籤詩內容仍靜靜寫進角色記憶（remember-context，不經 TTS、不進聊天記錄），
+   讓使用者接著問「這支籤是什麼意思」之類的問題時，角色答得出來。 */
+function greetCompanion() {
+  sendWhenReady({
+    type: 'speak-text',
+    text: '我是你的語音助手，可以用說話或是打字的方式和我對話，進一步詢問籤詩相關的內容。'
+  })
+  const context = buildSpokenNarration(fortune.value, interpretation.value)
+  if (context) sendWhenReady({ type: 'remember-context', text: context })
 }
 
 function onArComplete(event: Event) {
@@ -216,7 +242,6 @@ function onArComplete(event: Event) {
   setBodyLock(false)
   step.value = 5
   void buildShareQr(detail?.sessionId ?? '')
-  speakFortuneResult()
 }
 
 function bindAr(el: TempleArOracleEl) {
@@ -297,6 +322,11 @@ function restart() {
   category.value = null
   question.value = ''
   errorMessage.value = ''
+  /* 離開第五步時 showCompanion 會變 false，Live2DCompanion 隨之卸載（WS 斷線）；
+     這幾個旗標一起歸零，下次重新求籤到第五步才會是「按鈕收起、還沒打過招呼」的乾淨狀態。 */
+  companionOpened.value = false
+  companionVisible.value = false
+  hasGreetedCompanion.value = false
 }
 </script>
 
@@ -564,10 +594,22 @@ function restart() {
       </div>
     </Teleport>
 
-    <!-- 解籤結果的 Live2D 小夥伴：原生 Vue 元件，浮在畫面右下角 -->
+    <!-- 解籤結果的 Live2D 小夥伴：預設收成一顆小按鈕，點了才彈出來（含 WS 連線）。
+         按鈕本身在展開後仍留著當收合鈕，不會被面板蓋住。 -->
     <Teleport to="body">
-      <div v-if="showCompanion" class="live2d-companion">
-        <Live2DCompanion />
+      <button
+        v-if="showCompanion"
+        type="button"
+        class="live2d-fab"
+        :class="{ 'is-open': companionVisible }"
+        :aria-label="companionVisible ? '收起小夥伴' : '打開小夥伴聊聊'"
+        @click="toggleCompanion"
+      >
+        <span class="live2d-fab__icon">{{ companionVisible ? '✕' : '🔮' }}</span>
+        <span v-if="!companionVisible" class="live2d-fab__pulse" aria-hidden="true"></span>
+      </button>
+      <div v-if="showCompanion" class="live2d-companion" :class="{ 'is-open': companionVisible }">
+        <Live2DCompanion v-if="companionOpened" />
       </div>
     </Teleport>
   </div>
@@ -630,17 +672,73 @@ body.ar-ritual-open { overflow: hidden; }
 /* 解籤結果頁的 Live2D 小夥伴：固定在右下角，不擋到籤詩卡片，行動裝置縮小並降低高度避免蓋住整段文字 */
 .live2d-companion {
   position: fixed;
-  right: 0;
-  bottom: 0;
+  right: 16px;
+  bottom: calc(88px + env(safe-area-inset-bottom));
   z-index: 50;
   width: min(340px, 46vw);
   height: min(460px, 62vh);
+  transform-origin: bottom right;
+  transform: scale(0.82) translateY(14px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s ease;
+}
+.live2d-companion.is-open {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 @media (max-width: 640px) {
   .live2d-companion {
+    right: 12px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
     width: min(220px, 58vw);
     height: min(320px, 42vh);
   }
+}
+
+/* ── 小夥伴的呼叫鈕：一顆藏在右下角的圓鈕，點了才把角色跟聊天框叫出來 ── */
+.live2d-fab {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 55;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 175, 55, 0.55);
+  background: radial-gradient(circle at 32% 28%, #fff3d6, #d4af37 42%, #a63a3a 100%);
+  box-shadow: 0 10px 24px rgba(120, 60, 40, 0.32), inset 0 0 0 2px rgba(255, 253, 240, 0.35);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.live2d-fab:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 14px 28px rgba(120, 60, 40, 0.38); }
+.live2d-fab:active { transform: scale(0.96); }
+.live2d-fab.is-open {
+  background: radial-gradient(circle at 32% 28%, #fff9ec, #f2e2b3 45%, #7a2626 100%);
+}
+.live2d-fab__icon {
+  font-size: 24px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(58, 28, 15, 0.35));
+}
+.live2d-fab__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(212, 175, 55, 0.55);
+  animation: live2d-fab-pulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes live2d-fab-pulse {
+  0% { transform: scale(1); opacity: 0.65; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live2d-fab__pulse { animation: none; }
+  .live2d-companion { transition: none; }
 }
 </style>
 
