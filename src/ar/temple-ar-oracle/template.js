@@ -133,7 +133,7 @@ export function renderTemplate() {
       </div>
       <h2 class="gold-text text-xl-md font-normal tracking-05em mt-2">擲　筊　請　示</h2>
       <div class="hairline mt-4"></div>
-      <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">單手微握，捧起筊杯</p>
+      <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請伸出雙手，掌心合起捧住筊杯</p>
       <button id="btn-click-bwa" class="btn-line mt-4 hidden" type="button">擲　筊</button>
     </div>
 
