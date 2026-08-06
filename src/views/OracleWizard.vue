@@ -17,16 +17,22 @@ const router = useRouter()
 // 籤詩字級由右上角控制，設定跨頁共用（見 utils/fontScale）
 const { scaleStyle } = useFontScale()
 
+const healthyIcon = new URL('../assets/images/healthy.png', import.meta.url).href
+const homeIcon = new URL('../assets/images/home.png', import.meta.url).href
+const moneyIcon = new URL('../assets/images/money.png', import.meta.url).href
+const wellnessIcon = new URL('../assets/images/wellness.png', import.meta.url).href
+const godOfWealthIcon = new URL('../assets/images/god-of-wealth.png', import.meta.url).href
+
 // 沿用舊版（v17）的五個方向與說明文案
 /* arLabel 是傳給 AR 引擎的分類名稱。引擎內部的 CATEGORY_API_MAP 只認得它自己那份
    中文對照表，這裡的顯示名稱（身體健康／家庭平安…）不在表內，若直接傳過去會全部
    被歸成 other，所以另外標一組引擎看得懂的值。 */
-const CATEGORIES: { value: Category; label: string; emoji: string; hint: string; arLabel: string }[] = [
-  { value: 'health', label: '身體健康', emoji: '🌿', hint: '身體、看病、平安', arLabel: '健康平安' },
-  { value: 'family', label: '家庭平安', emoji: '🏠', hint: '家人、子女、和睦', arLabel: '家庭生活' },
-  { value: 'career', label: '工作錢財', emoji: '💰', hint: '工作、生意、財運', arLabel: '工作事業' },
-  { value: 'love', label: '感情姻緣', emoji: '💗', hint: '感情、對象、緣分', arLabel: '感情婚姻' },
-  { value: 'other', label: '其他心事', emoji: '🙏', hint: '任何想問的事', arLabel: '綜合運勢' }
+const CATEGORIES: { value: Category; label: string; icon: string; hint: string; arLabel: string }[] = [
+  { value: 'health', label: '身體健康', icon: healthyIcon, hint: '身體、看病、平安', arLabel: '健康平安' },
+  { value: 'family', label: '家庭平安', icon: homeIcon, hint: '家人、子女、和睦', arLabel: '家庭生活' },
+  { value: 'career', label: '工作錢財', icon: moneyIcon, hint: '工作、生意、財運', arLabel: '工作事業' },
+  { value: 'love', label: '感情姻緣', icon: wellnessIcon, hint: '感情、對象、緣分', arLabel: '感情婚姻' },
+  { value: 'other', label: '其他心事', icon: godOfWealthIcon, hint: '任何想問的事', arLabel: '綜合運勢' }
 ]
 
 const STEPS = ['選方向', '說心事', '確認送出']
@@ -419,7 +425,7 @@ function restart() {
             type="button"
             @click="chooseCategory(item.value)"
           >
-            <span class="choice-icon" aria-hidden="true">{{ item.emoji }}</span>
+            <img class="choice-icon" :src="item.icon" alt="" aria-hidden="true" />
             <span class="choice-text">
               <span class="choice-label">{{ item.label }}</span>
               <span class="choice-desc">{{ item.hint }}</span>
@@ -489,7 +495,7 @@ function restart() {
         <dl class="summary">
           <div>
             <dt>所問方向</dt>
-            <dd>{{ chosen?.emoji }} {{ chosen?.label }}</dd>
+            <dd><img class="chosen-icon" :src="chosen?.icon" alt="" /> {{ chosen?.label }}</dd>
           </div>
           <div>
             <dt>要問的事</dt>
@@ -563,7 +569,7 @@ function restart() {
             <dl class="summary compact">
               <div>
                 <dt>所問方向</dt>
-                <dd>{{ chosen?.emoji }} {{ chosen?.label }}</dd>
+                <dd><img class="chosen-icon" :src="chosen?.icon" alt="" /> {{ chosen?.label }}</dd>
               </div>
               <div>
                 <dt>要問的事</dt>
@@ -1019,7 +1025,7 @@ body.ar-ritual-open { overflow: hidden; }
   align-items: center;
   gap: 14px;
   width: 100%;
-  min-height: 74px;
+  min-height: 82px;
   padding: 0.9rem 1.1rem;
   border-radius: 16px;
   border: 1px solid var(--gold-line);
@@ -1030,7 +1036,7 @@ body.ar-ritual-open { overflow: hidden; }
   transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 .choice-row:hover { border-color: rgba(166, 58, 58, 0.45); }
-.choice-icon { flex: 0 0 auto; font-size: 27px; line-height: 1; }
+.choice-icon { flex: 0 0 auto; width: 46px; height: 46px; object-fit: contain; }
 .choice-text { flex: 1 1 auto; min-width: 0; }
 .choice-label { display: block; font-size: 19px; font-weight: 700; color: var(--ink); letter-spacing: 0.04em; }
 .choice-desc { display: block; margin-top: 3px; font-size: 14px; color: var(--ink-soft); letter-spacing: 0.02em; }
@@ -1271,6 +1277,7 @@ body.ar-ritual-open { overflow: hidden; }
 .summary dt { flex: 0 0 5.6em; font-size: 15px; color: var(--ink-soft); line-height: 1.8; }
 .summary dd { flex: 1; margin: 0; font-size: 17px; line-height: 1.8; color: var(--ink); word-break: break-word; }
 .summary dd.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--ink-soft); }
+.chosen-icon { width: 20px; height: 20px; object-fit: contain; vertical-align: -4px; margin-right: 2px; }
 
 /* ── 按鈕 ── */
 .row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 26px; }

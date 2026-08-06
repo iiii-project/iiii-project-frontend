@@ -33,13 +33,19 @@ import QrScanner from '@/components/QrScanner.vue'
 const router = useRouter()
 const { scaleStyle } = useFontScale()
 
+const healthyIcon = new URL('../assets/images/healthy.png', import.meta.url).href
+const homeIcon = new URL('../assets/images/home.png', import.meta.url).href
+const moneyIcon = new URL('../assets/images/money.png', import.meta.url).href
+const wellnessIcon = new URL('../assets/images/wellness.png', import.meta.url).href
+const godOfWealthIcon = new URL('../assets/images/god-of-wealth.png', import.meta.url).href
+
 // 與求籤流程同一組方向與說明，解籤才會落在同一個語彙裡
-const CATEGORIES: { value: Category; label: string; emoji: string; hint: string }[] = [
-  { value: 'health', label: '身體健康', emoji: '🌿', hint: '身體、看病、平安' },
-  { value: 'family', label: '家庭平安', emoji: '🏠', hint: '家人、子女、和睦' },
-  { value: 'career', label: '工作錢財', emoji: '💰', hint: '工作、生意、財運' },
-  { value: 'love', label: '感情姻緣', emoji: '💗', hint: '感情、對象、緣分' },
-  { value: 'other', label: '其他心事', emoji: '🙏', hint: '任何想問的事' }
+const CATEGORIES: { value: Category; label: string; icon: string; hint: string }[] = [
+  { value: 'health', label: '身體健康', icon: healthyIcon, hint: '身體、看病、平安' },
+  { value: 'family', label: '家庭平安', icon: homeIcon, hint: '家人、子女、和睦' },
+  { value: 'career', label: '工作錢財', icon: moneyIcon, hint: '工作、生意、財運' },
+  { value: 'love', label: '感情姻緣', icon: wellnessIcon, hint: '感情、對象、緣分' },
+  { value: 'other', label: '其他心事', icon: godOfWealthIcon, hint: '任何想問的事' }
 ]
 
 const STEPS = ['籤號', '選方向', '說心事']
@@ -401,7 +407,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
             type="button"
             @click="chooseCategory(item.value)"
           >
-            <span class="choice-icon" aria-hidden="true">{{ item.emoji }}</span>
+            <img class="choice-icon" :src="item.icon" alt="" aria-hidden="true" />
             <span class="choice-text">
               <span class="choice-label">{{ item.label }}</span>
               <span class="choice-desc">{{ item.hint }}</span>
@@ -461,7 +467,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
           </div>
           <div>
             <dt>所問方向</dt>
-            <dd>{{ chosen?.emoji }} {{ chosen?.label }}</dd>
+            <dd><img class="chosen-icon" :src="chosen?.icon" alt="" /> {{ chosen?.label }}</dd>
           </div>
         </dl>
 
@@ -724,7 +730,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
   align-items: center;
   gap: 14px;
   width: 100%;
-  min-height: 68px;
+  min-height: 78px;
   padding: 0.85rem 1rem;
   border: 1px solid var(--gold-line);
   border-radius: 16px;
@@ -738,7 +744,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
   border-color: var(--jiang-hong);
   background: rgba(166, 58, 58, 0.08);
 }
-.choice-icon { flex: 0 0 auto; font-size: 25px; line-height: 1; }
+.choice-icon { flex: 0 0 auto; width: 44px; height: 44px; object-fit: contain; }
 .choice-text { flex: 1; min-width: 0; }
 .choice-label {
   display: block;
@@ -874,6 +880,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
   word-break: break-word;
 }
 .dd-note { color: rgba(91, 70, 53, 0.55); font-size: calc(12.5px * var(--fs, 1)); }
+.chosen-icon { width: 18px; height: 18px; object-fit: contain; vertical-align: -3px; margin-right: 2px; }
 
 /* 結果 */
 .paper {
