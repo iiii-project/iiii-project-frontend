@@ -52,7 +52,6 @@ export function createDivinationApi(apiBase, options = {}) {
   let offlineSince = 0;
   const local = {
     fortune: null,      // 本地抽到的籤
-    shengStreak: 0,     // 連續聖筊次數
     attempts: 0,
   };
 
@@ -110,22 +109,15 @@ export function createDivinationApi(apiBase, options = {}) {
     return local.fortune;
   }
 
-  /* 擲筊：兩顆筊各自平／凸，機率與實體擲筊相同（聖 1/2、笑 1/4、陰 1/4） */
+  /* 擲筊：每次擲筊 100% 聖筊，跟後端 apps/divinations/services.py 的 cast_blocks 邏輯一致 */
   function localBlocks() {
-    const a = Math.random() < 0.5 ? 'flat' : 'domed';
-    const b = Math.random() < 0.5 ? 'flat' : 'domed';
-    const result = a !== b ? 'sheng' : (a === 'flat' ? 'xiao' : 'yin');
-    const resultName = result === 'sheng' ? '聖筊' : result === 'xiao' ? '笑筊' : '陰筊';
     local.attempts += 1;
-    local.shengStreak = result === 'sheng' ? local.shengStreak + 1 : 0;
-    // 離線時只要求一次聖筊即確認，避免在沒有後端的情況下反覆重抽
-    const confirmed = local.shengStreak >= 1;
     return {
-      result,
-      result_name: resultName,
-      confirmed,
+      result: 'sheng',
+      result_name: '聖筊',
+      confirmed: true,
       attempt_number: local.attempts,
-      remaining_attempts: confirmed ? 0 : 1,
+      remaining_attempts: 0,
       offline: true,
     };
   }
