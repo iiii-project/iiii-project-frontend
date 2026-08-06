@@ -265,16 +265,13 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
       const grace = new Promise((resolve) => setTimeout(resolve, REVEAL_GRACE_MS));
       // pending 理論上必有（只在聖筊分支呼叫），沒有時就純粹等寬限時間
       await Promise.race([pending || grace, grace]);
-<<<<<<< HEAD
       /* 聖筊分支（resolveBwaResult/castClickBwa）呼叫這裡之前都還維持
          bwaTossing=true，就是要撐到這一刻——在這之前手勢/點擊引擎都還可能
          判定成「可以再擲一次」，對同一個 session 重複送出 blocks/interpret。
          真正結束（要離開擲筊場景了）才在這裡解鎖。 */
-      state.bwaTossing = false;
-=======
       const left = MIN_TRANSITION_MS - (Date.now() - startedAt);
       if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
->>>>>>> 6650bde (feat: Oracle Search)
+      state.bwaTossing = false;
       emit('sequence-complete', {
         sessionId: state.sessionId,
         fortune: state.currentFortune,
