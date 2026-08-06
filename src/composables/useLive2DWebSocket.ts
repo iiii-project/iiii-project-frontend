@@ -25,7 +25,6 @@ interface UseLive2DWebSocketOptions {
     sliceLength: number
     displayText?: any
     expressions?: any
-    forwarded?: boolean
   }) => void
   startMic: () => Promise<void>
   stopMic: () => void
@@ -97,8 +96,7 @@ export function useLive2DWebSocket(options: UseLive2DWebSocketOptions) {
             volumes: message.volumes || [],
             sliceLength: message.slice_length || 0,
             displayText: message.display_text || null,
-            expressions: message.actions?.expressions || null,
-            forwarded: message.forwarded || false
+            expressions: message.actions?.expressions || null
           })
         }
         break

@@ -13,7 +13,6 @@ interface AudioTaskOptions {
   sliceLength: number
   displayText?: DisplayText | null
   expressions?: string[] | number[] | null
-  forwarded?: boolean
 }
 
 export function useAudioTask() {
@@ -32,15 +31,12 @@ export function useAudioTask() {
         return
       }
 
-      const { audioBase64, displayText, expressions, forwarded } = options
+      const { audioBase64, displayText, expressions } = options
 
       if (displayText) {
         chat.appendResponse(displayText.text)
         chat.appendAIMessage(displayText.text, displayText.name, displayText.avatar)
         if (audioBase64) chat.setSubtitleText(displayText.text)
-        if (!forwarded) {
-          wsService.sendMessage({ type: 'audio-play-start', display_text: displayText, forwarded: true })
-        }
       }
 
       if (!audioBase64) {

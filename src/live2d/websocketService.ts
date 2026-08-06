@@ -69,7 +69,6 @@ export interface MessageEvent {
   configs?: ConfigFile[]
   files?: string[]
   message?: string
-  forwarded?: boolean
 }
 
 export type WsState = 'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED'
