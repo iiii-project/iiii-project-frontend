@@ -199,16 +199,20 @@ function onArInterpretation(event: Event) {
   /* 小夥伴可能在 AI 解籤還沒回來時就先被打開了（那時 greetCompanion 記住的
      只有籤詩本文），解籤補到之後要再補記一次，不然角色答不出解籤內容。 */
   if (hasGreetedCompanion.value) {
-    const context = buildSpokenNarration(fortune.value, interpretation.value)
+    const context = buildFortuneContext(fortune.value, interpretation.value)
     if (context) sendWhenReady({ type: 'remember-context', text: context })
   }
 }
 
-// 把籤詩解籤結果組成一段文字，用來讓角色「知道」這次的籤詩內容（不是拿來念的）。
-function buildSpokenNarration(fortune: ArFortune | null, interpretation: ArInterpretation | null): string {
+/* 把「使用者問了什麼」+「抽到的籤跟解籤結果」組成一段文字，讓角色靜靜記住（不是拿來念的）。
+   兩件事都要放進去，缺一不可：只放解籤結果，角色答得出籤詩意思，但答不出「你剛才問的
+   是什麼」；只放問題，角色答得出方向，但答不出籤詩本身的內容。之後每一輪追問都是接著
+   這個當下的籤詩+問題延續，不是每次都當成全新、無關的對話重新開始。 */
+function buildFortuneContext(fortune: ArFortune | null, interpretation: ArInterpretation | null): string {
   const parts: string[] = []
+  parts.push(`使用者剛才求籤時問的是：「${askedQuestion.value}」。`)
   if (fortune) {
-    parts.push(`第 ${fortune.no} 籤${fortune.grade ? `，${fortune.grade}` : ''}。`)
+    parts.push(`抽到第 ${fortune.no} 籤${fortune.grade ? `，${fortune.grade}` : ''}。`)
   }
   if (interpretation?.overall_meaning) parts.push(interpretation.overall_meaning)
   if (interpretation?.relation_to_question) parts.push(interpretation.relation_to_question)
@@ -229,7 +233,7 @@ function greetCompanion() {
     type: 'speak-text',
     text: '我是你的語音助手，可以用說話或是打字的方式和我對話，進一步詢問籤詩相關的內容。'
   })
-  const context = buildSpokenNarration(fortune.value, interpretation.value)
+  const context = buildFortuneContext(fortune.value, interpretation.value)
   if (context) sendWhenReady({ type: 'remember-context', text: context })
 }
 
