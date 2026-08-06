@@ -1259,9 +1259,8 @@ body.ar-ritual-open { overflow: hidden; }
   color: var(--ink-soft);
 }
 
-/* 平安符按鈕：跟 QR 同一個「帶走」的區塊，寬度給滿 */
-.amulet-row { margin-top: 16px; display: flex; }
-.amulet-row > * { flex: 1; }
+/* 平安符按鈕：跟 QR 同一個「帶走」的區塊，置中、不拉滿 */
+.amulet-row { margin-top: 14px; display: flex; justify-content: center; }
 
 /* 這一次問了什麼：收成小字附註，不跟籤詩搶注意力 */
 .summary.compact { margin-top: 18px; }

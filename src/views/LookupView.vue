@@ -1021,9 +1021,8 @@ onBeforeUnmount(() => scannerEl.value?.stop())
 }
 
 .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
-/* 平安符自己一列，寬度給滿，它是「帶走」這件事的主要動作 */
-.amulet-row { margin-top: 20px; }
-.amulet-row > * { flex: 1; }
+/* 平安符自己一列，置中、不拉滿——它是附加的紀念品，不是主要動作 */
+.amulet-row { margin-top: 18px; justify-content: center; }
 .btn {
   appearance: none;
   border: 0;

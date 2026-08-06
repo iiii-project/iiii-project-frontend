@@ -275,33 +275,11 @@ function wrapText(
   return cy
 }
 
-// 品牌 logo（畫在符頂）。載入是非同步的，沒載到就用燕尾脊備援。
-const logoUrl = new URL('../assets/images/logo.png', import.meta.url).href
-let logoImage: HTMLImageElement | null = null
-let logoPromise: Promise<HTMLImageElement | null> | null = null
-
-function loadLogo(): Promise<HTMLImageElement | null> {
-  if (logoImage) return Promise.resolve(logoImage)
-  if (!logoPromise) {
-    logoPromise = new Promise((resolve) => {
-      const image = new Image()
-      image.onload = () => {
-        logoImage = image
-        resolve(image)
-      }
-      image.onerror = () => resolve(null)
-      image.src = logoUrl
-    })
-  }
-  return logoPromise
-}
-
 /** 畫出平安符，回傳 PNG 的 data URL */
 export async function renderAmulet(data: AmuletData): Promise<string> {
   const tier = tierOf(data.level)
   const theme = THEMES[tier]
   const rand = seedFrom(data.number)
-  const logo = await loadLogo()
 
   const canvas = document.createElement('canvas')
   canvas.width = WIDTH
@@ -338,61 +316,77 @@ export async function renderAmulet(data: AmuletData): Promise<string> {
   ctx.strokeRect(38, 38, 524, 824)
   ctx.globalAlpha = 1
 
-  // 符頂：品牌 logo，載不到就畫燕尾脊
-  if (logo) {
-    const logoW = 176
-    const logoH = logoW * (logo.naturalHeight / logo.naturalWidth)
-    ctx.drawImage(logo, WIDTH / 2 - logoW / 2, 14, logoW, logoH)
-  } else {
-    drawSwallowtailRoof(ctx, WIDTH / 2, 96, 380, theme.gold, 0.8)
-  }
+  /* 以下由上往下依序排版（不是寫死座標）：
+     籤詩可能 2～6 句、白話可能 1～4 行，寫死 y 會在句子少的時候留一個大洞。 */
+  let y = 0
+
+  /* 符頂：燕尾脊剪影 + 金色字樣。
+     原本畫的是品牌 logo PNG，但那張圖是為亮底設計的（自帶暗紅色字樣），
+     疊在深色符面上會變成一團看不清的髒污，所以改成自己畫。 */
+  drawSwallowtailRoof(ctx, WIDTH / 2, 108, 360, theme.gold, 0.85)
+  ctx.textAlign = 'center'
+  ctx.fillStyle = theme.gold
+  ctx.font = 'bold 30px "Noto Serif TC", serif'
+  ctx.fillText('籤 好 運', WIDTH / 2, 156)
+  y = 200
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
+  // logo 裡已經有「籤好運」，標題就不再重複一次，避免兩層字疊在一起
   ctx.fillStyle = '#f2e2b3'
-  ctx.font = '26px "Noto Serif TC", serif'
-  ctx.fillText('籤 好 運 · 數 位 平 安 符', WIDTH / 2, 206)
-  ctx.font = '13px "Noto Serif TC", serif'
+  ctx.font = '24px "Noto Serif TC", serif'
+  ctx.fillText('數 位 平 安 符', WIDTH / 2, y)
+  y += 24
+  ctx.font = '12.5px "Noto Serif TC", serif'
   ctx.fillStyle = 'rgba(242,226,179,0.7)'
-  ctx.fillText('TAIWAN TEMPLE ORACLE · 六十甲子籤', WIDTH / 2, 230)
+  ctx.fillText('TAIWAN TEMPLE ORACLE · 六十甲子籤', WIDTH / 2, y)
 
   // 籤號圓章
+  const circleR = 74
+  const circleY = y + 34 + circleR
   ctx.beginPath()
-  ctx.arc(WIDTH / 2, 322, 78, 0, Math.PI * 2)
+  ctx.arc(WIDTH / 2, circleY, circleR, 0, Math.PI * 2)
   ctx.strokeStyle = theme.gold
   ctx.lineWidth = 3
   ctx.stroke()
-  ctx.font = 'bold 34px "Noto Serif TC", serif'
+  ctx.font = 'bold 32px "Noto Serif TC", serif'
   ctx.fillStyle = '#f2e2b3'
-  ctx.fillText(`第 ${data.number} 籤`, WIDTH / 2, 314)
-  ctx.font = '19px "Noto Serif TC", serif'
   const subtitle = [data.ganzhi, data.level].filter(Boolean).join(' · ')
-  if (subtitle) ctx.fillText(subtitle, WIDTH / 2, 348)
+  ctx.fillText(`第 ${data.number} 籤`, WIDTH / 2, circleY + (subtitle ? -4 : 11))
+  if (subtitle) {
+    ctx.font = '18px "Noto Serif TC", serif'
+    ctx.fillText(subtitle, WIDTH / 2, circleY + 28)
+  }
+  y = circleY + circleR + 48
 
-  // 籤詩本文：一句一行（來源可能是整行用逗號隔開，交給 splitPoem 斷句）
-  const lines = splitPoem(data.poem)
-  ctx.font = '18px "Noto Serif TC", serif'
+  // 籤詩本文：一句一行（來源可能整行用逗號隔開，交給 splitPoem 斷句）
+  const lines = splitPoem(data.poem).slice(0, 6)
+  ctx.font = '19px "Noto Serif TC", serif'
   ctx.fillStyle = '#f2e2b3'
-  lines.slice(0, 6).forEach((line, index) => {
-    ctx.fillText(line, WIDTH / 2, 430 + index * 38)
+  lines.forEach((line) => {
+    ctx.fillText(line, WIDTH / 2, y)
+    y += 36
   })
 
   // 白話小語
   if (data.note) {
+    y += 16
     ctx.font = '14px "Noto Serif TC", serif'
     ctx.fillStyle = 'rgba(242,226,179,0.85)'
-    wrapText(ctx, data.note.trim(), WIDTH / 2, 620, 440, 24, 4)
+    y = wrapText(ctx, data.note.trim(), WIDTH / 2, y, 430, 24, 4) + 10
   }
 
-  // 八卦（轉向依籤號）與硃砂印（印文依吉凶 + 籤號選字）
-  drawBagua(ctx, WIDTH / 2, 726, 46, theme.gold, 0.6, rand() * Math.PI)
+  /* 八卦與硃砂印：擺在剩下的空間中央，但不要壓到頁腳（頁腳固定在 826/852），
+     所以給一個上下界。 */
+  const baguaY = Math.min(Math.max(y + 74, 686), 752)
+  drawBagua(ctx, WIDTH / 2, baguaY, 44, theme.gold, 0.6, rand() * Math.PI)
   const sealText = theme.seals[Math.floor(rand() * theme.seals.length)] ?? theme.seals[0]
-  drawSeal(ctx, 470, 782, 86, sealText, rand)
+  drawSeal(ctx, 448, baguaY + 4, 80, sealText, rand)
 
   ctx.font = '13px "Noto Serif TC", serif'
   ctx.fillStyle = 'rgba(242,226,179,0.55)'
-  ctx.fillText(`祈福日期：${formatRocDate(data.date ?? new Date())}`, WIDTH / 2, 836)
-  ctx.fillText('僅為互動祈福小語，非命理定論，願你事事順心', WIDTH / 2, 860)
+  ctx.fillText(`祈福日期：${formatRocDate(data.date ?? new Date())}`, WIDTH / 2, 826)
+  ctx.fillText('僅為互動祈福小語，非命理定論，願你事事順心', WIDTH / 2, 852)
 
   return canvas.toDataURL('image/png')
 }

@@ -27,6 +27,11 @@ const session = ref<DivinationSession | null>(null)
 const loadError = ref('')
 const isOpened = ref(false)
 
+/* 手機是「一頁不捲動」的版面，籤紙固定佔掉 220–330px，剩下給解籤的空間就很擠
+   （實測 375×812 只剩 378px，字級開大更少）。所以籤紙可以收起來：
+   收起時只留一條籤號列，整個下半部都讓給解籤，仍然維持一頁不捲。 */
+const paperCollapsed = ref(false)
+
 const fortune = computed(() => session.value?.fortune ?? null)
 const interpretation = computed(() => session.value?.interpretation ?? null)
 
@@ -46,6 +51,10 @@ async function load() {
 
 function onGateOpened() {
   isOpened.value = true
+}
+
+function togglePaper() {
+  paperCollapsed.value = !paperCollapsed.value
 }
 
 onMounted(() => {
@@ -74,6 +83,7 @@ onBeforeUnmount(() => {
 
       <template v-if="fortune">
         <FortunePoem
+          v-show="!paperCollapsed"
           class="paper"
           :hold="!isOpened"
           :poem="fortune.poem"
@@ -82,6 +92,16 @@ onBeforeUnmount(() => {
           :level="fortune.fortune_level"
           :title="fortune.title"
         />
+
+        <!-- 收起／展開籤紙：解籤讀不夠時把籤紙收成一條，空間全給文字 -->
+        <button class="paper-toggle" type="button" :aria-expanded="!paperCollapsed" @click="togglePaper">
+          <template v-if="paperCollapsed">
+            <span class="mini-no">第 {{ fortune.number }} 籤</span>
+            <span v-if="fortune.fortune_level" class="mini-level">{{ fortune.fortune_level }}</span>
+            <span class="toggle-hint">展 開 籤 紙 ▼</span>
+          </template>
+          <span v-else class="toggle-hint">收 起 籤 紙 ▲</span>
+        </button>
 
         <!-- 白話／解籤：分頁，一次讀一段；只有這一塊會在框裡捲動 -->
         <FortuneReading
@@ -211,6 +231,50 @@ body.fortune-share-open {
   box-shadow: 0 14px 34px rgba(120, 90, 50, 0.16);
 }
 
+/* 收起／展開籤紙的那一條。展開時只佔 30px，收起時變成籤號列 */
+.paper-toggle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  appearance: none;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  background: none;
+  font-family: inherit;
+  color: rgba(91, 70, 53, 0.6);
+}
+.paper-toggle[aria-expanded='false'] {
+  background: rgba(255, 253, 246, 0.9);
+  box-shadow: inset 0 0 0 1px var(--gold-line);
+  min-height: 44px;
+}
+.mini-no {
+  font-size: calc(15px * var(--fs, 1));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--jiang-hong-deep);
+}
+.mini-level {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: calc(11.5px * var(--fs, 1));
+  letter-spacing: 0.12em;
+  color: #fdf5e2;
+  background: linear-gradient(150deg, var(--jiang-hong), var(--jiang-hong-deep));
+}
+.toggle-hint {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
+}
+
 /* 解籤區：吃掉剩下的高度，內容自己在框裡捲，整頁不動 */
 .reading-block {
   flex: 1 1 auto;
@@ -254,15 +318,13 @@ body.fortune-share-open {
   width: 100%;
   margin: 12px auto 0;
 }
-.foot > * { flex: 1; min-width: 0; }
+.foot > * { flex: 1 1 0; min-width: 0; }
 .foot-amulet :deep(.amulet-trigger),
 .foot :deep(.amulet-trigger) { width: 100%; letter-spacing: 0.14em; text-indent: 0.14em; }
 
 .btn {
-  flex: none;
   display: block;
   width: 100%;
-  max-width: 320px;
   margin: 0;
   padding: 14px 24px;
   border: 0;
@@ -287,7 +349,9 @@ body.fortune-share-open {
     padding: calc(34px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom));
   }
   .reading-block :deep(.pane) { overflow: visible; }
-  .btn { margin-top: 26px; }
+  /* 桌機沒有一頁不捲動的限制，籤紙不必收起 */
+  .paper-toggle { display: none; }
+  .foot { margin-top: 26px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

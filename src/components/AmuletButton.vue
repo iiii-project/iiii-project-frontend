@@ -41,8 +41,12 @@ function close() {
 
 <template>
   <button class="amulet-trigger" :class="{ ghost }" type="button" @click="generate">
-    <span class="amulet-glyph" aria-hidden="true">🧿</span>
-    {{ label ?? '生成專屬平安符' }}
+    <!-- 小硃印記號：比 emoji 收斂，也跟站上的印章語彙一致 -->
+    <svg class="amulet-mark" viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="1.6" y="1.6" width="12.8" height="12.8" rx="1.6" />
+      <path d="M8 4.4v7.2M5.2 7.2h5.6" />
+    </svg>
+    {{ label ?? '求 平 安 符' }}
   </button>
 
   <Teleport to="body">
@@ -82,26 +86,36 @@ function close() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 13px 22px;
+  gap: 7px;
+  width: auto;
+  min-height: 40px;
+  padding: 9px 18px;
   border-radius: 999px;
   font-family: inherit;
-  font-size: 13.5px;
-  letter-spacing: 0.18em;
-  text-indent: 0.18em;
-  color: #f2e2b3;
-  background: linear-gradient(150deg, #b8863b, #8a5a1f);
-  box-shadow: 0 12px 26px rgba(122, 80, 20, 0.24);
-  transition: transform 0.2s ease;
-}
-.amulet-trigger.ghost {
+  font-size: 12.5px;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
   color: #7a5410;
-  background: rgba(255, 255, 255, 0.7);
-  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.55);
+  background: rgba(255, 253, 246, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.6);
+  transition: transform 0.2s ease, background 0.2s ease;
 }
-.amulet-trigger:hover { transform: translateY(-1px); }
-.amulet-glyph { font-size: 15px; text-indent: 0; }
+.amulet-trigger:hover { background: rgba(212, 175, 55, 0.16); transform: translateY(-1px); }
+/* ghost 是給「已經有一排主要按鈕」的地方用的，更淡一階 */
+.amulet-trigger.ghost {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.45);
+}
+.amulet-mark {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  text-indent: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  opacity: 0.75;
+}
 
 /* ── 預覽彈窗 ── */
 .amulet-modal {
