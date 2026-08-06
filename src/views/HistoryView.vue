@@ -11,6 +11,7 @@ const records = ref<HistoryItem[]>([])
 const selected = ref<HistoryItem | null>(null)
 const isLoading = ref(false)
 const errorMessage = ref('')
+const deletingId = ref<string | null>(null)
 
 onMounted(async () => {
   await auth.restore()
@@ -31,12 +32,16 @@ async function loadHistory() {
 }
 
 async function removeItem(sessionId: string) {
+  if (deletingId.value) return
+  deletingId.value = sessionId
   try {
     await deleteHistoryItem(sessionId)
     records.value = records.value.filter((record) => record.session_id !== sessionId)
     selected.value = records.value[0] || null
   } catch (error) {
     errorMessage.value = toUserMessage(error)
+  } finally {
+    deletingId.value = null
   }
 }
 
@@ -73,7 +78,7 @@ function formatDate(value?: string) {
         <p v-if="isLoading" class="notice">載入紀錄中…</p><p v-else-if="errorMessage" class="error">{{ errorMessage }}</p>
         <section v-else-if="records.length" class="history-layout">
           <div class="record-list"><button v-for="record in records" :key="record.session_id" type="button" :class="{ selected: selected?.session_id === record.session_id }" @click="selected = record"><span>{{ formatDate(record.created_at) }}</span><strong>{{ record.fortune?.title || '尚未完成的求籤' }}</strong><p>{{ record.question }}</p></button></div>
-          <article v-if="selected" class="record-detail"><div class="detail-top"><div><p class="eyebrow">{{ selected.category }}</p><h2>{{ selected.fortune?.title || '求籤進行中' }}</h2></div><button type="button" class="delete" @click="removeItem(selected.session_id)">刪除</button></div><div class="question"><span>你的問題</span><p>{{ selected.question }}</p></div><div v-if="selected.fortune" class="fortune"><p>{{ selected.fortune.ganzhi }} · {{ selected.fortune.fortune_level }}</p><pre>{{ selected.fortune.poem }}</pre><p>{{ selected.fortune.translation }}</p></div><div v-if="selected.interpretation?.overall_meaning" class="interpretation"><span>解籤紀錄</span><p>{{ selected.interpretation.overall_meaning }}</p></div></article>
+          <article v-if="selected" class="record-detail"><div class="detail-top"><div><p class="eyebrow">{{ selected.category }}</p><h2>{{ selected.fortune?.title || '求籤進行中' }}</h2></div><button type="button" class="delete" :disabled="deletingId === selected.session_id" @click="removeItem(selected.session_id)">刪除</button></div><div class="question"><span>你的問題</span><p>{{ selected.question }}</p></div><div v-if="selected.fortune" class="fortune"><p>{{ selected.fortune.ganzhi }} · {{ selected.fortune.fortune_level }}</p><pre>{{ selected.fortune.poem }}</pre><p>{{ selected.fortune.translation }}</p></div><div v-if="selected.interpretation?.overall_meaning" class="interpretation"><span>解籤紀錄</span><p>{{ selected.interpretation.overall_meaning }}</p></div></article>
         </section>
         <section v-else class="empty-state"><h2>還沒有帳號求籤紀錄</h2><p>登入後從「開始求籤」進入的紀錄會顯示在這裡。</p><RouterLink class="primary" to="/temple-oracle-v17">開始求籤</RouterLink></section>
       </template>

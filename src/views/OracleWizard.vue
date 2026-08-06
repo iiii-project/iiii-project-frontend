@@ -9,6 +9,8 @@ import FortunePoem from '@/components/FortunePoem.vue'
 import FortuneReading from '@/components/FortuneReading.vue'
 // 註冊 <temple-ar-oracle>（插香 → 搖籤 → 擲筊 的 AR 引擎）
 import '@/ar/temple-ar-oracle/index.js'
+import Live2DCompanion from '@/components/live2d/Live2DCompanion.vue'
+import { sendWhenReady } from '@/live2d/websocketService'
 
 const router = useRouter()
 // 籤詩字級由右上角控制，設定跨頁共用（見 utils/fontScale）
@@ -97,10 +99,8 @@ const isOffline = ref(false)
 const fortune = ref<ArFortune | null>(null)
 const interpretation = ref<ArInterpretation | null>(null)
 
-/* 解籤結果頁的 Live2D 小夥伴：獨立服務（live2d-frontend + live2d-backend），
-   用 iframe 嵌入即可，不需要共用 Vue/React 執行環境。網址可用環境變數覆蓋，
-   本機開發預設打 live2d-frontend 的網頁版 dev server（vite dev:web，預設 3000）。 */
-const LIVE2D_COMPANION_URL = import.meta.env.VITE_LIVE2D_FRONTEND_URL || 'http://localhost:3000'
+// 解籤結果頁的 Live2D 小夥伴，原本是 iframe 嵌入獨立的 live2d-frontend，現在角色渲染
+// 邏輯已經移植成原生 Vue 元件（Live2DCompanion），跟後端共用同一個 Django + Channels 服務。
 const showCompanion = computed(() => step.value >= 5)
 
 const isBusy = computed(() => loadingLabel.value !== '')
@@ -285,6 +285,30 @@ function onArInterpretation(event: Event) {
   waitingInterpretation.value = false
 }
 
+// 把籤詩解籤結果組成一段適合直接唸出來的文字，送給角色走 TTS——不經過角色自己的 LLM，
+// 確保念的內容跟畫面上顯示的解籤結果完全一致，不會被角色的人格「順便」改寫。
+function buildSpokenNarration(fortune: ArFortune | null, interpretation: ArInterpretation | null): string {
+  const parts: string[] = []
+  if (fortune) {
+    parts.push(`第 ${fortune.no} 籤${fortune.grade ? `，${fortune.grade}` : ''}。`)
+  }
+  if (interpretation?.overall_meaning) parts.push(interpretation.overall_meaning)
+  if (interpretation?.relation_to_question) parts.push(interpretation.relation_to_question)
+  if (interpretation?.suggested_actions?.length) {
+    parts.push(`建議你：${interpretation.suggested_actions.join('，')}。`)
+  }
+  if (interpretation?.warnings?.length) {
+    parts.push(`要留意的是：${interpretation.warnings.join('，')}。`)
+  }
+  return parts.join(' ').trim()
+}
+
+function speakFortuneResult() {
+  const text = buildSpokenNarration(fortune.value, interpretation.value)
+  if (!text) return
+  sendWhenReady({ type: 'speak-text', text })
+}
+
 function onArComplete(event: Event) {
   const detail = (event as CustomEvent<{ sessionId?: string; fortune?: ArFortune; interpretation?: ArInterpretation }>).detail
   fortune.value = detail?.fortune ?? null
@@ -294,6 +318,7 @@ function onArComplete(event: Event) {
   setBodyLock(false)
   step.value = 5
   void buildShareQr(detail?.sessionId ?? '')
+  speakFortuneResult()
 }
 
 function bindAr(el: TempleArOracleEl) {
@@ -315,33 +340,44 @@ function unbindAr() {
 }
 
 // 收集完成 → 進入 AR 儀式
+let isSubmitting = false
+
 async function submit() {
-  if (isBusy.value) return
-  errorMessage.value = ''
-  arNotice.value = ''
-  /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
-     一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
-  step.value = 4
-  await nextTick()
-  const el = arEl.value
-  if (!el) {
-    errorMessage.value = '無法載入求籤場景，請重新整理頁面再試一次。'
-    return
-  }
-  bindAr(el)
-  setBodyLock(true)
+  /* isBusy 目前恆為 false（loadingLabel 從未被賦值，見上面 99 行），單靠它擋不住
+     連點——button 從 DOM 移除是等 Vue 下一輪渲染，兩次 click 事件仍可能在那之前
+     都進到這裡，各自呼叫一次 api.create()。isSubmitting 是同步旗標，在事件迴圈
+     的下一輪渲染前就先擋下第二次呼叫。 */
+  if (isSubmitting || isBusy.value) return
+  isSubmitting = true
   try {
-    /* 手機（含把視窗縮窄的桌機）一律用搖的；桌機維持 auto，
-       會先試鏡頭手勢，失敗才降級成點擊。 */
-    const useShake = window.matchMedia('(max-width: 640px)').matches
-    await el.start({
-      question: askedQuestion.value,
-      category: chosen.value?.arLabel ?? '綜合運勢',
-      inputMode: useShake ? 'motion' : 'auto'
-    })
-  } catch (error) {
-    // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況
-    errorMessage.value = error instanceof Error ? error.message : '無法開始求籤，請稍後再試。'
+    errorMessage.value = ''
+    arNotice.value = ''
+    /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
+       一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
+    step.value = 4
+    await nextTick()
+    const el = arEl.value
+    if (!el) {
+      errorMessage.value = '無法載入求籤場景，請重新整理頁面再試一次。'
+      return
+    }
+    bindAr(el)
+    setBodyLock(true)
+    try {
+      /* 手機（含把視窗縮窄的桌機）一律用搖的；桌機維持 auto，
+         會先試鏡頭手勢，失敗才降級成點擊。 */
+      const useShake = window.matchMedia('(max-width: 640px)').matches
+      await el.start({
+        question: askedQuestion.value,
+        category: chosen.value?.arLabel ?? '綜合運勢',
+        inputMode: useShake ? 'motion' : 'auto'
+      })
+    } catch (error) {
+      // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況
+      errorMessage.value = error instanceof Error ? error.message : '無法開始求籤，請稍後再試。'
+    }
+  } finally {
+    isSubmitting = false
   }
 }
 
@@ -630,16 +666,10 @@ function restart() {
       </div>
     </Teleport>
 
-    <!-- 解籤結果的 Live2D 小夥伴：獨立服務，用透明背景的 iframe 浮在畫面右下角 -->
+    <!-- 解籤結果的 Live2D 小夥伴：原生 Vue 元件，浮在畫面右下角 -->
     <Teleport to="body">
       <div v-if="showCompanion" class="live2d-companion">
-        <iframe
-          :src="LIVE2D_COMPANION_URL"
-          class="live2d-companion-frame"
-          title="求籤小夥伴"
-          allow="microphone; autoplay"
-          loading="lazy"
-        ></iframe>
+        <Live2DCompanion />
       </div>
     </Teleport>
   </div>
@@ -707,14 +737,6 @@ body.ar-ritual-open { overflow: hidden; }
   z-index: 50;
   width: min(340px, 46vw);
   height: min(460px, 62vh);
-  pointer-events: none;
-}
-.live2d-companion-frame {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  pointer-events: auto;
 }
 @media (max-width: 640px) {
   .live2d-companion {

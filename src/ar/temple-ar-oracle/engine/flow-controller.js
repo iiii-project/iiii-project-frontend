@@ -238,6 +238,11 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
       const grace = new Promise((resolve) => setTimeout(resolve, REVEAL_GRACE_MS));
       // pending 理論上必有（只在聖筊分支呼叫），沒有時就純粹等寬限時間
       await Promise.race([pending || grace, grace]);
+      /* 聖筊分支（resolveBwaResult/castClickBwa）呼叫這裡之前都還維持
+         bwaTossing=true，就是要撐到這一刻——在這之前手勢/點擊引擎都還可能
+         判定成「可以再擲一次」，對同一個 session 重複送出 blocks/interpret。
+         真正結束（要離開擲筊場景了）才在這裡解鎖。 */
+      state.bwaTossing = false;
       emit('sequence-complete', {
         sessionId: state.sessionId,
         fortune: state.currentFortune,
@@ -464,7 +469,10 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     els.bwaResultPanel.classList.remove('reveal');
     void els.bwaResultPanel.offsetWidth;
     els.bwaResultPanel.classList.add('reveal');
-    state.bwaTossing = false;
+    /* 這裡不能提前解鎖 bwaTossing：底下三個分支都還要等 API（interpret/draw）才算真正
+       結束，太早解鎖會讓手勢引擎在等待期間把使用者收尾的手勢誤判成「可以再擲一次」，
+       對同一個 session 重複送出 blocks/interpret/draw（實測會重複觸發）。改成每個分支
+       各自在真正可以再擲一次的時間點才解鎖，跟 castClickBwa() 的 try/finally 寫法一致。 */
 
     if (result?.confirmed){
       const pos = bwaScene.getScreenPos();
@@ -475,7 +483,9 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
       els.bwaResultDesc.textContent = '聖筊，神明允准解籤。';
       emit('bwa-result', { tier: 'sacred' });
       /* 解籤與過場並行，使用者不必在定格畫面前乾等 AI 回應。
-         pending 是擲筊結果剛回來時就發出的那一份請求（見 tossBwa）。 */
+         pending 是擲筊結果剛回來時就發出的那一份請求（見 tossBwa）。
+         bwaTossing 在這裡先不解鎖，要等 finishAfter(pending) 真正跑完
+         （interpret 回來或逾時、要離開擲筊場景時）才解鎖，見 finishAfter 定義處。 */
       setTimeout(() => playOracleTransition(els, finishAfter(pending), transitionLoadHooks), 1200);
     } else if (result?.result === 'sheng'){
       els.bwaResultTitle.textContent = `第 ${result.attempt_number} 次聖筊`;
@@ -486,6 +496,7 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
         resetBwaVisual();
         gestureEngine.resetBwaTracking();
         els.bwaHint.textContent = '單手微握，捧起筊杯';
+        state.bwaTossing = false;
       }, 2200);
     } else {
       els.bwaResultTitle.textContent = `${result?.result_name || '非聖筊'} · 重新抽籤`;
@@ -498,7 +509,8 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
         .catch((error) => {
           darken(false);
           emit('toast', { message: error.message || '無法重新抽籤，請再試一次' });
-        });
+        })
+        .finally(() => { state.bwaTossing = false; });
     }
   }
 

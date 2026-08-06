@@ -10,7 +10,9 @@ export default defineConfig(() => {
   plugins: [vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'temple-ar-oracle' } } })],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Live2D Cubism 官方 Framework，vendor 進 src/live2d/webSDK/，內部 import 用這個 alias
+      '@framework': fileURLToPath(new URL('./src/live2d/webSDK/Framework/src', import.meta.url))
     }
   },
   server: {
@@ -21,7 +23,13 @@ export default defineConfig(() => {
     },
     proxy: {
       '/api': apiTarget,
-      '/admin': apiTarget
+      '/admin': apiTarget,
+      // Live2D 角色引擎現在跟 /api 同一個 Django 後端，共用 apiTarget
+      '/client-ws': { target: apiTarget, ws: true, changeOrigin: true },
+      '/live2d-models': apiTarget,
+      '/avatars': apiTarget,
+      '/bg': apiTarget,
+      '/cache': apiTarget
     }
   }
   }
