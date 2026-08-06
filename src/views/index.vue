@@ -643,8 +643,10 @@ body.celestial-home-open {
   transform-origin: 50% 20%;
   pointer-events: none;
   filter: blur(1.7px);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 58%, rgba(0, 0, 0, 0.42) 80%, transparent 96%);
-  mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 58%, rgba(0, 0, 0, 0.42) 80%, transparent 96%);
+  /* 完全可見範圍原本只到 58%（腰部附近）就開始淡出，長袍下半身幾乎被遮罩吃掉、
+     畫面觀感偏向只有臉+上半身。延伸到 88% 讓身體露出來，只在最頂端/最底端與霧氣融合。 */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 88%, rgba(0, 0, 0, 0.5) 97%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 88%, rgba(0, 0, 0, 0.5) 97%, transparent 100%);
   animation: emerge 19s ease-in-out infinite;
   will-change: transform, opacity;
   transform-style: preserve-3d;
@@ -758,9 +760,11 @@ body.celestial-home-open {
   z-index: 12;
   -webkit-mask-image: none;
   mask-image: none;
-  /* 平時的錨點是 50% 20%（讓靜態構圖的頭部定在雲霧上緣），
-     但放大時會以頭為軸往下擴張，破題的動勢會歪掉，轉場期間拉回中心。 */
-  transform-origin: 50% 50%;
+  /* 錨點改回頭部（50% 20%，與平時靜止的錨點一致），放大時以臉為軸往下擴張，
+     衝向鏡頭時放大的是臉，不是身體。（先前這裡改成 50% 50% 置中是為了避免
+     以頭為軸時「破題」撞擊那一格動勢看起來歪掉，如果放大後又覺得撞擊格畫面
+     跑位，要調整的是下面 ascend keyframe 21% 那一格的 translate 值。） */
+  transform-origin: 50% 20%;
   animation: ascend 1.5s cubic-bezier(0.42, 0, 0.3, 1) forwards;
 }
 .is-ascending .sovereign-float,
