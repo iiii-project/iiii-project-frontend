@@ -179,6 +179,60 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
       });
   }
 
+  /* ── 擲筊結果預取 ──────────────────────────────────────────────────────
+     擲筊的結果是後端決定的（api.blocks），與使用者怎麼擲無關；動畫只是把
+     那個結果演出來。原本是「使用者擲了 → 才 POST → 等回應 → 才開始演」，
+     等待就卡在最需要即時回饋的那一刻。
+
+     改成進到擲筊場景時就先把那一次 POST 發掉，結果先拿在手上；等前端自己
+     判定擲筊動作成立，直接拿現成的結果播動畫，不再等網路。
+     一次擲筊只發一次（後端規則是一次聖筊即允准，非聖筊會重抽籤、重新進場
+     時才會再發一次），所以不會多打 API。
+
+     另外，預取回來就已經知道是不是聖筊了——是的話解籤（最慢的一步）也在
+     這時候一起發出去，比使用者擲完再發又早了整段擲筊動作的時間。 */
+  let pendingCast = null;      // 這一輪擲筊結果（Promise）
+  let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
+
+  function startInterpretOnce() {
+    if (!pendingInterpret) pendingInterpret = interpretInBackground();
+    return pendingInterpret;
+  }
+
+  function resetCastPrefetch() {
+    pendingCast = null;
+    pendingInterpret = null;
+  }
+
+  function prefetchCast() {
+    if (!state.sessionId || pendingCast) return;
+    const request = api.blocks(state.sessionId).then((result) => {
+      // 聖筊已定：解籤不必等使用者擲完
+      if (result.confirmed) startInterpretOnce();
+      return result;
+    });
+    // 還沒有人 await 時不要變成 unhandled rejection；真正的錯誤在 takeCast 處理
+    request.catch(() => {});
+    pendingCast = request;
+  }
+
+  /* 取用預取到的結果。預取失敗（斷網、後端 5xx）就當場再要一次，
+     行為與沒有預取時完全相同。 */
+  async function takeCast() {
+    const prefetched = pendingCast;
+    pendingCast = null;
+    if (prefetched) {
+      try {
+        return await prefetched;
+      } catch (error) {
+        // 落到下面現場再要一次
+      }
+    }
+    const result = await api.blocks(state.sessionId);
+    if (result.confirmed) startInterpretOnce();
+    return result;
+  }
+
   function finishAfter(pending) {
     return async () => {
       const grace = new Promise((resolve) => setTimeout(resolve, REVEAL_GRACE_MS));
@@ -223,6 +277,8 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     }
     if (name === 'draw'){
       els.sceneDraw.classList.remove('hidden');
+      // 回到抽籤（第一次進場或非聖筊重抽）：上一輪預取的結果與解籤都作廢
+      resetCastPrefetch();
       state.drawSubState = 'shake';
       Array.from(els.sticksGroup.querySelectorAll('.stick')).forEach(s => s.classList.remove('selected'));
       gestureEngine.resetShakeProgress(); gestureEngine.resetPinch();
@@ -257,6 +313,9 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
         gestureEngine.resetBwaTracking();
       }
       state.bwaTossing = false;
+      /* 一進擲筊場景就把這一次的結果要回來放著，等使用者真的擲了就直接演，
+         不必在那一刻等網路（見 prefetchCast）。 */
+      prefetchCast();
     }
   }
 
@@ -327,11 +386,12 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     state.bwaTossing = true;
     els.bwaHint.textContent = '筊杯擲出中…';
     try {
-      const result = await api.blocks(state.sessionId);
+      // 進場時就預取好的結果，這裡通常立刻拿到，不會卡在網路上
+      const result = await takeCast();
       const sides = result.result === 'sheng' ? ['flat', 'domed'] : result.result === 'xiao' ? ['flat', 'flat'] : ['domed', 'domed'];
       const [coinA, coinB] = sides;
-      /* 與點擊擲筊同樣的道理：聖筊一確定就先發解籤，讓落地動畫的時間去等 LLM */
-      state.pendingBwaResult = { coinA, coinB, result, pending: result.confirmed ? interpretInBackground() : null };
+      // 聖筊的解籤在預取回來時就已經發出去了，這裡只是把那個 Promise 帶下去
+      state.pendingBwaResult = { coinA, coinB, result, pending: result.confirmed ? startInterpretOnce() : null };
       bwaScene.toss(coinA, coinB,
         () => { playLandingSounds(coinA, coinB); if (navigator.vibrate) navigator.vibrate(20); },
         () => { setTimeout(() => { resolveBwaResult(); }, 250); }
@@ -347,13 +407,15 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     if (state.bwaTossing || !state.sessionId) return;
     state.bwaTossing = true;
     els.btnClickBwa.disabled = true;
-    els.bwaHint.textContent = '正在請示…';
+    // 結果通常已經預取好了，所以這裡直接說「擲出中」，不再出現「正在請示…」的等待字樣
+    els.bwaHint.textContent = '筊杯擲出中…';
     els.bwaThreeContainer.classList.remove('tossable');
     try {
-      const result = await api.blocks(state.sessionId);
-      /* 聖筊一確定就立刻發解籤請求，不等筊杯落地動畫與結果面板。
-         這幾秒本來是白等的，挪去跑 LLM 等於整段縮短同樣的時間。 */
-      const pending = result.confirmed ? interpretInBackground() : null;
+      // 進場時就預取好的結果：點下去等於馬上開始演，不再有「正在請示…」的空等
+      const result = await takeCast();
+      /* 聖筊的解籤請求在預取回來的那一刻就發了（見 prefetchCast），
+         這裡只是取回同一個 Promise，讓過場去等它。 */
+      const pending = result.confirmed ? startInterpretOnce() : null;
       await playClickBwaAnimation(result);
       els.bwaResultPanel.classList.remove('hidden');
 
@@ -379,6 +441,10 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
           els.bwaHint.textContent = '已抽出新籤，請重新開始擲筊。';
           emit('bwa-result', { tier: 'other', resultName: result.result_name });
         }
+        /* 這條路沒有離開擲筊場景（使用者就地再擲一次），
+           所以在這裡替下一次補上預取，下一擲同樣不必等網路。 */
+        resetCastPrefetch();
+        prefetchCast();
       }
     } catch (error) {
       emit('toast', { message: error.message || '無法完成擲筊，請再試一次' });
@@ -453,6 +519,8 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     gestureEngine.resetPinch();
     gestureEngine.resetBwaTracking();
     mobileShake.stop();
+    // 離開儀式：預取的擲筊結果與解籤請求都不再屬於任何一場
+    resetCastPrefetch();
   }
 
   // ============================================================
@@ -474,6 +542,7 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     state.sessionId = session.session_id;
     state.shareToken = session.share_token;
     state.interpretation = null;
+    resetCastPrefetch();
 
     const mobile = isMobileDevice();
 
