@@ -27,14 +27,23 @@ const modelInfoRef = computed(() => config.modelInfo)
 const { canvasRef } = useLive2DResize(containerRef, modelInfoRef)
 const { isDragging, handlers } = useLive2DModel(modelInfoRef, canvasRef)
 const { addAudioTask } = useAudioTask()
-const { micOn, startMic, stopMic } = useMicVAD()
+const { micOn, startMic, stopMic, pauseListening, resumeListening } = useMicVAD()
 const { interrupt } = useInterrupt()
 const ws = useLive2DWebSocket({ addAudioTask, startMic, stopMic })
 
-// AI 回到 idle 時，把表情重設回角色的預設表情
+/* 角色一開始回應（thinking-speaking，從思考到念完整段話都算）就先暫停收音，
+   離開這個狀態（不管是正常講完回到 idle，還是被使用者按「打斷」變成 interrupted）
+   就恢復收音——避免角色自己講話的聲音被麥克風錄進去，也讓對話變成清楚的一來一回。
+   不是只看 idle：按了「打斷」之後不一定會馬上有下一句話，若只看 idle，打斷後
+   使用者會發現麥克風一直沒反應。 */
 watch(
   () => aiState.aiState,
-  (state) => {
+  (state, previous) => {
+    if (previous === 'thinking-speaking' && state !== 'thinking-speaking') {
+      resumeListening()
+    } else if (state === 'thinking-speaking' && previous !== 'thinking-speaking') {
+      pauseListening()
+    }
     if (state !== 'idle') return
     const lappAdapter = (window as any).getLAppAdapter?.()
     if (lappAdapter) resetExpression(lappAdapter, modelInfoRef.value)

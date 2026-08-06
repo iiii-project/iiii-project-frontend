@@ -669,15 +669,15 @@ body.ar-ritual-open { overflow: hidden; }
   backdrop-filter: blur(6px);
 }
 
-/* 解籤結果頁的 Live2D 小夥伴：固定在右下角，不擋到籤詩卡片，行動裝置縮小並降低高度避免蓋住整段文字 */
+/* 解籤結果頁的 Live2D 小夥伴：固定在左下角，不擋到籤詩卡片，行動裝置縮小並降低高度避免蓋住整段文字 */
 .live2d-companion {
   position: fixed;
-  right: 16px;
+  left: 16px;
   bottom: calc(88px + env(safe-area-inset-bottom));
   z-index: 50;
   width: min(340px, 46vw);
   height: min(460px, 62vh);
-  transform-origin: bottom right;
+  transform-origin: bottom left;
   transform: scale(0.82) translateY(14px);
   opacity: 0;
   pointer-events: none;
@@ -690,17 +690,17 @@ body.ar-ritual-open { overflow: hidden; }
 }
 @media (max-width: 640px) {
   .live2d-companion {
-    right: 12px;
+    left: 12px;
     bottom: calc(78px + env(safe-area-inset-bottom));
     width: min(220px, 58vw);
     height: min(320px, 42vh);
   }
 }
 
-/* ── 小夥伴的呼叫鈕：一顆藏在右下角的圓鈕，點了才把角色跟聊天框叫出來 ── */
+/* ── 小夥伴的呼叫鈕：一顆藏在左下角的圓鈕，點了才把角色跟聊天框叫出來 ── */
 .live2d-fab {
   position: fixed;
-  right: calc(16px + env(safe-area-inset-right));
+  left: calc(16px + env(safe-area-inset-left));
   bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 55;
   width: 56px;

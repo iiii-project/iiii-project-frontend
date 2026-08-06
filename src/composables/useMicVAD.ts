@@ -110,7 +110,25 @@ export function useMicVAD() {
     isProcessing = false
   }
 
+  /* 角色開始回應（思考中／念出來）時暫停收音，跟使用者主動關麥克風（stopMic）不同：
+     只 pause 現有的 VAD instance，不 destroy、不動 micOn——這樣角色講完話恢復收音時
+     不用重新跑一次 ONNX 模型初始化，使用者看到的麥克風圖示也維持原本「已開」的樣子。 */
+  function pauseListening() {
+    if (!vad) return
+    console.log('Pausing VAD while character responds')
+    vad.pause()
+    isProcessing = false
+  }
+
+  // 只有麥克風本來就是開著的時候才恢復；如果使用者在角色講話的這段時間手動關了麥克風，
+  // 尊重那個操作，不要在回話結束後又自動把它打開。
+  function resumeListening() {
+    if (!vad || !micOn.value) return
+    console.log('Resuming VAD after character finished responding')
+    vad.start()
+  }
+
   onBeforeUnmount(stopMic)
 
-  return { micOn, settings, startMic, stopMic, sendAudioPartition }
+  return { micOn, settings, startMic, stopMic, pauseListening, resumeListening, sendAudioPartition }
 }
