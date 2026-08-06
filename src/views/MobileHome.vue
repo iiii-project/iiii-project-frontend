@@ -315,7 +315,7 @@ onBeforeUnmount(() => {
       <p class="subtitle">誠 心 一 問 · 天 意 自 來</p>
       <div class="actions">
         <button class="btn primary" type="button" :disabled="isAscending" @click="enterHall">入 殿 求 籤</button>
-        <button class="btn ghost" type="button" @click="go('/temple-oracle-v17?mode=lookup')">線 上 查 籤</button>
+        <button class="btn ghost" type="button" @click="go('/lookup')">線 上 查 籤</button>
       </div>
       <button class="tutorial-link" type="button" @click="openTutorial">
         <span class="play-dot" aria-hidden="true"></span>第一次來？看 90 秒求籤教學

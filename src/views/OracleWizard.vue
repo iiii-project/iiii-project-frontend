@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Category } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
+import { useSpeechInput } from '@/utils/speech'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
 import FontScaleControl from '@/components/FontScaleControl.vue'
 import FortunePoem from '@/components/FortunePoem.vue'
@@ -30,48 +31,6 @@ const CATEGORIES: { value: Category; label: string; emoji: string; hint: string;
 
 const STEPS = ['選方向', '說心事', '確認送出']
 const QUESTION_MAX = 200
-
-/* ── 語音輸入：瀏覽器內建的語音辨識（Chrome / Edge / Safari 走 webkit 前綴）──
-   TS 的 DOM 型別沒有這組介面，這裡只宣告實際會用到的成員。 */
-interface SpeechResultAlternative {
-  transcript: string
-}
-interface SpeechResult {
-  readonly isFinal: boolean
-  readonly length: number
-  [index: number]: SpeechResultAlternative
-}
-interface SpeechResultList {
-  readonly length: number
-  [index: number]: SpeechResult
-}
-interface SpeechRecognitionResultEvent extends Event {
-  readonly resultIndex: number
-  readonly results: SpeechResultList
-}
-interface SpeechRecognitionErrorEvent extends Event {
-  readonly error: string
-}
-interface SpeechRecognitionLike {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  start(): void
-  stop(): void
-  abort(): void
-  onresult: ((event: SpeechRecognitionResultEvent) => void) | null
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
-  onend: (() => void) | null
-}
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike
-
-function getRecognitionCtor(): SpeechRecognitionCtor | null {
-  const scope = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor
-    webkitSpeechRecognition?: SpeechRecognitionCtor
-  }
-  return scope.SpeechRecognition ?? scope.webkitSpeechRecognition ?? null
-}
 
 const step = ref(1)
 const category = ref<Category | null>(null)
@@ -125,88 +84,27 @@ const showEnterMist = ref(true)
 let mistTimer = 0
 
 // ── 語音輸入狀態 ──
-const speechSupported = ref(false)
-const isRecording = ref(false)
-const speechHint = ref('')
-let recognition: SpeechRecognitionLike | null = null
-let committedText = ''
+/* 語音輸入與查籤共用同一套實作（見 utils/speech），
+   兩邊的支援判斷、錯誤訊息、離線時的說法都一致。 */
+const {
+  supported: speechSupported,
+  isRecording,
+  hint: speechHint,
+  stop: stopRecording,
+  toggle: toggleRecording
+} = useSpeechInput({
+  get: () => question.value,
+  set: (value) => { question.value = value },
+  maxLength: QUESTION_MAX
+})
 
 onMounted(() => {
-  speechSupported.value = getRecognitionCtor() !== null
   // 雲霧散盡後把整層移除，之後就不再佔用繪圖資源
   mistTimer = window.setTimeout(() => (showEnterMist.value = false), 900)
 })
 
-function startRecording() {
-  const Ctor = getRecognitionCtor()
-  if (!Ctor) {
-    speechHint.value = '這個瀏覽器不支援語音輸入，請直接打字。'
-    return
-  }
-  errorMessage.value = ''
-  speechHint.value = ''
-  committedText = question.value
-
-  recognition = new Ctor()
-  recognition.lang = 'zh-TW'
-  recognition.continuous = true
-  recognition.interimResults = true
-
-  recognition.onresult = (event) => {
-    let settled = ''
-    let pending = ''
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const result = event.results[i]
-      const text = result[0]?.transcript ?? ''
-      if (result.isFinal) settled += text
-      else pending += text
-    }
-    if (settled) committedText = (committedText + settled).slice(0, QUESTION_MAX)
-    question.value = (committedText + pending).slice(0, QUESTION_MAX)
-  }
-
-  recognition.onerror = (event) => {
-    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-      speechHint.value = '麥克風權限被拒絕，請在瀏覽器網址列開啟麥克風權限後再試。'
-    } else if (event.error === 'no-speech') {
-      speechHint.value = '沒有聽到聲音，請靠近麥克風再說一次。'
-    } else if (event.error === 'audio-capture') {
-      speechHint.value = '找不到麥克風，請確認裝置是否接上。'
-    } else if (event.error !== 'aborted') {
-      speechHint.value = '語音辨識中斷了，請再試一次或直接打字。'
-    }
-  }
-
-  recognition.onend = () => {
-    isRecording.value = false
-    question.value = committedText
-    recognition = null
-  }
-
-  try {
-    recognition.start()
-    isRecording.value = true
-    speechHint.value = '正在聆聽，說完再按一次停止。'
-  } catch {
-    isRecording.value = false
-    speechHint.value = '無法啟動語音輸入，請直接打字。'
-  }
-}
-
-function stopRecording() {
-  recognition?.stop()
-  isRecording.value = false
-}
-
-function toggleRecording() {
-  if (isRecording.value) stopRecording()
-  else startRecording()
-}
-
 onBeforeUnmount(() => {
   if (mistTimer) window.clearTimeout(mistTimer)
-  recognition?.abort()
-  recognition = null
   setBodyLock(false)
   unbindAr()
 })

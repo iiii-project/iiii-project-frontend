@@ -11,6 +11,8 @@ const router = createRouter({
     // 掃 QR 取籤：先推廟門，再顯示那一次的籤詩
     { path: '/fortune/:sessionId', name: 'fortune-share', component: () => import('@/views/FortuneShare.vue'), meta: { immersive: true } },
     { path: '/oracle', name: 'oracle', component: () => import('@/views/OracleWizard.vue'), meta: { immersive: true } },
+    // 查籤：輸入籤號看籤詩，或掃我們自己產的籤 QR
+    { path: '/lookup', name: 'lookup', component: () => import('@/views/LookupView.vue'), meta: { immersive: true } },
     // Preserve bookmarked legacy URLs without ever reopening the retired dark flow.
     { path: '/mode', redirect: '/temple-oracle-v17' },
     { path: '/question', redirect: '/temple-oracle-v17' },

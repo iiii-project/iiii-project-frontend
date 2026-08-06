@@ -39,6 +39,17 @@ export interface Fortune {
   translation?: string
   story?: string
   explanation?: string
+  /* 以下是查籤端點（GET /fortune-sets/<code>/fortunes/<number>/）會一併給的
+     籤書解釋。求籤流程的 session 序列化不含這些欄位，所以都是選填。 */
+  general_meaning?: string
+  love_meaning?: string
+  career_meaning?: string
+  study_meaning?: string
+  wealth_meaning?: string
+  health_meaning?: string
+  family_meaning?: string
+  relationship_meaning?: string
+  travel_meaning?: string
 }
 
 export interface BlockCast {

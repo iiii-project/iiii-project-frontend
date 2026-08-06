@@ -134,8 +134,17 @@ export function playOracleTransition(els, onCovered, hooks = {}){
     });
   }
 
+  /* 讓影片浮出來。
+     原本是 requestAnimationFrame(() => add('show'))——目的是先讓瀏覽器套用
+     移除 fade-out 後的樣式，再加 show 才會有淡入。問題是這一格 rAF 不保證會
+     來（頁面被判定為不可見、分頁在背景、或這一刻正忙著解碼與 three.js 重繪），
+     一旦沒來，class 就永遠不會加上：影片其實在播、有聲音，但整個是透明的，
+     使用者看到的就是「過場動畫沒播」。
+     改用強制重排（與 playInkTransition 同一個手法）同步把樣式沖出去，
+     淡入照樣有，但不再依賴 rAF 會不會被呼叫。 */
   video.classList.remove('fade-out');
-  requestAnimationFrame(() => video.classList.add('show'));
+  void video.offsetWidth;
+  video.classList.add('show');
 
   const total = Number.isFinite(video.duration) && video.duration > 0
     ? video.duration * 1000
@@ -233,16 +242,39 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     return result;
   }
 
+  /* 過場動畫至少要有的時間。
+     sequence-complete 一發出去，宿主就會切到籤詩頁、把整個 AR 全螢幕層卸載，
+     所以這個事件早發＝動畫被砍斷。以前解籤要等 ~21 秒，Promise.race 自然會
+     卡在寬限時間上，等於順手給了動畫時間；現在解籤在使用者擲筊前就發出去、
+     常常已經回來了，race 會瞬間通過——影片播得動時無妨（reveal 本來就在片尾
+     才觸發），但影片播不動改走 320ms 的墨轉場時，畫面會在動畫還沒演完就跳掉。
+     這裡明確補上下限，不再依賴「解籤很慢」這個巧合。 */
+  const MIN_TRANSITION_MS = 1800;
+
+  /* 等一個繪圖影格。
+     預取之後「按下去」到「開始擲」之間已經沒有網路等待了，等於在同一個 task 裡
+     就呼叫 bwaScene.toss()。等一格再擲，可以確保筊杯先以起始位置被畫出來一次，
+     整段落下都看得到——原本是靠網路來回的那幾十毫秒順手達成的。 */
+  function nextFrame() {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  }
+
   function finishAfter(pending) {
+    const startedAt = Date.now(); // 呼叫點就是過場開始的時間
     return async () => {
       const grace = new Promise((resolve) => setTimeout(resolve, REVEAL_GRACE_MS));
       // pending 理論上必有（只在聖筊分支呼叫），沒有時就純粹等寬限時間
       await Promise.race([pending || grace, grace]);
+<<<<<<< HEAD
       /* 聖筊分支（resolveBwaResult/castClickBwa）呼叫這裡之前都還維持
          bwaTossing=true，就是要撐到這一刻——在這之前手勢/點擊引擎都還可能
          判定成「可以再擲一次」，對同一個 session 重複送出 blocks/interpret。
          真正結束（要離開擲筊場景了）才在這裡解鎖。 */
       state.bwaTossing = false;
+=======
+      const left = MIN_TRANSITION_MS - (Date.now() - startedAt);
+      if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
+>>>>>>> 6650bde (feat: Oracle Search)
       emit('sequence-complete', {
         sessionId: state.sessionId,
         fortune: state.currentFortune,
@@ -369,9 +401,11 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     play(coinA, 0); play(coinB, 55);
   }
 
-  function playClickBwaAnimation(result){
+  async function playClickBwaAnimation(result){
     const sides = result.result === 'sheng' ? ['flat', 'domed'] : result.result === 'xiao' ? ['flat', 'flat'] : ['domed', 'domed'];
     const [coinA, coinB] = sides;
+    // 先讓筊杯以起始位置被畫出一格，落下的過程才完整看得到（見 nextFrame）
+    await nextFrame();
     return new Promise((resolve) => {
       bwaScene.toss(coinA, coinB,
         () => { playLandingSounds(coinA, coinB); if (navigator.vibrate) navigator.vibrate(20); },
@@ -397,6 +431,7 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
       const [coinA, coinB] = sides;
       // 聖筊的解籤在預取回來時就已經發出去了，這裡只是把那個 Promise 帶下去
       state.pendingBwaResult = { coinA, coinB, result, pending: result.confirmed ? startInterpretOnce() : null };
+      await nextFrame();
       bwaScene.toss(coinA, coinB,
         () => { playLandingSounds(coinA, coinB); if (navigator.vibrate) navigator.vibrate(20); },
         () => { setTimeout(() => { resolveBwaResult(); }, 250); }

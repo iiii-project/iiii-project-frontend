@@ -15,7 +15,11 @@
     "@ricky0123/vad-web": "^0.0.24",
     "@vitejs/plugin-vue": "^5.2.4",
     "axios": "^1.7.9",
+<<<<<<< HEAD
     "onnxruntime-web": "1.14.0",
+=======
+    "jsqr": "^1.4.0",
+>>>>>>> 6650bde (feat: Oracle Search)
     "pinia": "^2.3.0",
     "qrcode": "^1.5.4",
     "three": "^0.185.1",
