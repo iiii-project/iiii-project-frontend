@@ -74,10 +74,23 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     // 過場影片播放中：整格跳過，MediaPipe 的繪製與判斷都是重負載
     if (state.transitionActive) return;
     syncCanvasSize();
+    const cw = els.outputCanvas.width, ch = els.outputCanvas.height;
     outCtx.save();
-    outCtx.clearRect(0,0,els.outputCanvas.width, els.outputCanvas.height);
+    outCtx.clearRect(0,0,cw,ch);
     outCtx.scale(-1,1);
-    outCtx.drawImage(results.image, -els.outputCanvas.width, 0, els.outputCanvas.width, els.outputCanvas.height);
+    if (state.segmentationMask){
+      /* 人像去背：先把分割遮罩畫上去（人像=不透明、其餘=透明），source-in 疊圖模式
+         會讓下一筆 drawImage 只保留跟遮罩重疊、不透明的範圍，其餘鏤空——鏤空的地方
+         會露出下方 z-index 比 #output_canvas 低的 #ritual-overlay（神明實景疊加層），
+         人像本身則維持鏡頭原始畫質，不受神明實景疊加層淡化影響。 */
+      outCtx.drawImage(state.segmentationMask, -cw, 0, cw, ch);
+      outCtx.globalCompositeOperation = 'source-in';
+      outCtx.drawImage(results.image, -cw, 0, cw, ch);
+      outCtx.globalCompositeOperation = 'source-over';
+    } else {
+      // 分割模型還沒回傳第一格結果前，先照舊整格畫出來，避免畫面完全空白
+      outCtx.drawImage(results.image, -cw, 0, cw, ch);
+    }
     outCtx.restore();
 
     const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;

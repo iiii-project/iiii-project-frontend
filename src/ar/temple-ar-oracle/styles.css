@@ -48,7 +48,11 @@
 .ar-oracle-root.screen-shake{ animation: screenShake 0.45s ease; }
 
 /* ---------- 2. 原始自訂 class / id（逐一核對複製）---------- */
-#output_canvas{ position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; z-index:1; filter:saturate(0.85) contrast(1.0) brightness(1.05); transition: filter 0.35s ease; }
+/* opacity 預設0（進場veil期間人像圖層先隱藏，只留#ritual-overlay的神明實景），
+   加上 .blended 後淡入到1——跟 #ritual-overlay 的淡出時機由 showScene() 同步觸發，
+   讓「veil結束的瞬間」呈現「神明實景退到六成 + 人像同時浮現」的疊圖效果。 */
+#output_canvas{ position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; z-index:1; opacity:0; filter:saturate(0.85) contrast(1.0) brightness(1.05); transition: filter 0.35s ease, opacity 0.5s ease; }
+#output_canvas.blended{ opacity:1; }
 #vignette{
   position:fixed; inset:0; z-index:2; pointer-events:none;
   background:
@@ -69,6 +73,35 @@
 #ar-decoration.dof-blur, #output_canvas.dof-blur{ filter: blur(7px) brightness(0.85) saturate(0.6); }
 
 #particle_canvas{ position:fixed; inset:0; z-index:4; pointer-events:none; width:100vw; height:100vh; }
+
+/* 神明實景疊加層：z-index 0，疊在 #output_canvas（z-index 1）下方——人像去背後
+   #output_canvas 只剩人像範圍不透明、其餘鏤空，鏤空處會直接透出這層神明實景，
+   形成「人在神明實景前」的效果。預設 opacity:1（進場veil期間完全不透明），
+   加上 .blended 後淡化到 0.6；切換時機由 flow-controller.js 的 showScene() 控制。 */
+.ritual-overlay{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:1; transition: opacity 0.5s ease; }
+.ritual-overlay.blended{ opacity:0.6; }
+/* 背景照套一層放射狀遮罩：中央（神明所在處）維持完全不透明、飽和度也拉高一點，
+   往兩側漸漸淡出到全透明，形成聚光/光暈的視覺效果，而不是整張背景平均一致。 */
+.ritual-overlay-bg{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+  -webkit-mask-image: radial-gradient(ellipse 60% 68% at 50% 46%, #000 0%, #000 40%, rgba(0,0,0,0.6) 68%, transparent 100%);
+  mask-image: radial-gradient(ellipse 60% 68% at 50% 46%, #000 0%, #000 40%, rgba(0,0,0,0.6) 68%, transparent 100%);
+  filter: saturate(1.2) brightness(1.08);
+}
+/* 神明背後的暖金色光暈：獨立一層放射狀漸層+模糊，疊在背景與神像之間，
+   讓中央看起來更亮、更聚焦，效果類似舞台聚光燈。 */
+.ritual-overlay-glow{
+  position:absolute; left:50%; top:48%; width:58%; height:58%;
+  transform:translate(-50%,-50%);
+  background: radial-gradient(circle, rgba(255,214,140,0.55) 0%, rgba(255,182,80,0.28) 45%, transparent 74%);
+  filter: blur(24px);
+  mix-blend-mode: screen;
+}
+.ritual-overlay-emperor{
+  position:absolute; left:50%; top:52%; height:72%; width:auto; max-width:70%;
+  transform:translate(-50%,-50%); object-fit:contain;
+  filter: drop-shadow(0 12px 40px rgba(0,0,0,0.35)) brightness(1.1) saturate(1.15);
+}
 
 .glass-card{
   position:relative; border-radius: 28px; border: 1px solid var(--gold-line);

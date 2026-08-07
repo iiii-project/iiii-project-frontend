@@ -18,6 +18,7 @@
            sequence-complete, toast
    ========================================================================= */
 import { Hands } from '@mediapipe/hands';
+import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
 
 import { CONFIG } from './engine/config.js';
@@ -78,6 +79,7 @@ class TempleArOracle extends HTMLElement {
       outputCanvas: $('output_canvas'),
       particleCanvas: $('particle_canvas'),
       arDecoration: $('ar-decoration'),
+      ritualOverlay: $('ritual-overlay'),
       flash: $('flash'),
       darken: $('darken'),
       transitionOverlay: $('transition-overlay'),
@@ -221,8 +223,21 @@ class TempleArOracle extends HTMLElement {
       hands.onResults(this._gestureEngine.onResults);
       this._hands = hands;
 
+      /* 人像去背：把最新的分割遮罩存進共用的 state，讓 gesture-engine 畫
+         #output_canvas 時可以只畫出人像、其餘鏤空，讓底下的神明實景疊加層透出來。
+         跟 Hands 各自獨立送同一格畫面，彼此不互相依賴、也不用等對方。 */
+      const selfieSegmentation = new SelfieSegmentation({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+      });
+      selfieSegmentation.setOptions({ modelSelection: 1 });
+      selfieSegmentation.onResults((results) => { this._state.segmentationMask = results.segmentationMask; });
+      this._selfieSegmentation = selfieSegmentation;
+
       const camera = new Camera(this._els.video, {
-        onFrame: async () => { await hands.send({ image: this._els.video }); },
+        onFrame: async () => {
+          await hands.send({ image: this._els.video });
+          await selfieSegmentation.send({ image: this._els.video });
+        },
         width: 1280,
         height: 720,
       });
@@ -268,6 +283,7 @@ class TempleArOracle extends HTMLElement {
     }
     try { this._camera?.stop?.(); } catch (e) {}
     try { this._hands?.close?.(); } catch (e) {}
+    try { this._selfieSegmentation?.close?.(); } catch (e) {}
     try {
       const stream = this._els?.video?.srcObject;
       if (stream && stream.getTracks) stream.getTracks().forEach(t => t.stop());

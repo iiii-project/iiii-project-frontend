@@ -203,6 +203,11 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
   let pendingCast = null;      // 這一輪擲筊結果（Promise）
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
 
+  /* 神明實景疊加：插香/抽籤/擲筊三階段各自進場先完全不透明蓋住鏡頭，
+     維持這裡列的秒數之後才淡化，讓使用者透過半透明畫面看到自己（見 showScene）。 */
+  const RITUAL_OVERLAY_VEIL_MS = { incense: 1000, draw: 500, bwa: 500 };
+  let ritualOverlayTimer = 0;
+
   function startInterpretOnce() {
     if (!pendingInterpret) pendingInterpret = interpretInBackground();
     return pendingInterpret;
@@ -300,6 +305,19 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach(s => s.classList.add('hidden'));
     if (name !== 'draw') mobileShake.stop();
     state.current = name;
+
+    /* 神明實景疊加：每次進場先恢復「純實景、人像先隱藏」（veil），停留該階段的秒數後
+       才同步切換——神明實景淡到六成、人像（去背後的#output_canvas）同時淡入疊上來。 */
+    window.clearTimeout(ritualOverlayTimer);
+    const veilMs = RITUAL_OVERLAY_VEIL_MS[name];
+    if (veilMs != null){
+      els.ritualOverlay.classList.remove('blended');
+      els.outputCanvas.classList.remove('blended');
+      ritualOverlayTimer = window.setTimeout(() => {
+        els.ritualOverlay.classList.add('blended');
+        els.outputCanvas.classList.add('blended');
+      }, veilMs);
+    }
 
     if (name === 'incense'){
       els.sceneIncense.classList.remove('hidden');
@@ -558,6 +576,9 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach(s => s.classList.add('hidden'));
     state.current = 'idle';
     state.bwaTossing = false;
+    window.clearTimeout(ritualOverlayTimer);
+    els.ritualOverlay.classList.remove('blended');
+    els.outputCanvas.classList.remove('blended');
     gestureEngine.resetIncenseProgress();
     gestureEngine.resetShakeProgress();
     gestureEngine.resetPinch();

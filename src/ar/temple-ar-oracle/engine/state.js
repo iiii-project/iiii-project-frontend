@@ -38,5 +38,6 @@ export function createArState() {
     interpretation: null,
     pendingBwaResult: null,
     resolvedMode: null, // 'camera' | 'motion' | 'manual'，由 flow-controller.start() 解析後填入
+    segmentationMask: null, // SelfieSegmentation 每格畫面算出的人像遮罩，由 index.js 寫入、gesture-engine 讀取畫 #output_canvas 用
   };
 }

@@ -9,6 +9,11 @@
    - #result-bg 沒有納入（它是結果畫面的背景色效果，由showResultScene()這個
      周邊功能控制，不是AR核心的一部分）。
    ========================================================================= */
+/* 三階段（插香/抽籤/擲筊）進場的「神明實景」疊加圖層：廟宇內部照 + 玉皇大帝神像照
+   （神像照本身已去背，直接疊在背景照上方置中即可，不需要另外合成一張圖）。 */
+const ritualOverlayBgUrl = new URL('../../assets/images/temple_background.jpg', import.meta.url).href
+const ritualOverlayEmperorUrl = new URL('../../assets/images/jade.png', import.meta.url).href
+
 export function renderTemplate() {
   return `
   <!-- 攝影機原始畫面（隱藏，僅供MediaPipe讀取像素）與鏡像後顯示用畫布 -->
@@ -48,6 +53,14 @@ export function renderTemplate() {
   <canvas id="particle_canvas"></canvas>
   <div class="flash-white" id="flash"></div>
   <div class="screen-darken" id="darken"></div>
+
+  <!-- 神明實景疊加：插香/抽籤/擲筊三階段進場先100%不透明蓋住鏡頭畫面，
+       過場結束後淡化到部分透明，讓使用者能透過這層畫面看到攝影機拍到的自己 -->
+  <div id="ritual-overlay" class="ritual-overlay">
+    <img class="ritual-overlay-bg" src="${ritualOverlayBgUrl}" alt="" />
+    <div class="ritual-overlay-glow"></div>
+    <img class="ritual-overlay-emperor" src="${ritualOverlayEmperorUrl}" alt="" />
+  </div>
 
   <!-- 墨染 / 金線 場景過場遮罩 -->
   <video id="oracle-transition-video" muted playsinline preload="auto" aria-hidden="true"></video>
