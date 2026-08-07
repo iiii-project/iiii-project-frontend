@@ -8,7 +8,7 @@
    2. 進階材質：使用 MeshPhysicalMaterial 模擬漆木質感，加入 Clearcoat (清漆層)。
    3. 動態紋理：代碼自動生成木質纖維貼圖，無需外部圖檔。
 
-   【封裝調整說明（僅此三處，其餘幾何/材質/物理數值全部逐行相同）】
+   【封裝調整說明（其餘幾何/材質/物理數值全部逐行相同）】
    1. 全域 `THREE`（原本由 CDN <script> 掛在 window 上）改為標準 `import * as THREE from 'three'`。
    2. 全域 `AppState.bwaTossing` 改為由外部注入的 `state.bwaTossing`
       （state 由 engine/state.js 的 createArState() 產生，跟 GestureEngine 共用同一份，
@@ -17,142 +17,68 @@
       每個 <temple-ar-oracle> 元件實例呼叫一次即可得到一份獨立場景；
       resize() 原本讀取全域 `els.bwaThreeContainer`，改為讀取 init() 時傳入、
       並保存在模組內部的 container 參照。
+   4. 筊杯本體改為載入外部 GLTF 模型（來源：Digital-Jiaobei 專案，見檔案下方
+      makeCup() 註解），取代原本用 ExtrudeGeometry + Canvas 貼圖程序化產生的
+      幾何體與「凸」「平」文字標籤；擲筊物理、命中測試、鏡頭、燈光等其餘邏輯
+      不變。
    ========================================================================= */
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// 筊杯 3D 模型來源：Digital-Jiaobei 專案的 models/jiaobeii.glb（原封不動複製到
+// public/models/jiaobei.glb）。模型內含 JiaoOne / JiaoTwo 兩個節點，各自的原始
+// 網格座標沿用同一套慣例：局部 +Z 是凸面、-Z 是平面，跟這個檔案既有的
+// rotation.x（0=凸面朝上、π=平面朝上）判斷邏輯完全吻合，因此下面的擲筊物理、
+// 命中測試等邏輯都不需要跟著調整。
+const JIAO_MODEL_URL = '/models/jiaobei.glb';
+let jiaoTemplatesPromise = null;
+
+function loadJiaoTemplates() {
+  if (!jiaoTemplatesPromise) {
+    jiaoTemplatesPromise = new GLTFLoader().loadAsync(JIAO_MODEL_URL).then((gltf) => ({
+      jiaoOne: gltf.scene.getObjectByName('JiaoOne'),
+      jiaoTwo: gltf.scene.getObjectByName('JiaoTwo'),
+    }));
+  }
+  return jiaoTemplatesPromise;
+}
 
 export function createBwaScene(state) {
   let renderer, scene, camera, cupA, cupB, ground, light;
   let holding = false;
+  let destroyed = false;
   let container = null;
   let lastScreenPos = { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
   let loopRafId = null;
 
-  // 生成凸面（外側）的深紅漆木紋
-  function createWoodTextureDomed() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256; canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#9e1b1b'; // 深硃砂紅
-    ctx.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 300; i++) {
-      ctx.fillStyle = `rgba(50, 0, 0, ${Math.random() * 0.15})`;
-      ctx.fillRect(Math.random() * 256, Math.random() * 256, Math.random() * 60, 1);
-    }
-    return new THREE.CanvasTexture(canvas);
-  }
+  // 把模型節點複製成一顆獨立的筊杯：重置成原始網格座標（見上方註解），
+  // 置中並統一縮放到跟舊版程序化幾何體相近的尺寸，這樣其餘的位置／旋轉／
+  // 間距數值（idle、hold、toss 裡的座標）都不必更動。
+  function makeCup(template) {
+    const inner = template.clone(true);
+    inner.position.set(0, 0, 0);
+    inner.quaternion.identity();
+    inner.scale.set(1, 1, 1);
+    inner.updateMatrixWorld(true);
 
-  // 生成平面（內側）的淺色木紋（模擬磨損或未上厚漆的切面，方便辨識正反）
-  function createWoodTextureFlat() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256; canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#c25140'; // 較淺、帶橘紅的木頭切面色
-    ctx.fillRect(0, 0, 256, 256);
-    // 加點年輪木紋感
-    for (let i = 0; i < 15; i++) {
-      ctx.strokeStyle = `rgba(90, 20, 10, 0.1)`;
-      ctx.lineWidth = Math.random() * 3 + 1;
-      ctx.beginPath();
-      ctx.arc(128, 128, Math.random() * 150, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    return new THREE.CanvasTexture(canvas);
-  }
+    const box = new THREE.Box3().setFromObject(inner);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    inner.position.sub(center);
 
-  function buildCupGeometry() {
-    const shape = new THREE.Shape();
-    // 重新校正基本輪廓，稍微瘦身，避免過度肥大
-    shape.moveTo(0, 1.1);
-    shape.bezierCurveTo(0.7, 1.1, 0.9, 0.5, 0.9, 0);
-    shape.bezierCurveTo(0.9, -0.5, 0.7, -1.1, 0, -1.1);
-    shape.bezierCurveTo(-0.2, -1.1, -0.1, -0.6, -0.4, 0);
-    shape.bezierCurveTo(-0.1, 0.6, -0.2, 1.1, 0, 1.1);
-
-    const extrudeSettings = {
-      depth: 0.2,            // 降低厚度，避免像大木塊
-      bevelEnabled: true,
-      bevelThickness: 0.15,   // 縮小倒角
-      bevelSize: 0.1,
-      bevelSegments: 8,
-      curveSegments: 32
-    };
-
-    const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    geo.center();
-
-    // 控制最終尺寸：原來的太大，這裡全面縮小 (X縮小到0.5, Y縮小到0.6, Z厚度縮小)
-    geo.scale(0.5, 0.6, 0.7);
-    return geo;
-  }
-
-  // 產生「凸」「平」標記貼圖：不依賴 ExtrudeGeometry 的材質分組（該分組在不同版本
-  // 行為不一致，容易導致兩面看起來完全相同），改用獨立的文字貼圖平面固定貼附在
-  // 局部座標的正反兩面，保證無論如何都能清楚分辨「凸面／平面」。
-  function createFaceLabelTexture(char, style){
-    const canvas = document.createElement('canvas');
-    canvas.width = 256; canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    if (style === 'domed'){
-      const g = ctx.createRadialGradient(100,90,10,128,128,150);
-      g.addColorStop(0, '#ff9a68'); g.addColorStop(0.55, '#c53a1c'); g.addColorStop(1, '#7a1c0a');
-      ctx.fillStyle = g;
-    } else {
-      ctx.fillStyle = '#e2c88f';
-    }
-    ctx.beginPath(); ctx.arc(128,128,120,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle = style==='domed' ? 'rgba(255,230,190,0.8)' : 'rgba(90,50,20,0.6)';
-    ctx.lineWidth = 6; ctx.stroke();
-    ctx.fillStyle = style==='domed' ? '#fff6e6' : '#5c2210';
-    ctx.font = 'bold 150px "Noto Serif TC", serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(char, 128, 140);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  }
-  function addFaceLabels(mesh){
-    const domedTex = createFaceLabelTexture('凸', 'domed');
-    const flatTex = createFaceLabelTexture('平', 'flat');
-    const domedMat = new THREE.MeshStandardMaterial({ map: domedTex, roughness: 0.35, metalness: 0.05, transparent:true });
-    const flatMat = new THREE.MeshStandardMaterial({ map: flatTex, roughness: 0.7, metalness: 0.0, transparent:true });
-    const geo = new THREE.CircleGeometry(0.32, 40);
-    const domedPlane = new THREE.Mesh(geo, domedMat);
-    domedPlane.position.z = 0.19; // 局部 +z 面：rotation.x=0 時朝向相機 → 對應「凸面朝上」
-    domedPlane.castShadow = false;
-    const flatPlane = new THREE.Mesh(geo, flatMat);
-    flatPlane.position.z = -0.19; // 局部 -z 面：rotation.x=π 時朝向相機 → 對應「平面朝上」
-    flatPlane.rotation.y = Math.PI;
-    flatPlane.castShadow = false;
-    mesh.add(domedPlane);
-    mesh.add(flatPlane);
-  }
-
-  function makeCup() {
-    const geo = buildCupGeometry();
-
-    // 💡 核心修正：利用多重材質群組（Groups），讓正面與反面吃不同材質！
-    // 凸面（背面）：深紅清漆感
-    const matDomed = new THREE.MeshPhysicalMaterial({
-      map: createWoodTextureDomed(),
-      color: 0xa81d1d,
-      roughness: 0.2,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.1
+    inner.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
     });
 
-    // 平面（正面）：淺橘紅、高粗糙度（無亮面漆），製造物理正反面反差
-    const matFlat = new THREE.MeshStandardMaterial({
-      map: createWoodTextureFlat(),
-      color: 0xd6634f,
-      roughness: 0.6, // 霧面，不反光
-    });
-
-    // Three.js Extrude 預設：index 0 是側邊與凸面，index 1 是平面的蓋子
-    const mesh = new THREE.Mesh(geo, [matDomed, matFlat]);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    addFaceLabels(mesh);
-    return mesh;
+    const cup = new THREE.Group();
+    cup.add(inner);
+    // 用寬度（X 軸）決定筊杯大小：hold 手持狀態下兩顆筊杯中心距最窄只有 0.8，
+    // 寬度抓 0.75 還留一點間隙，不會互相穿插。
+    cup.scale.setScalar(0.75 / size.x);
+    return cup;
   }
 
   function init(el) {
@@ -196,19 +122,24 @@ export function createBwaScene(state) {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    cupA = makeCup();
-    cupB = makeCup();
-
-    resetIdle();
-    scene.add(cupA);
-    scene.add(cupB);
-
     loopRafId = requestAnimationFrame(loop);
+
+    // 模型是非同步載入，載完才生出兩顆筊杯並加進場景；在這之前場景照常
+    // 渲染（燈光、地板都已就緒），下面幾個操作函式也都對 cupA/cupB 尚未
+    // 就緒的情況做了保護。
+    loadJiaoTemplates().then(({ jiaoOne, jiaoTwo }) => {
+      if (destroyed) return;
+      cupA = makeCup(jiaoOne);
+      cupB = makeCup(jiaoTwo);
+      resetIdle();
+      scene.add(cupA);
+      scene.add(cupB);
+    });
   }
 
   function loop(now) {
     if (!renderer) return;
-    if (!holding && !state.bwaTossing) {
+    if (cupA && cupB && !holding && !state.bwaTossing) {
       const time = now * 0.001;
       // 微弱優雅的懸浮，幅度調小
       const bob = Math.sin(time * 1.2) * 0.05;
@@ -233,6 +164,8 @@ export function createBwaScene(state) {
 
   function setHoldPosition(nx01, ny01) {
     holding = true;
+    lastScreenPos = { x: nx01 * window.innerWidth, y: ny01 * window.innerHeight };
+    if (!cupA || !cupB) return;
     const vFOV = camera.fov * Math.PI / 180;
     const dist = camera.position.z;
     const worldH = 2 * Math.tan(vFOV / 2) * dist;
@@ -246,13 +179,12 @@ export function createBwaScene(state) {
     cupB.position.set(targetX + 0.4, targetY, 0);
     cupA.rotation.set(0.2, 0.1, -0.05);
     cupB.rotation.set(0.2, -0.1, 0.05);
-
-    lastScreenPos = { x: nx01 * window.innerWidth, y: ny01 * window.innerHeight };
   }
 
   function resetIdle() {
     holding = false;
     state.bwaTossing = false;
+    if (!cupA || !cupB) return;
     cupA.position.set(-0.5, 0, 0);
     cupB.position.set(0.5, 0, 0);
     // 預設閒置時：凸面朝上 (0,0,0)
@@ -261,6 +193,12 @@ export function createBwaScene(state) {
   }
 
   function toss(coinA, coinB, onImpact, onSettle) {
+    if (!cupA || !cupB) {
+      // 理論上不會發生：進到擲筊步驟前使用者已經走完上香／抽籤等流程，
+      // 模型早已載入完畢；保留這個保險，避免極端情況下卡住流程。
+      requestAnimationFrame(() => toss(coinA, coinB, onImpact, onSettle));
+      return;
+    }
     holding = false;
     state.bwaTossing = true;
     const restY = -1.1;
@@ -332,6 +270,7 @@ export function createBwaScene(state) {
   // 新增：釋放資源用（原始版本活在單頁iframe裡，卸載時瀏覽器整包回收記憶體；
   // 元件化之後需要能主動釋放WebGL context跟事件監聽，避免切走畫面後仍佔用GPU資源）
   function destroy(){
+    destroyed = true;
     window.removeEventListener('resize', resize);
     if (loopRafId) cancelAnimationFrame(loopRafId);
     if (renderer) {
