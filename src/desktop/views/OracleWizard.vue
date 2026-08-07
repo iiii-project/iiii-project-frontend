@@ -5,24 +5,24 @@ import type { Category } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
 import { useSpeechInput } from '@/utils/speech'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
-import AmuletButton from '@/components/AmuletButton.vue'
-import FontScaleControl from '@/components/FontScaleControl.vue'
-import FortunePoem from '@/components/FortunePoem.vue'
-import FortuneReading from '@/components/FortuneReading.vue'
+import AmuletButton from '@/desktop/components/AmuletButton.vue'
+import FontScaleControl from '@/desktop/components/FontScaleControl.vue'
+import FortunePoem from '@/desktop/components/FortunePoem.vue'
+import FortuneReading from '@/desktop/components/FortuneReading.vue'
 // 註冊 <temple-ar-oracle>（插香 → 搖籤 → 擲筊 的 AR 引擎）
 import '@/ar/temple-ar-oracle/index.js'
-import Live2DCompanion from '@/components/live2d/Live2DCompanion.vue'
+import Live2DCompanion from '@/desktop/components/live2d/Live2DCompanion.vue'
 import { sendWhenReady } from '@/live2d/websocketService'
 
 const router = useRouter()
 // 籤詩字級由右上角控制，設定跨頁共用（見 utils/fontScale）
 const { scaleStyle } = useFontScale()
 
-const healthyIcon = new URL('../assets/images/healthy.png', import.meta.url).href
-const homeIcon = new URL('../assets/images/home.png', import.meta.url).href
-const moneyIcon = new URL('../assets/images/money.png', import.meta.url).href
-const wellnessIcon = new URL('../assets/images/wellness.png', import.meta.url).href
-const godOfWealthIcon = new URL('../assets/images/god-of-wealth.png', import.meta.url).href
+const healthyIcon = new URL('../../assets/images/healthy.png', import.meta.url).href
+const homeIcon = new URL('../../assets/images/home.png', import.meta.url).href
+const moneyIcon = new URL('../../assets/images/money.png', import.meta.url).href
+const wellnessIcon = new URL('../../assets/images/wellness.png', import.meta.url).href
+const godOfWealthIcon = new URL('../../assets/images/god-of-wealth.png', import.meta.url).href
 
 // 沿用舊版（v17）的五個方向與說明文案
 /* arLabel 是傳給 AR 引擎的分類名稱。引擎內部的 CATEGORY_API_MAP 只認得它自己那份

@@ -1,14 +1,6 @@
 <script setup lang="ts">
-import { defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-
-/* 手機版是獨立的一支頁面（MobileHome.vue）：進場改成推廟門，
-   這裡只負責依螢幕寬度決定要掛哪一支，桌機版的內容完全不動。 */
-const MobileHome = defineAsyncComponent(() => import('./MobileHome.vue'))
-const MOBILE_QUERY = '(max-width: 640px)'
-const isMobile = ref(typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches)
-let mobileMedia: MediaQueryList | null = null
-const onBreakpointChange = (event: MediaQueryListEvent) => (isMobile.value = event.matches)
 
 interface Mote {
   left: string
@@ -69,10 +61,10 @@ function step() {
 }
 
 // 玉皇大帝：去背後的插畫，取代原本的手繪 SVG
-const jadeEmperorSrc = new URL('../assets/images/jade-emperor.png', import.meta.url).href
+const jadeEmperorSrc = new URL('../../assets/images/jade-emperor.png', import.meta.url).href
 
 // 入殿音效：實際錄好的廟宇音檔，點擊當下才播（瀏覽器要有使用者手勢才允許）
-const ascendSoundUrl = new URL('../assets/audio/temple-ascend.m4a', import.meta.url).href
+const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
 let ascendSound: HTMLAudioElement | null = null
 
 function primeAscendSound() {
@@ -165,8 +157,6 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
-  mobileMedia = window.matchMedia(MOBILE_QUERY)
-  mobileMedia.addEventListener('change', onBreakpointChange)
   document.body.classList.add('celestial-home-open')
   buildMotes()
   primeAscendSound() // 先把音檔載好，按下去才不會有延遲
@@ -180,7 +170,6 @@ onBeforeUnmount(() => {
   document.body.classList.remove('celestial-home-open')
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('keydown', onKeydown)
-  mobileMedia?.removeEventListener('change', onBreakpointChange)
   if (raf) cancelAnimationFrame(raf)
   if (ascendTimer) clearTimeout(ascendTimer)
   const root = document.documentElement
@@ -190,10 +179,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- 手機：走獨立的推門版首頁 -->
-  <MobileHome v-if="isMobile" />
-
-  <div v-else class="celestial-home" :class="{ 'is-ascending': isAscending }">
+  <div class="celestial-home" :class="{ 'is-ascending': isAscending }">
     <!-- ============ SVG 素材庫 ============ -->
     <svg width="0" height="0" class="asset-defs" aria-hidden="true">
       <defs>

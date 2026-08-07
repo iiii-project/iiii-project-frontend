@@ -310,13 +310,21 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
        才同步切換——神明實景淡到六成、人像（去背後的#output_canvas）同時淡入疊上來。 */
     window.clearTimeout(ritualOverlayTimer);
     const veilMs = RITUAL_OVERLAY_VEIL_MS[name];
+    // 防呆：els.ritualOverlay / els.outputCanvas 理論上一定存在，
+    // 但曾經在插香/抽籤/擲筊進場時炸過 undefined.classList，先擋著避免整個流程卡死。
     if (veilMs != null){
-      els.ritualOverlay.classList.remove('blended');
-      els.outputCanvas.classList.remove('blended');
-      ritualOverlayTimer = window.setTimeout(() => {
-        els.ritualOverlay.classList.add('blended');
-        els.outputCanvas.classList.add('blended');
-      }, veilMs);
+      if (!els.ritualOverlay || !els.outputCanvas){
+        console.warn('[temple-ar-oracle] showScene: ritualOverlay/outputCanvas 缺失，跳過神明實景淡入效果', {
+          name, hasRitualOverlay: !!els.ritualOverlay, hasOutputCanvas: !!els.outputCanvas
+        });
+      } else {
+        els.ritualOverlay.classList.remove('blended');
+        els.outputCanvas.classList.remove('blended');
+        ritualOverlayTimer = window.setTimeout(() => {
+          els.ritualOverlay?.classList.add('blended');
+          els.outputCanvas?.classList.add('blended');
+        }, veilMs);
+      }
     }
 
     if (name === 'incense'){
@@ -577,8 +585,8 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
     state.current = 'idle';
     state.bwaTossing = false;
     window.clearTimeout(ritualOverlayTimer);
-    els.ritualOverlay.classList.remove('blended');
-    els.outputCanvas.classList.remove('blended');
+    els.ritualOverlay?.classList.remove('blended');
+    els.outputCanvas?.classList.remove('blended');
     gestureEngine.resetIncenseProgress();
     gestureEngine.resetShakeProgress();
     gestureEngine.resetPinch();

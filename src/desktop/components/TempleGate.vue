@@ -7,7 +7,7 @@ import { onBeforeUnmount, ref } from 'vue'
 const props = withDefaults(defineProps<{ hint?: string }>(), { hint: '輕 觸 推 門' })
 const emit = defineEmits<{ opening: []; opened: [] }>()
 
-const logoUrl = new URL('../assets/images/logo.png', import.meta.url).href
+const logoUrl = new URL('../../assets/images/logo.png', import.meta.url).href
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches

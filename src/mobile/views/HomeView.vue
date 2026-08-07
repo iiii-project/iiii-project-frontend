@@ -13,8 +13,8 @@ const prefersReducedMotion = () =>
 
 /* ── 音效：與桌機版同一支音檔。音檔前 1.5 秒是空白，
    從撞擊點往回抓，聲音才會正好落在門敞開的那一刻。 ── */
-const logoUrl = new URL('../assets/images/logo.png', import.meta.url).href
-const ascendSoundUrl = new URL('../assets/audio/temple-ascend.m4a', import.meta.url).href
+const logoUrl = new URL('../../assets/images/logo.png', import.meta.url).href
+const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
 const AUDIO_IMPACT = 1.5
 const AUDIO_PREROLL = 0.04
 let ascendSound: HTMLAudioElement | null = null

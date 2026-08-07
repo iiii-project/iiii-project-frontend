@@ -4,7 +4,7 @@ import { deleteHistoryItem, listHistory } from '@/api/divinationApi'
 import { toUserMessage } from '@/api/client'
 import { useAuthStore } from '@/stores/authStore'
 import type { HistoryItem } from '@/types/divination'
-import AccountAccessPanel from '@/components/common/AccountAccessPanel.vue'
+import AccountAccessPanel from '@/desktop/components/common/AccountAccessPanel.vue'
 
 const auth = useAuthStore()
 const records = ref<HistoryItem[]>([])

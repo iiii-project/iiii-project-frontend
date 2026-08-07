@@ -1,23 +1,15 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { isMobileViewport } from '@/utils/device'
+import { mobileRoutes } from '@/mobile/router'
+import { desktopRoutes } from '@/desktop/router'
 
+/* 手機／電腦是兩份完全獨立的路由＋頁面（src/mobile、src/desktop），
+   彼此互不影響；這裡只在 app 啟動的當下判斷一次裝置，掛上對應的那一份路由表。
+   （跟以前 index.vue 內部用 matchMedia 即時切換不同：現在是整個 app 啟動時
+   就決定好走哪一份，瀏覽器視窗中途跨越 640px 斷點不會再熱切換。） */
 const router = createRouter({
   history: createWebHistory(),
-  routes: [
-    /* 首頁＝仙境主視覺。桌機走 index.vue，手機由它切換到 MobileHome（推廟門版）。 */
-    { path: '/', name: 'home', component: () => import('@/views/index.vue'), meta: { immersive: true } },
-    // 舊網址：先前對外用過 /celestial，保留轉址避免既有連結失效
-    { path: '/celestial', redirect: '/' },
-    // 全新 Vue 版求籤流程（與首頁分屬兩支檔案）
-    // 掃 QR 取籤：先推廟門，再顯示那一次的籤詩
-    { path: '/fortune/:sessionId', name: 'fortune-share', component: () => import('@/views/FortuneShare.vue'), meta: { immersive: true } },
-    { path: '/oracle', name: 'oracle', component: () => import('@/views/OracleWizard.vue'), meta: { immersive: true } },
-    // 查籤：輸入籤號看籤詩，或掃我們自己產的籤 QR
-    { path: '/lookup', name: 'lookup', component: () => import('@/views/LookupView.vue'), meta: { immersive: true } },
-    { path: '/donation', name: 'donation', component: () => import('@/views/DonationView.vue'), meta: { immersive: true } },
-    { path: '/temple-map', name: 'temple-map', component: () => import('@/views/TempleMapView.vue'), meta: { immersive: true } },
-    { path: '/history', name: 'history', component: () => import('@/views/HistoryView.vue'), meta: { immersive: true } },
-    { path: '/login', redirect: '/history' }
-  ]
+  routes: isMobileViewport() ? mobileRoutes : desktopRoutes
 })
 
 export default router

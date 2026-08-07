@@ -26,21 +26,21 @@ import { useFontScale } from '@/utils/fontScale'
 import { OFFLINE_MAX_NUMBER, offlineFortuneByNumber } from '@/utils/offlineFortunes'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
 import { useSpeechInput } from '@/utils/speech'
-import AmuletButton from '@/components/AmuletButton.vue'
-import FontScaleControl from '@/components/FontScaleControl.vue'
-import FortunePoem from '@/components/FortunePoem.vue'
-import FortuneReading from '@/components/FortuneReading.vue'
-import OracleTransition from '@/components/OracleTransition.vue'
-import QrScanner from '@/components/QrScanner.vue'
+import AmuletButton from '@/mobile/components/AmuletButton.vue'
+import FontScaleControl from '@/mobile/components/FontScaleControl.vue'
+import FortunePoem from '@/mobile/components/FortunePoem.vue'
+import FortuneReading from '@/mobile/components/FortuneReading.vue'
+import OracleTransition from '@/mobile/components/OracleTransition.vue'
+import QrScanner from '@/mobile/components/QrScanner.vue'
 
 const router = useRouter()
 const { scaleStyle } = useFontScale()
 
-const healthyIcon = new URL('../assets/images/healthy.png', import.meta.url).href
-const homeIcon = new URL('../assets/images/home.png', import.meta.url).href
-const moneyIcon = new URL('../assets/images/money.png', import.meta.url).href
-const wellnessIcon = new URL('../assets/images/wellness.png', import.meta.url).href
-const godOfWealthIcon = new URL('../assets/images/god-of-wealth.png', import.meta.url).href
+const healthyIcon = new URL('../../assets/images/healthy.png', import.meta.url).href
+const homeIcon = new URL('../../assets/images/home.png', import.meta.url).href
+const moneyIcon = new URL('../../assets/images/money.png', import.meta.url).href
+const wellnessIcon = new URL('../../assets/images/wellness.png', import.meta.url).href
+const godOfWealthIcon = new URL('../../assets/images/god-of-wealth.png', import.meta.url).href
 
 // 與求籤流程同一組方向與說明，解籤才會落在同一個語彙裡
 const CATEGORIES: { value: Category; label: string; icon: string; hint: string }[] = [
