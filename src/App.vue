@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import Live2DCompanionWidget from '@/live2d/Live2DCompanionWidget.vue'
 
 const route = useRoute()
 const isImmersiveRoute = computed(() => route.meta.immersive === true)
@@ -42,4 +43,5 @@ watch(
       </Transition>
     </RouterView>
   </main>
+  <Live2DCompanionWidget />
 </template>
