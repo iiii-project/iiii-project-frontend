@@ -9,6 +9,7 @@ dist/
 *.log
 .DS_Store
 
-# 過場影片：檔案大（2.7MB）且會反覆重出，不進版控。
+# 過場影片：檔案大且會反覆重出，不進版控。
 # 缺檔時 AR 引擎會自動退回原本的墨染過場，不會壞掉。
 public/videos/oracle-transition.mov
+public/videos/dragon.mp4

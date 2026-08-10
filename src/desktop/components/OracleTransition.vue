@@ -7,12 +7,17 @@
 
    用法：ref 拿到元件後呼叫 play()，回傳的 Promise 會在「揭曉點」resolve
    （影片播到尾聲、或墨染蓋滿畫面時），那一刻再把結果換上去，
-   使用者看到的就是龍把籤送到眼前、畫面接著變成籤詩。 */
+   使用者看到的就是龍把籤送到眼前、畫面接著變成籤詩。
+
+   桌機版改用 dragon.mp4（AR 版跟手機版維持引擎預設的 oracle-transition.mov，
+   不受影響），透過 preload/play 的 src 覆蓋參數指定，不動共用引擎的預設值。 */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   playOracleTransition,
   preloadOracleTransition
 } from '@/ar/temple-ar-oracle/engine/flow-controller.js'
+
+const DESKTOP_TRANSITION_SRC = '/videos/dragon.mp4'
 
 const videoEl = ref<HTMLVideoElement | null>(null)
 const overlayEl = ref<HTMLElement | null>(null)
@@ -23,7 +28,10 @@ let hideTimer = 0
 onMounted(() => {
   // 先把影片抓下來，真的要播時才不會卡在載入
   if (videoEl.value && overlayEl.value) {
-    preloadOracleTransition({ transitionVideo: videoEl.value, transitionOverlay: overlayEl.value })
+    preloadOracleTransition(
+      { transitionVideo: videoEl.value, transitionOverlay: overlayEl.value },
+      { src: DESKTOP_TRANSITION_SRC }
+    )
   }
 })
 
@@ -51,7 +59,11 @@ function play(): Promise<void> {
          時間到再整層關掉，避免它一直蓋在頁面上吃點擊。 */
       hideTimer = window.setTimeout(() => { active.value = false }, 1400)
     }
-    playOracleTransition({ transitionVideo: video, transitionOverlay: overlay }, reveal)
+    playOracleTransition(
+      { transitionVideo: video, transitionOverlay: overlay },
+      reveal,
+      { src: DESKTOP_TRANSITION_SRC }
+    )
     /* 保險：引擎那邊已經有影片卡死的硬上限，但萬一連 reveal 都沒被呼叫，
        這裡也要把流程放行，不能讓使用者永遠停在過場上。 */
     window.setTimeout(reveal, 9000)

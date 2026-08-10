@@ -38,16 +38,18 @@ import { spawnLightBurst, screenShakeOnce } from './particle-system.js';
 
 /* 領籤過場：播放自製的 5.12 秒動畫（龍銜籤送到眼前）。
    影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
-   載入失敗、解碼失敗、或播放卡住超過預期時間，都走 fallback。 */
+   載入失敗、解碼失敗、或播放卡住超過預期時間，都走 fallback。
+   AR 引擎跟手機版維持這支預設影片；桌機版改用 dragon.mp4，
+   呼叫端透過 options.src / hooks.src 覆蓋，未帶入時就走這個預設值。 */
 export const ORACLE_TRANSITION_SRC = '/videos/oracle-transition.mov';
 const ORACLE_TRANSITION_MS = 5120;   // 素材長度（拿不到 metadata 時的備用值）
 const REVEAL_LEAD_MS = 350;          // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
 const HARD_CAP_EXTRA_MS = 2500;      // 影片真的卡死時的保險
 
-export function preloadOracleTransition(els){
+export function preloadOracleTransition(els, options = {}){
   const video = els.transitionVideo;
   if (!video || video.dataset.ready === '1' || video.dataset.failed === '1') return;
-  video.src = ORACLE_TRANSITION_SRC;
+  video.src = options.src || ORACLE_TRANSITION_SRC;
   video.addEventListener('canplaythrough', () => { video.dataset.ready = '1'; }, { once:true });
   video.addEventListener('error', () => { video.dataset.failed = '1'; }, { once:true });
   video.load();
@@ -111,7 +113,7 @@ export function playOracleTransition(els, onCovered, hooks = {}){
   }
   function onEnded(){ finish(); }
 
-  if (!video.src) video.src = ORACLE_TRANSITION_SRC;
+  if (!video.src) video.src = hooks.src || ORACLE_TRANSITION_SRC;
   video.currentTime = 0;
   /* 開聲播放。瀏覽器只在頁面已有使用者互動時才允許非靜音自動播放，
      走到這步使用者早就點過擲筊；若仍被擋，退成靜音再播一次，

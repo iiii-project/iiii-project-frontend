@@ -48,11 +48,11 @@ declare module '@/ar/temple-ar-oracle/engine/flow-controller.js' {
     transitionVideo: HTMLVideoElement
     transitionOverlay: HTMLElement
   }
-  export function preloadOracleTransition(els: TransitionEls): void
+  export function preloadOracleTransition(els: TransitionEls, options?: { src?: string }): void
   export function playOracleTransition(
     els: TransitionEls,
     onCovered?: () => void,
-    hooks?: { onStart?: () => void; onEnd?: () => void }
+    hooks?: { onStart?: () => void; onEnd?: () => void; src?: string }
   ): void
   export function playInkTransition(els: TransitionEls, onCovered?: () => void): void
 }

@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -62,6 +63,9 @@ function step() {
 
 // 玉皇大帝：去背後的插畫，取代原本的手繪 SVG
 const jadeEmperorSrc = new URL('../../assets/images/jade-emperor.png', import.meta.url).href
+
+// 首頁背景：水墨山水，廟宇立於群山之間、旭日高懸
+const heroBackgroundSrc = new URL('../../assets/images/blackground.jpg', import.meta.url).href
 
 // 入殿音效：實際錄好的廟宇音檔，點擊當下才播（瀏覽器要有使用者手勢才允許）
 const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
@@ -237,129 +241,16 @@ onBeforeUnmount(() => {
           />
         </symbol>
 
-        <!-- 飛天：持蓮飛舞，長帛帶曳於身後 -->
-        <symbol id="apsara" viewBox="0 0 360 200">
-          <g class="sway">
-            <path d="M6,146 C58,150 96,132 126,116" fill="none" stroke="url(#gRibbon)" stroke-width="5" stroke-linecap="round" opacity="0.75" />
-            <path d="M0,118 C48,104 84,110 122,98" fill="none" stroke="url(#gRibbon)" stroke-width="7" stroke-linecap="round" opacity="0.9" />
-            <path d="M18,86 C64,72 98,86 128,82" fill="none" stroke="url(#gRibbon)" stroke-width="4.5" stroke-linecap="round" opacity="0.6" />
-          </g>
-          <!-- 曳地長裙，末端收成飄尾 -->
-          <path
-            d="M256,92 C252,112 236,130 212,142 C186,154 152,156 122,150
-               C100,146 80,150 62,162 C74,138 100,126 128,126
-               C154,126 178,120 194,106 C208,94 214,84 216,74 Z"
-            fill="url(#gRobe)"
-          />
-          <!-- 曲膝後掠的腿 -->
-          <path d="M238,116 C218,132 194,140 170,140" fill="none" stroke="#eccb90" stroke-width="11" stroke-linecap="round" />
-          <path d="M170,140 C160,142 152,146 146,152" fill="none" stroke="#f3ddb8" stroke-width="8" stroke-linecap="round" />
-          <!-- 斜傾的軀幹 -->
-          <path
-            d="M272,56 C286,62 288,78 278,90 C268,102 252,110 240,114
-               C228,116 221,107 224,97 C229,83 250,62 262,55 Z"
-            fill="url(#gRobe2)"
-          />
-          <!-- 後臂 -->
-          <path d="M256,80 C242,76 228,74 214,76" fill="none" stroke="#eccb90" stroke-width="7.5" stroke-linecap="round" />
-          <!-- 前伸手臂與蓮花 -->
-          <path d="M270,66 C288,58 302,52 314,50" fill="none" stroke="#eccb90" stroke-width="8.5" stroke-linecap="round" />
-          <g>
-            <path d="M322,38 C328,44 328,52 322,57 C316,52 316,44 322,38 Z" fill="#e79a9a" />
-            <path d="M308,50 C316,45 323,47 325,54 C317,59 310,57 308,50 Z" fill="#d97f7f" />
-            <path d="M336,50 C328,45 321,47 319,54 C327,59 334,57 336,50 Z" fill="#d97f7f" />
-            <circle cx="322" cy="54" r="5" fill="#f6e2b6" />
-          </g>
-          <!-- 頸與頭 -->
-          <path d="M268,50 L276,60" stroke="#f3ddb8" stroke-width="7" stroke-linecap="round" />
-          <circle cx="270" cy="40" r="27" fill="url(#gHalo)" />
-          <circle cx="270" cy="40" r="21" fill="none" stroke="rgba(212,175,55,0.7)" stroke-width="1.4" />
-          <ellipse cx="270" cy="40" rx="11.5" ry="13.5" fill="#f3ddb8" transform="rotate(12 270 40)" />
-          <path d="M259,36 C260,23 279,20 283,30 C285,37 281,41 275,39 C268,37 262,39 259,36 Z" fill="#6c4326" />
-          <circle cx="271" cy="19" r="6" fill="#6c4326" />
-          <!-- 後拋長帶 -->
-          <path
-            d="M232,62 C192,54 146,66 106,54 C74,44 46,50 28,64"
-            fill="none" stroke="url(#gRibbon)" stroke-width="6" stroke-linecap="round" opacity="0.85"
-          />
-        </symbol>
-
-        <!-- 神佛：乘祥雲、結印、圓光背屏 -->
-        <symbol id="buddha" viewBox="0 0 300 240">
-          <circle cx="150" cy="86" r="76" fill="url(#gHalo)" />
-          <circle cx="150" cy="86" r="62" fill="none" stroke="rgba(212,175,55,0.6)" stroke-width="1.6" />
-          <circle cx="150" cy="86" r="50" fill="none" stroke="rgba(212,175,55,0.35)" stroke-width="1" />
-          <!-- 盤坐的下襬 -->
-          <path
-            d="M104,150 C112,132 128,124 150,124 C172,124 188,132 196,150
-               C186,158 166,162 150,162 C134,162 114,158 104,150 Z"
-            fill="url(#gRobe)"
-          />
-          <!-- 袈裟上身：肩線內收，腰腹放寬 -->
-          <path
-            d="M150,80 C164,80 176,88 182,100 C190,116 194,134 192,146
-               C176,152 164,154 150,154 C136,154 124,152 108,146
-               C106,134 110,116 118,100 C124,88 136,80 150,80 Z"
-            fill="url(#gRobe2)"
-          />
-          <!-- 斜襟 -->
-          <path d="M150,84 C142,98 138,116 138,134 C138,144 142,150 150,152" fill="none" stroke="rgba(255,246,220,0.55)" stroke-width="3" />
-          <path d="M150,84 C160,92 168,104 172,118" fill="none" stroke="rgba(255,246,220,0.4)" stroke-width="2.5" />
-          <!-- 雙臂垂下、結印 -->
-          <path d="M120,104 C112,118 114,130 126,138" fill="none" stroke="#e6c07a" stroke-width="9" stroke-linecap="round" />
-          <path d="M180,104 C188,118 186,130 174,138" fill="none" stroke="#e6c07a" stroke-width="9" stroke-linecap="round" />
-          <path d="M128,140 C138,132 162,132 172,140 C162,148 138,148 128,140 Z" fill="#f3ddb8" />
-          <!-- 頸、頭與肉髻 -->
-          <path d="M150,74 L150,84" stroke="#f3ddb8" stroke-width="12" stroke-linecap="round" />
-          <ellipse cx="150" cy="58" rx="15.5" ry="17.5" fill="#f3ddb8" />
-          <path d="M134,52 C135,34 165,34 166,52 C158,45 142,45 134,52 Z" fill="#6c4326" />
-          <circle cx="150" cy="31" r="7.5" fill="#6c4326" />
-          <path d="M143,58 C145,56 147,56 149,58" fill="none" stroke="#8a6a4a" stroke-width="1.4" stroke-linecap="round" />
-          <path d="M151,58 C153,56 155,56 157,58" fill="none" stroke="#8a6a4a" stroke-width="1.4" stroke-linecap="round" />
-          <!-- 蓮座 -->
-          <path d="M96,160 C110,152 190,152 204,160 C196,174 172,180 150,180 C128,180 104,174 96,160 Z" fill="#f6e2b6" />
-          <path d="M112,160 C120,170 132,176 150,177 C168,176 180,170 188,160" fill="none" stroke="rgba(212,175,55,0.6)" stroke-width="2" />
-          <path d="M150,155 C142,164 140,172 141,178 M150,155 C158,164 160,172 159,178" fill="none" stroke="rgba(212,175,55,0.5)" stroke-width="2" />
-          <!-- 承托祥雲 -->
-          <g transform="translate(20,158) scale(0.87)">
-            <use href="#ruyi" width="300" height="120" />
-          </g>
-        </symbol>
-
-        <!-- 仙鶴 -->
-        <symbol id="crane" viewBox="0 0 220 120">
-          <path d="M96,68 C74,58 46,58 22,72 C46,64 72,66 90,76 Z" fill="#fdfbf4" />
-          <ellipse cx="112" cy="70" rx="34" ry="15" fill="#fdfbf4" />
-          <path d="M120,62 C126,44 138,32 152,26 C142,38 136,50 136,64 Z" fill="#fdfbf4" />
-          <path d="M150,28 C160,20 172,18 182,20 L196,22 L182,28 C170,32 158,32 150,28 Z" fill="#f6f1e4" />
-          <path d="M196,22 L214,18 L198,28 Z" fill="#c9922f" />
-          <circle cx="176" cy="24" r="4" fill="#a63a3a" />
-          <path d="M84,78 C70,88 56,96 40,100" fill="none" stroke="#e7ddc7" stroke-width="4" stroke-linecap="round" />
-          <path d="M92,80 C80,92 66,100 50,106" fill="none" stroke="#e7ddc7" stroke-width="3" stroke-linecap="round" />
-          <path d="M78,62 C56,44 40,40 22,44 C42,48 58,58 74,74 Z" fill="#f2ece0" />
-          <path d="M96,60 C86,44 76,36 62,32 C78,42 86,54 90,68 Z" fill="rgba(212,175,55,0.35)" />
-        </symbol>
-      </defs>
+    </defs>
     </svg>
 
     <!-- ============ 舞台 ============ -->
     <div class="stage" aria-hidden="true">
-      <div class="layer sky"></div>
+      <div class="layer sky" :style="{ backgroundImage: `url(${heroBackgroundSrc})` }"></div>
       <div class="rays"></div>
       <div class="layer halo-glow"></div>
 
-      <svg class="mountains" viewBox="0 0 1440 420" preserveAspectRatio="none">
-        <path
-          d="M0,300 L150,190 L250,250 L380,120 L520,240 L640,180 L760,270 L900,150 L1040,246 L1180,166 L1320,254 L1440,196 L1440,420 L0,420 Z"
-          fill="url(#gMountain)" opacity="0.4"
-        />
-        <path
-          d="M0,340 L180,254 L320,320 L470,220 L620,318 L780,246 L920,330 L1080,258 L1240,336 L1400,270 L1440,300 L1440,420 L0,420 Z"
-          fill="#a9bcbb" opacity="0.34"
-        />
-      </svg>
-
-      <!-- 中央玉皇大帝：置於霧氣與雲帶之後，時隱時現 -->
+      <!-- 中央玉皇大帝：站在畫中廟宇與旭日之間的留白處 -->
       <div class="sovereign">
         <span class="sovereign-float">
           <img :src="jadeEmperorSrc" alt="" class="sovereign-img" />
@@ -370,56 +261,6 @@ onBeforeUnmount(() => {
       <div class="mist m2"></div>
       <div class="mist m3"></div>
       <div class="mist m4"></div>
-
-      <!-- 遠景雲帶 -->
-      <div class="band band-far">
-        <svg viewBox="0 0 2400 140" preserveAspectRatio="none">
-          <g id="cloudsFar">
-            <use href="#ruyi" x="40" y="30" width="300" height="120" />
-            <use href="#ruyi" x="420" y="8" width="240" height="96" />
-            <use href="#ruyi" x="760" y="42" width="330" height="132" />
-            <use href="#ruyi" x="1180" y="16" width="270" height="108" />
-          </g>
-          <use href="#cloudsFar" x="1200" />
-        </svg>
-      </div>
-
-      <!-- 飛天神佛 -->
-      <div class="flyer f1 far" style="--top:13%; --size:150px; --dur:104s; --delay:-6s; --bob:8s; --alpha:0.4;">
-        <span class="bob"><svg viewBox="0 0 360 200"><use href="#apsara" width="360" height="200" /></svg></span>
-      </div>
-
-      <div class="flyer f2 rtl mid" style="--top:64%; --size:186px; --dur:118s; --delay:-30s; --bob:6.4s; --alpha:0.5;">
-        <span class="bob"><svg viewBox="0 0 360 200"><use href="#apsara" width="360" height="200" /></svg></span>
-      </div>
-
-      <div class="flyer f3 mid" style="--top:6%; --size:132px; --dur:150s; --delay:-52s; --bob:9s; --alpha:0.46;">
-        <span class="bob"><svg viewBox="0 0 300 240"><use href="#buddha" width="300" height="240" /></svg></span>
-      </div>
-
-      <div class="flyer f4 far rtl" style="--top:24%; --size:104px; --dur:132s; --delay:-14s; --bob:7.6s; --alpha:0.34;">
-        <span class="bob"><svg viewBox="0 0 220 120"><use href="#crane" width="220" height="120" /></svg></span>
-      </div>
-
-      <div class="flyer f5 mid" style="--top:76%; --size:120px; --dur:112s; --delay:-40s; --bob:5.8s; --alpha:0.42;">
-        <span class="bob"><svg viewBox="0 0 220 120"><use href="#crane" width="220" height="120" /></svg></span>
-      </div>
-
-      <div class="flyer f6 far" style="--top:72%; --size:140px; --dur:146s; --delay:-72s; --bob:7.2s; --alpha:0.3;">
-        <span class="bob"><svg viewBox="0 0 360 200"><use href="#apsara" width="360" height="200" /></svg></span>
-      </div>
-
-      <!-- 中景雲帶 -->
-      <div class="band band-mid">
-        <svg viewBox="0 0 2400 150" preserveAspectRatio="none">
-          <g id="cloudsMid">
-            <use href="#ruyi" x="0" y="26" width="380" height="152" />
-            <use href="#ruyi" x="440" y="54" width="300" height="120" />
-            <use href="#ruyi" x="820" y="18" width="420" height="168" />
-          </g>
-          <use href="#cloudsMid" x="1200" />
-        </svg>
-      </div>
 
       <!-- 金色光點 -->
       <div class="motes">
@@ -438,18 +279,6 @@ onBeforeUnmount(() => {
             '--peak': mote.peak
           }"
         ></span>
-      </div>
-
-      <!-- 近景雲帶 -->
-      <div class="band band-near">
-        <svg viewBox="0 0 2400 160" preserveAspectRatio="none">
-          <g id="cloudsNear">
-            <use href="#ruyi" x="-40" y="20" width="460" height="184" />
-            <use href="#ruyi" x="520" y="46" width="380" height="152" />
-            <use href="#ruyi" x="960" y="10" width="420" height="168" />
-          </g>
-          <use href="#cloudsNear" x="1200" />
-        </svg>
       </div>
 
       <div class="layer vignette"></div>
@@ -575,16 +404,22 @@ body.celestial-home-open {
   pointer-events: none;
 }
 
-/* 天光：上青下金的仙氣漸層 */
+/* 天光：水墨山水背景圖（廟宇立於群山、旭日高懸），實際圖檔由行內 style 帶入 */
+/* 錨點貼底：圖上緣本來就留了大片空白天空，寬螢幕裁切時寧可多切天空，
+   也要讓廟宇完整留在畫面裡（原本 center 置中在較寬的視窗會把廟頂切掉）。
+   inset 蓋回 0（.layer 共用的 -6% 是給舊版視差用的緩衝，天空圖本身不會位移，
+   留著只會讓貼底錨點多犧牲 6% 圖高，廟宇還是會被切掉一截） */
 .sky {
-  background:
-    radial-gradient(120% 85% at 50% 8%, rgba(255, 252, 242, 0.95) 0%, rgba(255, 244, 214, 0.7) 26%, rgba(255, 255, 255, 0) 62%),
-    linear-gradient(180deg, #b9d3d8 0%, #cfe0dc 18%, #e6e0cd 42%, #f4e6cc 62%, #f9efd9 80%, #fbf6ea 100%);
+  inset: 0;
+  background-color: #f3e6d2;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
 }
 
-/* 佛光：中心暈光 + 放射光芒 */
+/* 佛光：疊在畫中旭日位置上的暈光，加強日光感 */
 .halo-glow {
-  background: radial-gradient(38% 30% at 50% 16%, rgba(255, 238, 190, 0.95), rgba(255, 232, 170, 0.35) 45%, rgba(255, 255, 255, 0) 72%);
+  background: radial-gradient(30% 22% at 50% 34%, rgba(255, 238, 190, 0.85), rgba(255, 232, 170, 0.3) 45%, rgba(255, 255, 255, 0) 72%);
   mix-blend-mode: screen;
   animation: breathe 9s ease-in-out infinite;
 }
@@ -608,31 +443,22 @@ body.celestial-home-open {
   animation: spin 150s linear infinite;
 }
 
-/* 遠山 */
-.mountains {
-  position: absolute;
-  left: -4%;
-  right: -4%;
-  bottom: 16%;
-  width: 108%;
-  height: 46%;
-  transform: translate3d(calc(var(--px, 0) * -6px), calc(var(--py, 0) * -4px), 0);
-}
-
 /* ===================== 中央玉皇大帝 ===================== */
+/* 站滿整個「旭日頭頂～廟宇屋脊」的縱深：頭頂貼著太陽上緣、腳貼著廟頂，
+   用 vh 定寬（而非 vw）是因為這段縱深是畫作垂直方向上的固定比例，
+   跟視窗寬高比脫鉤，才不會在寬螢幕上被拉到跟太陽或屋頂疊在一起 */
 .sovereign {
   position: absolute;
   left: 50%;
-  top: 50%;
-  width: clamp(200px, 23vw, 335px);
-  transform: translate3d(-50%, -62%, 0);
+  top: 44%;
+  width: clamp(170px, 30vh, 340px);
+  transform: translate3d(-50%, -50%, 0);
   transform-origin: 50% 20%;
   pointer-events: none;
-  filter: blur(1.7px);
-  /* 完全可見範圍原本只到 58%（腰部附近）就開始淡出，長袍下半身幾乎被遮罩吃掉、
-     畫面觀感偏向只有臉+上半身。延伸到 88% 讓身體露出來，只在最頂端/最底端與霧氣融合。 */
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 88%, rgba(0, 0, 0, 0.5) 97%, transparent 100%);
-  mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 88%, rgba(0, 0, 0, 0.5) 97%, transparent 100%);
+  /* 身形拉這麼大會蓋掉主文案，用低模糊、高不透明維持清楚可見 */
+  filter: blur(0.5px);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 5%, #000 95%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 5%, #000 95%, transparent 100%);
   animation: emerge 19s ease-in-out infinite;
   will-change: transform, opacity;
   transform-style: preserve-3d;
@@ -817,8 +643,6 @@ body.celestial-home-open {
   opacity: 0;
   animation: break-wave 0.8s cubic-bezier(0.15, 0.7, 0.3, 1) 0.32s forwards;
 }
-.is-ascending .band,
-.is-ascending .flyer,
 .is-ascending .mist {
   animation-play-state: running;
   opacity: 0;
@@ -837,58 +661,6 @@ body.celestial-home-open {
 .mist.m2 { right: -22%; top: 36%; width: 86vw; height: 38vh; animation: mist-b 58s ease-in-out infinite; opacity: 0.85; }
 .mist.m3 { left: 10%; bottom: -8%; width: 96vw; height: 40vh; animation: mist-a 38s ease-in-out infinite reverse; }
 .mist.m4 { right: 4%; top: 8%; width: 52vw; height: 26vh; animation: mist-b 64s ease-in-out infinite reverse; opacity: 0.6; }
-
-/* 祥雲帶：無縫橫向流動 */
-.band {
-  position: absolute;
-  left: 0;
-  width: 200%;
-  height: auto;
-  will-change: transform;
-}
-.band :deep(svg) {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-.band-far { bottom: 30%; opacity: 0.5; animation: flow 150s linear infinite; transform-origin: left bottom; --s: 0.75; }
-.band-mid { bottom: 10%; opacity: 0.78; animation: flow 96s linear infinite reverse; --s: 1; }
-.band-near { bottom: -14%; opacity: 1; animation: flow 64s linear infinite; transform-origin: left bottom; --s: 1.35; }
-
-/* ===================== 飛天神佛 ===================== */
-.flyer {
-  position: absolute;
-  left: 0;
-  top: var(--top, 30%);
-  width: var(--size, 300px);
-  will-change: transform;
-  animation: cross var(--dur, 54s) linear infinite;
-  animation-delay: var(--delay, 0s);
-  opacity: var(--alpha, 1);
-  filter: drop-shadow(0 10px 26px rgba(166, 105, 40, 0.22));
-}
-.flyer.rtl { animation-name: cross-back; }
-.flyer .bob {
-  display: block;
-  animation: bob var(--bob, 7s) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-}
-.flyer.rtl .bob { transform-origin: 50% 50%; }
-.flyer.rtl .bob svg { transform: scaleX(-1); }
-.flyer svg {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-/* 景深：mid 稍遠、far 最遠 */
-.flyer.mid { filter: blur(1.8px) saturate(0.72) drop-shadow(0 6px 16px rgba(166, 105, 40, 0.1)); }
-.flyer.far { filter: blur(3.4px) saturate(0.55) drop-shadow(0 4px 12px rgba(166, 105, 40, 0.08)); }
-
-/* symbol 內的帛帶擺動：需獨立選取器，<use> 影子樹才吃得到 */
-.sway {
-  animation: sway 5.5s ease-in-out infinite;
-  transform-origin: 78% 42%;
-}
 
 /* 金色光點 */
 .mote {
@@ -1138,13 +910,9 @@ body.celestial-home-open {
   0%, 100% { opacity: 0.82; }
   50% { opacity: 1; }
 }
-@keyframes flow {
-  from { transform: translate3d(0, 0, 0) scale(var(--s, 1)); }
-  to { transform: translate3d(-50%, 0, 0) scale(var(--s, 1)); }
-}
 @keyframes ascend {
   0% {
-    transform: translate3d(-50%, -62%, 0) scale(1);
+    transform: translate3d(-50%, -50%, 0) scale(1);
     opacity: 0.3;
     filter: blur(2.2px);
   }
@@ -1152,29 +920,27 @@ body.celestial-home-open {
     opacity: 0.95;
     filter: blur(0.4px);
   }
-  /* 撞上標題的瞬間：與字同高，才看得出是祂把字撞碎的。
-     底圖從 500px 縮成 335px 之後，原本的 2 倍會讓祂在撞擊當下就吞掉整個標題，
-     這裡依新尺寸重算成 1.15 倍。 */
+  /* 撞上標題的瞬間：與字同高，才看得出是祂把字撞碎的 */
   21% {
-    transform: translate3d(-50%, -60%, 0) scale(1.15);
+    transform: translate3d(-50%, -48%, 0) scale(1.15);
     opacity: 1;
     filter: blur(0);
   }
   /* 撞破後先維持一下，讓碎片在還看得清的背景上飛出去 */
   42% {
-    transform: translate3d(-50%, -58%, 0) scale(1.9);
+    transform: translate3d(-50%, -46%, 0) scale(1.9);
     opacity: 1;
     filter: blur(0);
   }
   /* 再一口氣衝滿畫面 */
   72% {
-    transform: translate3d(-50%, -55%, 0) scale(3.8);
+    transform: translate3d(-50%, -43%, 0) scale(3.8);
     opacity: 1;
     filter: blur(0);
   }
   /* 就地化去，雲霧隨後才捲上來 */
   100% {
-    transform: translate3d(-50%, -52%, 0) scale(5.8);
+    transform: translate3d(-50%, -40%, 0) scale(5.8);
     opacity: 0;
     filter: blur(10px);
   }
@@ -1288,9 +1054,9 @@ body.celestial-home-open {
   100% { transform: scale(3.6); opacity: 0; border-width: 1px; }
 }
 @keyframes emerge {
-  0%, 100% { opacity: 0.2; }
-  46% { opacity: 0.66; }
-  70% { opacity: 0.38; }
+  0%, 100% { opacity: 0.78; }
+  46% { opacity: 1; }
+  70% { opacity: 0.88; }
 }
 @keyframes sovereign-float {
   0%, 100% { transform: translateY(6px); }
@@ -1303,22 +1069,6 @@ body.celestial-home-open {
 @keyframes mist-b {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1.08); }
   50% { transform: translate3d(-8vw, 3vh, 0) scale(0.94); }
-}
-@keyframes cross {
-  from { transform: translate3d(-38vw, 0, 0); }
-  to { transform: translate3d(138vw, 0, 0); }
-}
-@keyframes cross-back {
-  from { transform: translate3d(138vw, 0, 0); }
-  to { transform: translate3d(-38vw, 0, 0); }
-}
-@keyframes bob {
-  0%, 100% { transform: translateY(-16px) rotate(-1.5deg); }
-  50% { transform: translateY(16px) rotate(1.5deg); }
-}
-@keyframes sway {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(3deg); }
 }
 @keyframes rise {
   0% { transform: translate3d(0, 0, 0); opacity: 0; }
@@ -1353,12 +1103,9 @@ body.celestial-home-open {
     /* 手機瀏覽器的網址列會吃掉 100vh，用 dvh 才不會被截 */
     height: 100dvh;
   }
-  .flyer { width: calc(var(--size, 300px) * 0.62); }
-
-  /* 直式螢幕：玉皇大帝放大一點、往下挪，臉才不會頂在畫面外 */
+  /* 直式螢幕：玉皇大帝放大一點，站位維持在畫中留白處置中 */
   .sovereign {
-    width: min(54vw, 241px);
-    transform: translate3d(-50%, -56%, 0);
+    width: min(30vh, 241px);
   }
 
   .celestial-hero { padding: 0 22px; }
@@ -1416,12 +1163,11 @@ body.celestial-home-open {
   }
   .btn { width: auto; padding: 12px 28px; font-size: 13px; }
   .tutorial-link { margin-top: 12px; }
-  .sovereign { transform: translate3d(-50%, -52%, 0); }
   .tutorial-video { max-height: 74vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rays, .mist, .band, .flyer, .flyer .bob, .sway, .mote, .halo-glow,
+  .rays, .mist, .mote, .halo-glow,
   .sovereign, .sovereign-float, .title .glyph,
   .is-ascending, .title .shard, .glyph-face, .puff, .puff .churn,
   .fogbank, .swirl, .break-flash, .break-wave {
@@ -1429,13 +1175,6 @@ body.celestial-home-open {
   }
   .title .shard { opacity: 0 !important; }
   .sovereign { opacity: 0.32; }
-  .flyer { opacity: calc(var(--alpha, 1) * 0.9); }
-  .flyer.f1 { transform: translate3d(8vw, 0, 0); }
-  .flyer.f2 { transform: translate3d(64vw, 0, 0); }
-  .flyer.f3 { transform: translate3d(30vw, 0, 0); }
-  .flyer.f4 { transform: translate3d(76vw, 0, 0); }
-  .flyer.f5 { transform: translate3d(46vw, 0, 0); }
-  .flyer.f6 { transform: translate3d(14vw, 0, 0); }
   .celestial-eyebrow, .title, .subtitle, .desc, .actions {
     opacity: 1;
     animation: none;
