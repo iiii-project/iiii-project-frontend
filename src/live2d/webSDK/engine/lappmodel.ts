@@ -505,6 +505,16 @@ export class LAppModel extends CubismUserModel {
           this._modelSetting.getTextureFileName(modelTextureNumber);
         texturePath = this._modelHomeDir + texturePath;
 
+        /* 開發模式下每次都帶一個唯一的查詢字串：LAppTextureManager 是靠完全比對
+           fileName 字串來判斷「這張貼圖是不是已經載入過」（見 lapptexturemanager.ts
+           createTextureFromPngFile），字串一樣就直接重用舊的 GPU 貼圖、完全不管
+           磁碟上的檔案有沒有換過；瀏覽器 HTTP 快取也是照 URL 判斷。加這個參數讓
+           兩層快取都必定 miss，才能在同一次瀏覽器分頁裡看到剛存檔的新材質。
+           正式環境保留原本行為，不然每個訪客都會重複下載、GPU 貼圖也會越載越多。 */
+        if (import.meta.env.DEV) {
+          texturePath += `${texturePath.includes("?") ? "&" : "?"}t=${Date.now()}`;
+        }
+
         // ロード完了時に呼び出すコールバック関数
         const onLoad = (textureInfo: TextureInfo): void => {
           this.getRenderer().bindTexture(modelTextureNumber, textureInfo.id);
