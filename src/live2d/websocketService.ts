@@ -73,6 +73,8 @@ export interface MessageEvent {
 
 export type WsState = 'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED'
 
+const RECONNECT_DELAY_MS = 3000
+
 class WebSocketService {
   private static instance: WebSocketService
 
@@ -83,6 +85,11 @@ class WebSocketService {
   private stateListeners = new Set<(state: WsState) => void>()
 
   private currentState: WsState = 'CLOSED'
+
+  // disconnect() 清空這個；只要還有值，代表連線是「非自願斷線」，該試著接回去
+  private lastUrl: string | null = null
+
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
   static getInstance(): WebSocketService {
     if (!WebSocketService.instance) {
@@ -103,10 +110,45 @@ class WebSocketService {
     this.stateListeners.forEach((cb) => cb(state))
   }
 
-  connect(url: string) {
-    if (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN) {
-      this.disconnect()
+  private clearReconnectTimer() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
     }
+  }
+
+  /* 關掉舊 socket 但不動 lastUrl／reconnectTimer——connect() 內部切新連線跟
+     disconnect() 各自對這兩個欄位有不同意圖，拆成獨立方法才不會互相踩到。 */
+  private teardownSocket() {
+    if (this.ws) {
+      this.ws.onopen = null
+      this.ws.onmessage = null
+      this.ws.onclose = null
+      this.ws.onerror = null
+      this.ws.close()
+    }
+    this.ws = null
+  }
+
+  /* 連線斷了但沒人主動呼叫 disconnect()（後端重啟、網路瞬斷…）：
+     過幾秒自動用同一個網址接回去，不然小夥伴在那之後就整頁都是啞的，
+     使用者只能重新整理頁面才能恢復（實測踩過一次：求籤儀式進行到一半
+     WS 斷線，擲筊那句引導語音就再也沒機會補送）。 */
+  private handleUnexpectedClose() {
+    this.ws = null
+    this.setState('CLOSED')
+    if (!this.lastUrl || this.reconnectTimer) return
+    const url = this.lastUrl
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (this.lastUrl === url) this.connect(url)
+    }, RECONNECT_DELAY_MS)
+  }
+
+  connect(url: string) {
+    this.clearReconnectTimer()
+    this.lastUrl = url
+    this.teardownSocket()
 
     try {
       this.ws = new WebSocket(url)
@@ -130,8 +172,8 @@ class WebSocketService {
         }
       }
 
-      this.ws.onclose = () => this.setState('CLOSED')
-      this.ws.onerror = () => this.setState('CLOSED')
+      this.ws.onclose = () => this.handleUnexpectedClose()
+      this.ws.onerror = () => this.handleUnexpectedClose()
     } catch (error) {
       console.error('Failed to connect to WebSocket:', error)
       this.setState('CLOSED')
@@ -157,18 +199,10 @@ class WebSocketService {
   }
 
   disconnect() {
-    /* close() 是非同步的，舊 socket 的 onclose/onerror 之後仍可能遲到觸發。若不先拔掉
-       這些 callback，等新連線已經 connect() 建立、甚至已經 OPEN 之後，舊 socket 那個遲
-       到的 onclose 還是會呼叫 setState('CLOSED')，把剛連上的新連線狀態誤蓋成關閉，導致
-       依賴 wsState 的呼叫端誤判並可能觸發不必要的重連/重送初始化訊息。 */
-    if (this.ws) {
-      this.ws.onopen = null
-      this.ws.onmessage = null
-      this.ws.onclose = null
-      this.ws.onerror = null
-      this.ws.close()
-    }
-    this.ws = null
+    this.clearReconnectTimer()
+    this.lastUrl = null
+    this.setState('CLOSED')
+    this.teardownSocket()
   }
 
   getCurrentState(): WsState {

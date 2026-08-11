@@ -5,14 +5,31 @@
  * 桌面／手機各自的 Live2DCompanion.vue 內容目前逐字元相同，但比照全站既有的
  * desktop/mobile 分離慣例，仍依裝置動態選其中一份渲染，之後兩邊要各自演化不受影響。
  */
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { isMobileViewport } from '@/utils/device'
 import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
+import { useInterrupt } from '@/composables/useInterrupt'
 import DesktopLive2DCompanion from '@/desktop/components/live2d/Live2DCompanion.vue'
 import MobileLive2DCompanion from '@/mobile/components/live2d/Live2DCompanion.vue'
 
 const companion = useLive2DCompanionStore()
 const Live2DCompanion = computed(() => (isMobileViewport() ? MobileLive2DCompanion : DesktopLive2DCompanion))
+
+/* 預設展開，不用等使用者點 FAB。announce=false：這是頁面剛載入、還沒有任何使用者
+   互動的當下，瀏覽器的 autoplay 政策會擋掉這時候播放的語音，所以跳過通用自介語音
+   （面板本身照常展開），等使用者真的有互動之後（打字、點麥克風、或進求籤儀式）
+   要播放的語音才不會被擋。 */
+onMounted(() => companion.open(false))
+
+/* 收起面板要立刻停止說話：interrupt() 內部會檢查 aiState 是不是 thinking-speaking，
+   不是這個狀態時呼叫是安全的 no-op，不用另外判斷。 */
+const { interrupt } = useInterrupt()
+watch(
+  () => companion.isVisible,
+  (visible, wasVisible) => {
+    if (!visible && wasVisible) interrupt()
+  }
+)
 </script>
 
 <template>

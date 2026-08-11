@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Category } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
-import { useSpeechInput } from '@/utils/speech'
+import { useLocalSpeechInput } from '@/utils/localSpeech'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
 import AmuletButton from '@/mobile/components/AmuletButton.vue'
 import FontScaleControl from '@/mobile/components/FontScaleControl.vue'
@@ -91,15 +91,18 @@ const showEnterMist = ref(true)
 let mistTimer = 0
 
 // ── 語音輸入狀態 ──
-/* 語音輸入與查籤共用同一套實作（見 utils/speech），
-   兩邊的支援判斷、錯誤訊息、離線時的說法都一致。 */
+/* 求籤這一步改走自家後端的台語模型（見 utils/localSpeech）：
+   瀏覽器內建的語音辨識只認華語又必須連外網，台語只能靠自己的模型。
+   代價是沒有即時逐字，說完要等辨識，所以多一個 isTranscribing 狀態。
+   查籤頁仍用瀏覽器內建那套（utils/speech），那邊輸入的是籤號、華語即可。 */
 const {
   supported: speechSupported,
   isRecording,
+  isTranscribing,
   hint: speechHint,
   stop: stopRecording,
   toggle: toggleRecording
-} = useSpeechInput({
+} = useLocalSpeechInput({
   get: () => question.value,
   set: (value) => { question.value = value },
   maxLength: QUESTION_MAX
@@ -234,12 +237,69 @@ function onArComplete(event: Event) {
   void buildShareQr(detail?.sessionId ?? '')
 }
 
+/* ── 儀式進行中，小夥伴主動彈出來講解每個階段 ──
+   <temple-ar-oracle> 其實會發 8 種事件，這裡另外接的 3 個（input-mode-resolved／
+   incense-complete／draw-complete）原本沒人在聽，正好是「進燒香」「進抽籤」
+   「進擲筊」這三個階段轉換點。文案依 input-mode-resolved 給的模式分桌面／手機：
+   camera（桌面鏡頭手勢）才會經過燒香，motion（手機搖動）跟 manual（桌面鏡頭
+   失敗退成點擊）都直接跳過燒香、從抽籤開始。 */
+type ArInputMode = 'camera' | 'motion' | 'manual'
+let resolvedInputMode: ArInputMode | null = null
+let ritualDismissed = false
+
+watch(
+  () => companionStore.isVisible,
+  (visible, wasVisible) => {
+    if (!visible && wasVisible) ritualDismissed = true
+  }
+)
+
+function guideRitualStage(text: string) {
+  if (ritualDismissed) return
+  companionStore.open(false)
+  sendWhenReady({ type: 'speak-text', text })
+}
+
+function drawInstruction(mode: ArInputMode | null): string {
+  return mode === 'motion'
+    ? '接下來搖一搖手機，就可以抽籤囉。'
+    : '搖一搖籤筒，或是直接點擊籤條，就可以抽出籤囉。'
+}
+
+function bwaInstruction(mode: ArInputMode | null): string {
+  return mode === 'motion'
+    ? '接下來點擊螢幕，就可以擲筊囉。'
+    : '把雙手捧著筊杯，然後向上拋出去。'
+}
+
+function onArInputModeResolved(event: Event) {
+  const mode = (event as CustomEvent<{ mode?: ArInputMode }>).detail?.mode ?? null
+  resolvedInputMode = mode
+  if (mode === 'camera') {
+    guideRitualStage('接下來要把雙手合十，誠心地說出你是誰，然後在心裡祈福拜拜。')
+  } else {
+    // motion／manual 都會跳過燒香，直接進抽籤
+    guideRitualStage(drawInstruction(mode))
+  }
+}
+
+function onArIncenseComplete() {
+  guideRitualStage(drawInstruction('camera'))
+}
+
+function onArDrawComplete() {
+  guideRitualStage(bwaInstruction(resolvedInputMode))
+}
+
 function bindAr(el: TempleArOracleEl) {
   el.addEventListener('toast', onArToast)
   el.addEventListener('offline', onArOffline)
   el.addEventListener('sequence-complete', onArComplete)
   // 解籤晚於過場才回來，補發的事件也要接
   el.addEventListener('interpretation-ready', onArInterpretation)
+  el.addEventListener('input-mode-resolved', onArInputModeResolved)
+  el.addEventListener('incense-complete', onArIncenseComplete)
+  el.addEventListener('draw-complete', onArDrawComplete)
 }
 
 function unbindAr() {
@@ -249,6 +309,9 @@ function unbindAr() {
   el.removeEventListener('offline', onArOffline)
   el.removeEventListener('sequence-complete', onArComplete)
   el.removeEventListener('interpretation-ready', onArInterpretation)
+  el.removeEventListener('input-mode-resolved', onArInputModeResolved)
+  el.removeEventListener('incense-complete', onArIncenseComplete)
+  el.removeEventListener('draw-complete', onArDrawComplete)
   try { el.destroy() } catch { /* 元件可能已卸載 */ }
 }
 
@@ -265,6 +328,8 @@ async function submit() {
   try {
     errorMessage.value = ''
     arNotice.value = ''
+    resolvedInputMode = null
+    ritualDismissed = false
     /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
        一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
     step.value = 4
@@ -438,9 +503,11 @@ function restart() {
           <button
             v-if="speechSupported"
             class="mic"
-            :class="{ on: isRecording }"
+            :class="{ on: isRecording, thinking: isTranscribing }"
             type="button"
             :aria-pressed="isRecording"
+            :aria-busy="isTranscribing"
+            :disabled="isTranscribing"
             @click="toggleRecording"
           >
             <span class="mic-icon" aria-hidden="true">
@@ -451,7 +518,9 @@ function restart() {
               </svg>
             </span>
             <span class="mic-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-            <span class="mic-label">{{ isRecording ? '停 止 錄 音' : '用 說 的' }}</span>
+            <span class="mic-label">{{
+              isTranscribing ? '辨 識 中' : isRecording ? '停 止 錄 音' : '用 說 的'
+            }}</span>
           </button>
           <p class="count">{{ question.length }} / {{ QUESTION_MAX }}</p>
         </div>
@@ -1312,22 +1381,57 @@ body.ar-ritual-open { overflow: hidden; }
 }
 
 @media (max-width: 640px) {
-  /* 手機只留一層 14px 的邊界，內容才不會被三層 padding 擠成細長條 */
+  /* 手機只留一層 14px 的邊界，內容才不會被三層 padding 擠成細長條。
+     填資料時不該捲動：整頁鎖成一個 dvh 的直向 flex，內容在剩餘空間裡置中。
+     下方留白從 28px 收成 10px，那 18px 正是原本溢出捲軸的來源。 */
   .oracle-page {
     min-height: 100dvh;
-    padding: 0 14px calc(28px + env(safe-area-inset-bottom));
+    height: 100dvh;
+    padding: 0 14px calc(10px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
   }
   /* 讀出瀏海與底部安全區，內容不會被系統列蓋住 */
+  /* 直排 flex 的子元素不會自動撐滿，寬度要寫明，
+     否則整條標題列會縮成內容寬、擠在左邊 */
   .oracle-bar {
+    width: 100%;
+    max-width: none;
+    margin: 0;
     padding: calc(16px + env(safe-area-inset-top)) 0 8px;
     gap: 12px;
   }
   .oracle-main {
+    width: 100%;
     max-width: none;
     margin: 0;
-    padding: 10px 0 0;
+    padding: 0;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* 卡片在標題列與底部之間垂直置中 */
   }
-  .panel { padding: 26px 20px 24px; border-radius: 18px; }
+  /* 直向留白一律跟著螢幕高度縮放，矮一點的手機也塞得下 */
+  .panel {
+    padding: clamp(16px, 3vh, 26px) 18px clamp(14px, 2.4vh, 24px);
+    border-radius: 18px;
+  }
+  /* 各步驟內容長短不一，若讓卡片依內容決定高度，動作按鈕就會上下跳。
+     卡片一律撐滿可用高度、動作列貼底，按鈕在每一步都落在同一個位置。
+     看籤那一步（.result）內容本來就滿版，排除掉。 */
+  .panel:not(.result) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel:not(.result) .row {
+    margin-top: auto;
+    padding-top: clamp(14px, 3vh, 26px);
+  }
+  .lede { margin-bottom: clamp(12px, 3.2vh, 26px); }
+  .choice-list { flex: 0 0 auto; gap: clamp(7px, 1.2vh, 12px); }
   h2 { font-size: 24px; }
   .lede { font-size: 14px; line-height: 1.9; }
 
@@ -1340,10 +1444,12 @@ body.ar-ritual-open { overflow: hidden; }
     letter-spacing: 0.08em;
   }
 
-  /* 選項列加高，手指好按 */
-  .choice-row { padding: 16px 16px; gap: 14px; }
+  /* 選項列高度也跟著螢幕高度走，維持好按又不撐破一頁 */
+  .choice-row { padding: clamp(9px, 1.3vh, 16px) 16px; gap: 14px; }
 
-  .ask { min-height: 150px; }
+  /* 固定 150px 會把卡片撐出畫面（底緣被裁掉、按鈕位置也跟著跑掉），
+     改成跟著螢幕高度縮放 */
+  .ask { min-height: clamp(96px, 13vh, 150px); }
   .ask-tools { flex-wrap: wrap; gap: 10px; }
   .mic { padding: 12px 20px 12px 14px; }
   .mic-label { font-size: 12.5px; letter-spacing: 0.14em; text-indent: 0.14em; }
@@ -1352,7 +1458,7 @@ body.ar-ritual-open { overflow: hidden; }
   .row {
     flex-direction: column;
     gap: 10px;
-    margin-top: 22px;
+    margin-top: clamp(12px, 2.7vh, 22px);
   }
   .btn {
     width: 100%;

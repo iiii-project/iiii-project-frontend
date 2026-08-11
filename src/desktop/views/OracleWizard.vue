@@ -234,12 +234,69 @@ function onArComplete(event: Event) {
   void buildShareQr(detail?.sessionId ?? '')
 }
 
+/* ── 儀式進行中，小夥伴主動彈出來講解每個階段 ──
+   <temple-ar-oracle> 其實會發 8 種事件，這裡另外接的 3 個（input-mode-resolved／
+   incense-complete／draw-complete）原本沒人在聽，正好是「進燒香」「進抽籤」
+   「進擲筊」這三個階段轉換點。文案依 input-mode-resolved 給的模式分桌面／手機：
+   camera（桌面鏡頭手勢）才會經過燒香，motion（手機搖動）跟 manual（桌面鏡頭
+   失敗退成點擊）都直接跳過燒香、從抽籤開始。 */
+type ArInputMode = 'camera' | 'motion' | 'manual'
+let resolvedInputMode: ArInputMode | null = null
+let ritualDismissed = false
+
+watch(
+  () => companionStore.isVisible,
+  (visible, wasVisible) => {
+    if (!visible && wasVisible) ritualDismissed = true
+  }
+)
+
+function guideRitualStage(text: string) {
+  if (ritualDismissed) return
+  companionStore.open(false)
+  sendWhenReady({ type: 'speak-text', text })
+}
+
+function drawInstruction(mode: ArInputMode | null): string {
+  return mode === 'motion'
+    ? '接下來搖一搖手機，就可以抽籤囉。'
+    : '搖一搖籤筒，或是直接點擊籤條，就可以抽出籤囉。'
+}
+
+function bwaInstruction(mode: ArInputMode | null): string {
+  return mode === 'motion'
+    ? '接下來點擊螢幕，就可以擲筊囉。'
+    : '把雙手捧著筊杯，然後向上拋出去。'
+}
+
+function onArInputModeResolved(event: Event) {
+  const mode = (event as CustomEvent<{ mode?: ArInputMode }>).detail?.mode ?? null
+  resolvedInputMode = mode
+  if (mode === 'camera') {
+    guideRitualStage('接下來要把雙手合十，誠心地說出你是誰，然後在心裡祈福拜拜。')
+  } else {
+    // motion／manual 都會跳過燒香，直接進抽籤
+    guideRitualStage(drawInstruction(mode))
+  }
+}
+
+function onArIncenseComplete() {
+  guideRitualStage(drawInstruction('camera'))
+}
+
+function onArDrawComplete() {
+  guideRitualStage(bwaInstruction(resolvedInputMode))
+}
+
 function bindAr(el: TempleArOracleEl) {
   el.addEventListener('toast', onArToast)
   el.addEventListener('offline', onArOffline)
   el.addEventListener('sequence-complete', onArComplete)
   // 解籤晚於過場才回來，補發的事件也要接
   el.addEventListener('interpretation-ready', onArInterpretation)
+  el.addEventListener('input-mode-resolved', onArInputModeResolved)
+  el.addEventListener('incense-complete', onArIncenseComplete)
+  el.addEventListener('draw-complete', onArDrawComplete)
 }
 
 function unbindAr() {
@@ -249,6 +306,9 @@ function unbindAr() {
   el.removeEventListener('offline', onArOffline)
   el.removeEventListener('sequence-complete', onArComplete)
   el.removeEventListener('interpretation-ready', onArInterpretation)
+  el.removeEventListener('input-mode-resolved', onArInputModeResolved)
+  el.removeEventListener('incense-complete', onArIncenseComplete)
+  el.removeEventListener('draw-complete', onArDrawComplete)
   try { el.destroy() } catch { /* 元件可能已卸載 */ }
 }
 
@@ -265,6 +325,8 @@ async function submit() {
   try {
     errorMessage.value = ''
     arNotice.value = ''
+    resolvedInputMode = null
+    ritualDismissed = false
     /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
        一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
     step.value = 4
@@ -920,12 +982,21 @@ body.ar-ritual-open { overflow: hidden; }
 }
 
 /* ── 分類：沿用舊版的大圖示清單 ── */
-.choice-list { display: grid; gap: 12px; }
+/* 桌機橫著排：由左而右、換行往下，不要一路往下堆成細長條。
+   grid-auto-rows: 1fr 讓每一列等高，最後單獨一張也維持同樣的矩形尺寸
+   （不讓它跨欄撐成兩倍寬）。 */
+.choice-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 12px;
+}
 .choice-row {
   display: flex;
   align-items: center;
   gap: 14px;
   width: 100%;
+  height: 100%;
   min-height: 82px;
   padding: 0.9rem 1.1rem;
   border-radius: 16px;
@@ -1340,6 +1411,8 @@ body.ar-ritual-open { overflow: hidden; }
     letter-spacing: 0.08em;
   }
 
+  /* 窄視窗放不下兩欄，收回單欄 */
+  .choice-list { grid-template-columns: 1fr; grid-auto-rows: auto; }
   /* 選項列加高，手指好按 */
   .choice-row { padding: 16px 16px; gap: 14px; }
 
