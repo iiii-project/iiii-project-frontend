@@ -149,8 +149,17 @@ class TempleArOracle extends HTMLElement {
       },
     });
 
+    /* 領籤過場影片來源：預設吃引擎內建的 oracle-transition.mov，
+       宿主頁面可用 transition-src attribute 覆蓋（例如桌機版換成 dragon.mp4）。
+       只在建立當下讀一次，過場開始播放後才換片沒有意義，不需要做成響應式的。 */
+    const transitionSrc = this.getAttribute('transition-src') || undefined;
+    /* 預設的 oracle-transition.mov 是直式 720x1280，桌機用 cover 會裁掉龍與籤枝
+       （見 styles.css 內的說明），所以預設保留 contain、兩側留白。
+       換過影片（如 dragon.mp4）不受這個限制，交由 data-fill 讓 CSS 改用 cover 鋪滿。 */
+    if (transitionSrc) this._els.transitionVideo.dataset.fill = '1';
+
     // 過場影片先預載，播放時才不會頓一下
-    preloadOracleTransition(this._els);
+    preloadOracleTransition(this._els, { src: transitionSrc });
 
     /* 攝影機畫布的後備緩衝區要在這裡就校正好。
        原本只在 MediaPipe 送影格時才校正，但搖籤模式不開鏡頭、
@@ -171,6 +180,7 @@ class TempleArOracle extends HTMLElement {
       mobileShake: this._mobileShake,
       rootEl: root,
       emit: (name, detail) => this._emit(name, detail),
+      transitionSrc,
     });
 
     this._bwaScene.init(this._els.bwaThreeContainer);

@@ -100,7 +100,10 @@ defineExpose({ play })
   z-index: 72;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  /* 這支固定播 dragon.mp4（見上方 DESKTOP_TRANSITION_SRC），不是引擎預設的
+     直式 oracle-transition.mov，不必為了保留直式構圖而 contain 留白，
+     直接鋪滿到滿版。 */
+  object-fit: cover;
   background: radial-gradient(120% 90% at 50% 42%, #fffdf6 0%, #fbf9f5 46%, #f3ece0 100%);
   opacity: 0;
   pointer-events: none;
@@ -109,11 +112,6 @@ defineExpose({ play })
 }
 .transition-video.show { opacity: 1; }
 .transition-video.fade-out { transition: opacity 700ms ease-in; opacity: 0; }
-
-/* 直式螢幕（手機）比例本來就吻合，鋪滿裁掉極少的邊 */
-@media (max-aspect-ratio: 3 / 4) {
-  .transition-video { object-fit: cover; }
-}
 
 .transition-overlay {
   position: fixed;

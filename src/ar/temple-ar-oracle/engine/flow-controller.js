@@ -39,8 +39,10 @@ import { spawnLightBurst, screenShakeOnce } from './particle-system.js';
 /* 領籤過場：播放自製的 5.12 秒動畫（龍銜籤送到眼前）。
    影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
    載入失敗、解碼失敗、或播放卡住超過預期時間，都走 fallback。
-   AR 引擎跟手機版維持這支預設影片；桌機版改用 dragon.mp4，
-   呼叫端透過 options.src / hooks.src 覆蓋，未帶入時就走這個預設值。 */
+   預設值是這支影片；呼叫端可透過 options.src / hooks.src 覆蓋，未帶入時
+   就走這個預設值。<temple-ar-oracle> 把這個覆蓋參數接到 transition-src
+   attribute，例如桌機版 OracleWizard.vue 就是靠這個 attribute 換成 dragon.mp4，
+   手機版沒帶這個 attribute，維持這支預設影片。 */
 export const ORACLE_TRANSITION_SRC = '/videos/oracle-transition.mov';
 const ORACLE_TRANSITION_MS = 5120;   // 素材長度（拿不到 metadata 時的備用值）
 const REVEAL_LEAD_MS = 350;          // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
@@ -162,7 +164,7 @@ export function playInkTransition(els, onCovered){
   setTimeout(() => { els.transitionOverlay.classList.remove('play'); }, 950);
 }
 
-export function createFlowController({ els, state, api, gestureEngine, bwaScene, particleSystem, audioEngine, mobileShake, rootEl, emit }) {
+export function createFlowController({ els, state, api, gestureEngine, bwaScene, particleSystem, audioEngine, mobileShake, rootEl, emit, transitionSrc }) {
 
   /* 解籤（AI 生成）通常是整段流程裡最慢的一步。原本是「先等 interpret 回來，
      才開始播領籤過場」，使用者會在定格畫面前面乾等。改成兩件事並行：
@@ -291,6 +293,7 @@ export function createFlowController({ els, state, api, gestureEngine, bwaScene,
      粒子與 three.js 迴圈全都還在滿載跑，會跟影片解碼搶資源造成掉格。
      這裡在過場期間把它們停掉，結束再放回去。 */
   const transitionLoadHooks = {
+    src: transitionSrc,
     onStart(){
       state.transitionActive = true;
       if (particleSystem.pause) particleSystem.pause();

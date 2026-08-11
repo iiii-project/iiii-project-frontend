@@ -586,7 +586,7 @@ function restart() {
     <!-- AR 儀式全螢幕層 -->
     <Teleport to="body">
       <div v-if="step === 4" class="ar-fullscreen">
-        <temple-ar-oracle ref="arEl" api-base="/api/v1"></temple-ar-oracle>
+        <temple-ar-oracle ref="arEl" api-base="/api/v1" transition-src="/videos/dragon.mp4"></temple-ar-oracle>
         <p v-if="arNotice" class="ar-toast">{{ arNotice }}</p>
         <button class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
       </div>

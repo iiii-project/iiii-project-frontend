@@ -268,6 +268,10 @@
   #oracle-transition-video{ object-fit:cover; }
 }
 
+/* 换成非預設影片時（見 index.js 的 transition-src / data-fill），不受上面
+   「直式素材怕被裁」的顧慮，桌機也鋪滿到滿版，不留兩側空白。 */
+#oracle-transition-video[data-fill]{ object-fit:cover; }
+
 #transition-overlay{ position:fixed; inset:0; z-index:70; pointer-events:none; display:flex; align-items:center; justify-content:center; }
 #transition-overlay .ink-blot{
   width:40px; height:40px; border-radius:50%; background:radial-gradient(circle, var(--wu-mu-hei) 60%, var(--jiang-hong-deep) 100%);
