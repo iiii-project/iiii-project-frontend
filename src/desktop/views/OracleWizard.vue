@@ -234,12 +234,69 @@ function onArComplete(event: Event) {
   void buildShareQr(detail?.sessionId ?? '')
 }
 
+/* ── 儀式進行中，小夥伴主動彈出來講解每個階段 ──
+   <temple-ar-oracle> 其實會發 8 種事件，這裡另外接的 3 個（input-mode-resolved／
+   incense-complete／draw-complete）原本沒人在聽，正好是「進燒香」「進抽籤」
+   「進擲筊」這三個階段轉換點。文案依 input-mode-resolved 給的模式分桌面／手機：
+   camera（桌面鏡頭手勢）才會經過燒香，motion（手機搖動）跟 manual（桌面鏡頭
+   失敗退成點擊）都直接跳過燒香、從抽籤開始。 */
+type ArInputMode = 'camera' | 'motion' | 'manual'
+let resolvedInputMode: ArInputMode | null = null
+let ritualDismissed = false
+
+watch(
+  () => companionStore.isVisible,
+  (visible, wasVisible) => {
+    if (!visible && wasVisible) ritualDismissed = true
+  }
+)
+
+function guideRitualStage(text: string) {
+  if (ritualDismissed) return
+  companionStore.open(false)
+  sendWhenReady({ type: 'speak-text', text })
+}
+
+function drawInstruction(mode: ArInputMode | null): string {
+  return mode === 'motion'
+    ? '接下來搖一搖手機，就可以抽籤囉。'
+    : '搖一搖籤筒，或是直接點擊籤條，就可以抽出籤囉。'
+}
+
+function bwaInstruction(mode: ArInputMode | null): string {
+  return mode === 'motion'
+    ? '接下來點擊螢幕，就可以擲筊囉。'
+    : '把雙手捧著筊杯，然後向上拋出去。'
+}
+
+function onArInputModeResolved(event: Event) {
+  const mode = (event as CustomEvent<{ mode?: ArInputMode }>).detail?.mode ?? null
+  resolvedInputMode = mode
+  if (mode === 'camera') {
+    guideRitualStage('接下來要把雙手合十，誠心地說出你是誰，然後在心裡祈福拜拜。')
+  } else {
+    // motion／manual 都會跳過燒香，直接進抽籤
+    guideRitualStage(drawInstruction(mode))
+  }
+}
+
+function onArIncenseComplete() {
+  guideRitualStage(drawInstruction('camera'))
+}
+
+function onArDrawComplete() {
+  guideRitualStage(bwaInstruction(resolvedInputMode))
+}
+
 function bindAr(el: TempleArOracleEl) {
   el.addEventListener('toast', onArToast)
   el.addEventListener('offline', onArOffline)
   el.addEventListener('sequence-complete', onArComplete)
   // 解籤晚於過場才回來，補發的事件也要接
   el.addEventListener('interpretation-ready', onArInterpretation)
+  el.addEventListener('input-mode-resolved', onArInputModeResolved)
+  el.addEventListener('incense-complete', onArIncenseComplete)
+  el.addEventListener('draw-complete', onArDrawComplete)
 }
 
 function unbindAr() {
@@ -249,6 +306,9 @@ function unbindAr() {
   el.removeEventListener('offline', onArOffline)
   el.removeEventListener('sequence-complete', onArComplete)
   el.removeEventListener('interpretation-ready', onArInterpretation)
+  el.removeEventListener('input-mode-resolved', onArInputModeResolved)
+  el.removeEventListener('incense-complete', onArIncenseComplete)
+  el.removeEventListener('draw-complete', onArDrawComplete)
   try { el.destroy() } catch { /* 元件可能已卸載 */ }
 }
 
@@ -265,6 +325,8 @@ async function submit() {
   try {
     errorMessage.value = ''
     arNotice.value = ''
+    resolvedInputMode = null
+    ritualDismissed = false
     /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
        一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
     step.value = 4

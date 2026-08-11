@@ -15,14 +15,23 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
     hasGreeted: false
   }),
   actions: {
-    toggle() {
-      this.isVisible = !this.isVisible
-      if (!this.isVisible) return
-
+    /* announce=false 給求籤儀式用：自動彈出來講階段指引時，不要再搶著講一次
+       通用自介——但一樣算「已經打過招呼」，之後手動點開也不會補講。 */
+    open(announce = true) {
+      if (this.isVisible) return
+      this.isVisible = true
       this.hasOpenedOnce = true
+
       if (this.hasGreeted) return
       this.hasGreeted = true
-      sendWhenReady({ type: 'speak-text', text: GREETING_TEXT })
+      if (announce) sendWhenReady({ type: 'speak-text', text: GREETING_TEXT })
+    },
+    toggle() {
+      if (this.isVisible) {
+        this.isVisible = false
+        return
+      }
+      this.open()
     }
   }
 })
