@@ -197,6 +197,8 @@ onBeforeUnmount(() => {
 
     <div class="leaf left" aria-hidden="true">
       <div class="leaf-face"><span class="studs"></span><span class="ring"></span></div>
+      <!-- 門扇斷面：立在門縫那側、往後長，門一轉開就露出厚度 -->
+      <div class="leaf-edge"></div>
       <!-- logo 左半：直接放在門扇裡，跟著門扇同一個 3D 變換走 -->
       <div class="logo-half">
         <div class="logo-art"><img :src="logoUrl" alt="" /></div>
@@ -204,6 +206,7 @@ onBeforeUnmount(() => {
     </div>
     <div class="leaf right" aria-hidden="true">
       <div class="leaf-face"><span class="studs"></span><span class="ring"></span></div>
+      <div class="leaf-edge"></div>
       <div class="logo-half">
         <div class="logo-art"><img :src="logoUrl" alt="" /></div>
       </div>
@@ -219,6 +222,9 @@ onBeforeUnmount(() => {
 .gate {
   --logo-w: min(74vw, 300px);
   --logo-top: 31%;
+  --leaf-depth: clamp(12px, 1.9vw, 24px);
+  /* logo 圖檔下緣帶著「傳統廟宇文化」字樣，門上只要雕刻本體，裁掉 */
+  --logo-crop-bottom: 17%;
   perspective: 900px;
   perspective-origin: 50% 44%;
 }
@@ -295,6 +301,34 @@ onBeforeUnmount(() => {
     inset 26px 0 40px -18px rgba(0, 0, 0, 0.75);
 }
 
+/* 門扇的厚度：一片立在門縫側的斷面，繞 Y 軸轉 90 度後沿 z 軸往後長，
+   所以關著時是正側面（寬度為 0、看不見），門一轉開才露出來。
+   漸層方向兩扇相反：兩扇的斷面在自己的 local x 軸上，「靠門面」的那端剛好相反。 */
+.leaf-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--leaf-depth);
+  /* 木料斷面：靠門面那端受光，往門內迅速沉進陰影 */
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.45);
+}
+.leaf.left .leaf-edge {
+  right: 0;
+  transform-origin: right center;
+  transform: rotateY(-90deg);
+  background: linear-gradient(90deg, #3a0c0a, #6d1a15 40%, #932b21 74%, #b2402e);
+}
+.leaf.right .leaf-edge {
+  left: 0;
+  transform-origin: left center;
+  transform: rotateY(90deg);
+  background: linear-gradient(270deg, #3a0c0a, #6d1a15 40%, #932b21 74%, #b2402e);
+}
+
+/* 開門過程的明暗變化：門面轉離光源逐漸沉下去，斷面則轉進光裡亮起來 */
+.gate.go .leaf-face { animation: face-shade 1.5s cubic-bezier(0.42, 0, 0.24, 1) 0.24s forwards; }
+.gate.go .leaf-edge { animation: edge-light 1.5s cubic-bezier(0.42, 0, 0.24, 1) 0.24s forwards; }
+
 /* 門釘：用平鋪的漸層排成整齊的釘陣，不用堆一堆節點 */
 .studs {
   position: absolute;
@@ -309,6 +343,14 @@ onBeforeUnmount(() => {
   );
   background-size: 33.4% 12.5%;
   opacity: 0.95;
+}
+/* logo 那一片的門釘會跟鎏金雕刻打架，整條橫帶不放釘子。
+   刻意用「硬邊」而不是漸層：釘陣的排距固定（容器高的 12.5%），
+   軟邊一定會切在某一排上、讓那排變成半明半暗，看起來像少一層。
+   49.4% 這個位置落在雕刻下方兩排釘子的中間，上面整排不留、下面整排完整。 */
+.studs {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0 49.4%, #000 49.4%);
+  mask-image: linear-gradient(180deg, transparent 0 49.4%, #000 49.4%);
 }
 
 /* 銜環：兩扇各一，離門縫遠一點才不會黏成一坨 */
@@ -392,6 +434,8 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  /* 裁掉圖檔下緣的字樣，只留雕刻本體 */
+  clip-path: inset(0 0 var(--logo-crop-bottom, 17%) 0);
 }
 
 .gate-hint {
@@ -421,6 +465,14 @@ onBeforeUnmount(() => {
   0% { transform: rotateY(0deg); }
   10% { transform: rotateY(-2.5deg); }
   100% { transform: rotateY(78deg); }
+}
+@keyframes face-shade {
+  0% { filter: brightness(1); }
+  100% { filter: brightness(0.6) saturate(0.88); }
+}
+@keyframes edge-light {
+  0% { filter: brightness(0.68); }
+  100% { filter: brightness(1.16); }
 }
 @keyframes seam {
   0% { opacity: 0; width: 3px; }

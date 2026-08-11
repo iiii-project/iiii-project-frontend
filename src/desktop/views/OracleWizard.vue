@@ -920,12 +920,21 @@ body.ar-ritual-open { overflow: hidden; }
 }
 
 /* ── 分類：沿用舊版的大圖示清單 ── */
-.choice-list { display: grid; gap: 12px; }
+/* 桌機橫著排：由左而右、換行往下，不要一路往下堆成細長條。
+   grid-auto-rows: 1fr 讓每一列等高，最後單獨一張也維持同樣的矩形尺寸
+   （不讓它跨欄撐成兩倍寬）。 */
+.choice-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 12px;
+}
 .choice-row {
   display: flex;
   align-items: center;
   gap: 14px;
   width: 100%;
+  height: 100%;
   min-height: 82px;
   padding: 0.9rem 1.1rem;
   border-radius: 16px;
@@ -1340,6 +1349,8 @@ body.ar-ritual-open { overflow: hidden; }
     letter-spacing: 0.08em;
   }
 
+  /* 窄視窗放不下兩欄，收回單欄 */
+  .choice-list { grid-template-columns: 1fr; grid-auto-rows: auto; }
   /* 選項列加高，手指好按 */
   .choice-row { padding: 16px 16px; gap: 14px; }
 

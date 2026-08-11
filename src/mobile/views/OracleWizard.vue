@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Category } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
-import { useSpeechInput } from '@/utils/speech'
+import { useLocalSpeechInput } from '@/utils/localSpeech'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
 import AmuletButton from '@/mobile/components/AmuletButton.vue'
 import FontScaleControl from '@/mobile/components/FontScaleControl.vue'
@@ -91,15 +91,18 @@ const showEnterMist = ref(true)
 let mistTimer = 0
 
 // ── 語音輸入狀態 ──
-/* 語音輸入與查籤共用同一套實作（見 utils/speech），
-   兩邊的支援判斷、錯誤訊息、離線時的說法都一致。 */
+/* 求籤這一步改走自家後端的台語模型（見 utils/localSpeech）：
+   瀏覽器內建的語音辨識只認華語又必須連外網，台語只能靠自己的模型。
+   代價是沒有即時逐字，說完要等辨識，所以多一個 isTranscribing 狀態。
+   查籤頁仍用瀏覽器內建那套（utils/speech），那邊輸入的是籤號、華語即可。 */
 const {
   supported: speechSupported,
   isRecording,
+  isTranscribing,
   hint: speechHint,
   stop: stopRecording,
   toggle: toggleRecording
-} = useSpeechInput({
+} = useLocalSpeechInput({
   get: () => question.value,
   set: (value) => { question.value = value },
   maxLength: QUESTION_MAX
@@ -438,9 +441,11 @@ function restart() {
           <button
             v-if="speechSupported"
             class="mic"
-            :class="{ on: isRecording }"
+            :class="{ on: isRecording, thinking: isTranscribing }"
             type="button"
             :aria-pressed="isRecording"
+            :aria-busy="isTranscribing"
+            :disabled="isTranscribing"
             @click="toggleRecording"
           >
             <span class="mic-icon" aria-hidden="true">
@@ -451,7 +456,9 @@ function restart() {
               </svg>
             </span>
             <span class="mic-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-            <span class="mic-label">{{ isRecording ? '停 止 錄 音' : '用 說 的' }}</span>
+            <span class="mic-label">{{
+              isTranscribing ? '辨 識 中' : isRecording ? '停 止 錄 音' : '用 說 的'
+            }}</span>
           </button>
           <p class="count">{{ question.length }} / {{ QUESTION_MAX }}</p>
         </div>
@@ -1312,22 +1319,57 @@ body.ar-ritual-open { overflow: hidden; }
 }
 
 @media (max-width: 640px) {
-  /* 手機只留一層 14px 的邊界，內容才不會被三層 padding 擠成細長條 */
+  /* 手機只留一層 14px 的邊界，內容才不會被三層 padding 擠成細長條。
+     填資料時不該捲動：整頁鎖成一個 dvh 的直向 flex，內容在剩餘空間裡置中。
+     下方留白從 28px 收成 10px，那 18px 正是原本溢出捲軸的來源。 */
   .oracle-page {
     min-height: 100dvh;
-    padding: 0 14px calc(28px + env(safe-area-inset-bottom));
+    height: 100dvh;
+    padding: 0 14px calc(10px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
   }
   /* 讀出瀏海與底部安全區，內容不會被系統列蓋住 */
+  /* 直排 flex 的子元素不會自動撐滿，寬度要寫明，
+     否則整條標題列會縮成內容寬、擠在左邊 */
   .oracle-bar {
+    width: 100%;
+    max-width: none;
+    margin: 0;
     padding: calc(16px + env(safe-area-inset-top)) 0 8px;
     gap: 12px;
   }
   .oracle-main {
+    width: 100%;
     max-width: none;
     margin: 0;
-    padding: 10px 0 0;
+    padding: 0;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* 卡片在標題列與底部之間垂直置中 */
   }
-  .panel { padding: 26px 20px 24px; border-radius: 18px; }
+  /* 直向留白一律跟著螢幕高度縮放，矮一點的手機也塞得下 */
+  .panel {
+    padding: clamp(16px, 3vh, 26px) 18px clamp(14px, 2.4vh, 24px);
+    border-radius: 18px;
+  }
+  /* 各步驟內容長短不一，若讓卡片依內容決定高度，動作按鈕就會上下跳。
+     卡片一律撐滿可用高度、動作列貼底，按鈕在每一步都落在同一個位置。
+     看籤那一步（.result）內容本來就滿版，排除掉。 */
+  .panel:not(.result) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel:not(.result) .row {
+    margin-top: auto;
+    padding-top: clamp(14px, 3vh, 26px);
+  }
+  .lede { margin-bottom: clamp(12px, 3.2vh, 26px); }
+  .choice-list { flex: 0 0 auto; gap: clamp(7px, 1.2vh, 12px); }
   h2 { font-size: 24px; }
   .lede { font-size: 14px; line-height: 1.9; }
 
@@ -1340,10 +1382,12 @@ body.ar-ritual-open { overflow: hidden; }
     letter-spacing: 0.08em;
   }
 
-  /* 選項列加高，手指好按 */
-  .choice-row { padding: 16px 16px; gap: 14px; }
+  /* 選項列高度也跟著螢幕高度走，維持好按又不撐破一頁 */
+  .choice-row { padding: clamp(9px, 1.3vh, 16px) 16px; gap: 14px; }
 
-  .ask { min-height: 150px; }
+  /* 固定 150px 會把卡片撐出畫面（底緣被裁掉、按鈕位置也跟著跑掉），
+     改成跟著螢幕高度縮放 */
+  .ask { min-height: clamp(96px, 13vh, 150px); }
   .ask-tools { flex-wrap: wrap; gap: 10px; }
   .mic { padding: 12px 20px 12px 14px; }
   .mic-label { font-size: 12.5px; letter-spacing: 0.14em; text-indent: 0.14em; }
@@ -1352,7 +1396,7 @@ body.ar-ritual-open { overflow: hidden; }
   .row {
     flex-direction: column;
     gap: 10px;
-    margin-top: 22px;
+    margin-top: clamp(12px, 2.7vh, 22px);
   }
   .btn {
     width: 100%;

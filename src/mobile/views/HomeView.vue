@@ -14,6 +14,8 @@ const prefersReducedMotion = () =>
 /* ── 音效：與桌機版同一支音檔。音檔前 1.5 秒是空白，
    從撞擊點往回抓，聲音才會正好落在門敞開的那一刻。 ── */
 const logoUrl = new URL('../../assets/images/logo.png', import.meta.url).href
+/* 神明改用高解析的 jade.png（與 AR 儀式疊圖同一張），不再用內嵌 SVG */
+const jadeUrl = new URL('../../assets/images/jade.png', import.meta.url).href
 const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
 const AUDIO_IMPACT = 1.5
 const AUDIO_PREROLL = 0.04
@@ -100,6 +102,17 @@ const motes = Array.from({ length: 14 }, (_, index) => ({
   delay: `${-index * 2.6}s`,
   dx: `${((index % 5) - 2) * 26}px`,
   peak: `${0.4 + (index % 4) * 0.16}`
+}))
+
+/* 撞擊迸出的火星：角度、距離、大小、時間都錯開，
+   碎塊負責「塊」、火星負責「屑」，兩層疊起來才有細節。 */
+const sparks = Array.from({ length: 22 }, (_, index) => ({
+  id: index,
+  angle: `${index * 16.4 + (index % 5) * 7}deg`,
+  dist: `${11 + (index % 6) * 6}vmin`,
+  size: `${2 + (index % 4) * 1.6}px`,
+  delay: `${0.32 + (index % 7) * 0.022}s`,
+  dur: `${0.5 + (index % 5) * 0.13}s`
 }))
 
 // 轉場用的霧絮：自中心往外捲
@@ -241,7 +254,7 @@ onBeforeUnmount(() => {
       <div class="haze h1"></div>
       <div class="haze h2"></div>
       <div class="emperor">
-        <svg viewBox="0 0 400 560"><use href="#mEmperor" width="400" height="560" /></svg>
+        <img :src="jadeUrl" alt="" />
       </div>
       <div class="cloudbelt"></div>
 
@@ -305,13 +318,23 @@ onBeforeUnmount(() => {
           class="glyph"
         ><span class="glyph-face">{{ char }}</span
         ><span
-          v-for="band in 3"
+          v-for="band in 6"
           :key="band"
           class="shard"
           :class="`s${band}`"
           aria-hidden="true"
         >{{ char }}</span
-        ></span></h1>
+        ></span><span class="sparks" aria-hidden="true"><i
+          v-for="spark in sparks"
+          :key="spark.id"
+          :style="{
+            '--sa': spark.angle,
+            '--sd': spark.dist,
+            '--ss': spark.size,
+            '--sdelay': spark.delay,
+            '--sdur': spark.dur
+          }"
+        ></i></span><span class="impact-flash" aria-hidden="true"></span></h1>
       <p class="subtitle">誠 心 一 問 · 天 意 自 來</p>
       <div class="actions">
         <button class="btn primary" type="button" :disabled="isAscending" @click="enterHall">入 殿 求 籤</button>
@@ -456,7 +479,9 @@ body.mobile-home-open {
   width: min(84vw, 380px);
   transform: translate3d(-50%, -54%, 0) scale(0.92);
   opacity: 0;
-  filter: blur(2.4px);
+  /* 舊的內嵌 SVG 是剪影，糊一點才有距離感；換成實拍的 jade.png 後
+     2.4px 會整張失焦，只留一點空氣感就夠 */
+  filter: blur(0.7px);
   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 58%, rgba(0, 0, 0, 0.35) 82%, transparent 96%);
   mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 58%, rgba(0, 0, 0, 0.35) 82%, transparent 96%);
 }
@@ -464,10 +489,12 @@ body.mobile-home-open {
    落定後接上原本的呼吸式明滅。 */
 .opened .emperor {
   animation:
-    deity-fly-in 1.7s cubic-bezier(0.18, 0.72, 0.24, 1) 0.15s both,
-    emerge 17s ease-in-out 1.85s infinite;
+    /* 拉長到 2.4s、換成單調的 ease-out，中段不再變速 */
+    deity-fly-in 2.4s cubic-bezier(0.22, 0.66, 0.15, 1) 0.15s both,
+    /* 呼吸式明滅要等飛入完全結束才接手，否則兩個動畫搶同一個 opacity */
+    emerge 17s ease-in-out 2.6s infinite;
 }
-.emperor svg { width: 100%; height: auto; display: block; }
+.emperor img { width: 100%; height: auto; display: block; }
 
 .cloudbelt {
   position: absolute;
@@ -574,7 +601,7 @@ body.mobile-home-open {
 .ascending .tutorial-link {
   animation: hero-out 0.4s ease-in forwards;
 }
-/* 先愈抖愈兇，0.32 秒被撞上時炸成三截 */
+/* 先愈抖愈兇，0.32 秒被撞上時炸成六塊 */
 .ascending .title .glyph {
   animation: glyph-shudder 0.32s linear forwards;
 }
@@ -585,9 +612,14 @@ body.mobile-home-open {
   opacity: 1;
   animation: shard-fly 0.8s cubic-bezier(0.1, 0.72, 0.3, 1) 0.32s forwards;
 }
-.ascending .glyph .s1 { --fy: -1.05; --fr: -30deg; --fs: 1.3; }
-.ascending .glyph .s2 { --fy: 0.08; --fr: 16deg; --fs: 1.45; animation-delay: 0.335s; }
-.ascending .glyph .s3 { --fy: 1.05; --fr: -24deg; --fs: 1.3; animation-delay: 0.35s; }
+/* 每塊各自的去向：左半往左、右半往右，上下再分開，
+   時間錯開 8ms 一階，碎裂才有先後而不是整排齊飛。 */
+.ascending .glyph .s1 { --sx: -0.9; --fy: -1; --fr: -34deg; --fs: 1.28; }
+.ascending .glyph .s2 { --sx: 0.9; --fy: -1.06; --fr: 30deg; --fs: 1.32; animation-delay: 0.328s; }
+.ascending .glyph .s3 { --sx: -1.12; --fy: 0.04; --fr: -18deg; --fs: 1.44; animation-delay: 0.336s; }
+.ascending .glyph .s4 { --sx: 1.12; --fy: 0.1; --fr: 20deg; --fs: 1.4; animation-delay: 0.344s; }
+.ascending .glyph .s5 { --sx: -0.86; --fy: 1.02; --fr: -26deg; --fs: 1.26; animation-delay: 0.352s; }
+.ascending .glyph .s6 { --sx: 0.86; --fy: 1.06; --fr: 24deg; --fs: 1.3; animation-delay: 0.36s; }
 .ascending .glyph:nth-child(1) .shard { --dx: -1.15; }
 .ascending .glyph:nth-child(2) .shard { --dx: 0.1; }
 .ascending .glyph:nth-child(3) .shard { --dx: 1.15; }
@@ -627,6 +659,7 @@ body.mobile-home-open {
   color: var(--ink-soft);
 }
 .title {
+  position: relative; /* 火星與閃光以標題中心為原點 */
   margin: 0;
   font-size: clamp(52px, 17vw, 80px);
   font-weight: 700;
@@ -650,9 +683,45 @@ body.mobile-home-open {
   text-shadow: 0 2px 10px rgba(90, 26, 26, 0.45), 0 0 2px rgba(90, 26, 26, 0.5);
   will-change: transform, opacity;
 }
-.title .s1 { clip-path: polygon(-14% -6%, 114% -6%, 114% 30%, -14% 38%); }
-.title .s2 { clip-path: polygon(-14% 38%, 114% 30%, 114% 68%, -14% 74%); }
-.title .s3 { clip-path: polygon(-14% 74%, 114% 68%, 114% 114%, -14% 114%); }
+/* 六片不規則碎塊（2 欄 × 3 列，交界刻意歪斜），
+   拼起來剛好蓋滿整個字，比原本三條橫帶碎得細也碎得像。 */
+.title .s1 { clip-path: polygon(-14% -6%, 54% -6%, 46% 30%, -14% 36%); }
+.title .s2 { clip-path: polygon(54% -6%, 114% -6%, 114% 32%, 46% 30%); }
+.title .s3 { clip-path: polygon(-14% 36%, 46% 30%, 52% 68%, -14% 72%); }
+.title .s4 { clip-path: polygon(46% 30%, 114% 32%, 114% 70%, 52% 68%); }
+.title .s5 { clip-path: polygon(-14% 72%, 52% 68%, 44% 114%, -14% 114%); }
+.title .s6 { clip-path: polygon(52% 68%, 114% 70%, 114% 114%, 44% 114%); }
+
+/* 撞擊的兩層附加細節：放射狀火星 + 一瞬的白金閃光 */
+.sparks,
+.impact-flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+}
+.sparks i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--ss, 3px);
+  height: var(--ss, 3px);
+  margin: calc(var(--ss, 3px) / -2) 0 0 calc(var(--ss, 3px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffdf2 0%, #ffe9ad 42%, rgba(212, 175, 55, 0) 72%);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.ascending .sparks i { animation: spark-fly var(--sdur, 0.6s) cubic-bezier(0.12, 0.7, 0.2, 1) var(--sdelay, 0.32s) forwards; }
+.impact-flash {
+  width: 46vmin;
+  height: 46vmin;
+  margin: -23vmin 0 0 -23vmin;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(255, 232, 170, 0.6) 34%, rgba(255, 226, 150, 0) 70%);
+  opacity: 0;
+}
+.ascending .impact-flash { animation: flash-pop 0.42s ease-out 0.3s forwards; }
 
 .subtitle {
   margin: 14px 0 0;
@@ -810,25 +879,32 @@ body.mobile-home-open {
   0%, 100% { opacity: 0.85; }
   50% { opacity: 1; }
 }
+/* 飛入要順：三個關鍵字是「單向、緩收、不要在中途換速度」。
+   原本 0.2 起跳 + 62% 衝到 1.08 再彈回，段與段之間各自套一次 easing，
+   看起來會在中段頓一下；改成起手大一點、overshoot 收斂到 1.02，
+   透明度全程只升不降，模糊一路收到與靜止狀態相同的 0.7px。 */
 @keyframes deity-fly-in {
   /* 從高處的雲深處遠遠飛來 */
   0% {
-    transform: translate3d(-50%, -128%, 0) scale(0.2);
+    transform: translate3d(-50%, -118%, 0) scale(0.38);
     opacity: 0;
-    filter: blur(6px);
+    filter: blur(5px);
   }
-  22% { opacity: 0.42; }
+  40% {
+    opacity: 0.26;
+    filter: blur(2.6px);
+  }
   /* 掠過殿門、略微前傾 */
-  62% {
-    transform: translate3d(-50%, -62%, 0) scale(1.08);
-    opacity: 0.5;
-    filter: blur(2px);
+  74% {
+    transform: translate3d(-50%, -61%, 0) scale(1.02);
+    opacity: 0.32;
+    filter: blur(1.4px);
   }
   /* 回穩落定 */
   100% {
     transform: translate3d(-50%, -56%, 0) scale(1);
     opacity: 0.34;
-    filter: blur(2.4px);
+    filter: blur(0.7px);
   }
 }
 @keyframes emerge {
@@ -904,23 +980,40 @@ body.mobile-home-open {
     opacity: 1;
     filter: blur(0);
   }
+  /* --dx 是這個字整體的去向、--sx 是這一塊在字裡的位置，
+     兩者相加，碎塊才會既跟著字往外飛、又各自散開 */
+  /* 距離刻意收在畫面內：原本 62% 時已經飛到 32vw 外、卻還有 0.92 不透明度，
+     碎塊會以「被截平的半塊」撞出畫面邊緣。現在提早開始淡出、
+     末段位置也拉回來，出界前就已經散掉。 */
   14% {
-    transform: translate3d(calc(var(--dx, 0) * 4vw), calc(var(--fy, 0) * 3vh), 0)
+    transform: translate3d(calc((var(--dx, 0) + var(--sx, 0)) * 2.5vw), calc(var(--fy, 0) * 2.6vh), 0)
       rotate(calc(var(--fr, 0deg) * 0.22)) scale(1.06);
     opacity: 1;
   }
   62% {
-    transform: translate3d(calc(var(--dx, 0) * 20vw), calc(var(--fy, 0) * 15vh), 0)
+    transform: translate3d(calc((var(--dx, 0) + var(--sx, 0)) * 8.5vw), calc(var(--fy, 0) * 11vh), 0)
       rotate(calc(var(--fr, 0deg) * 0.62)) scale(calc(1 + (var(--fs, 1.3) - 1) * 0.55));
-    opacity: 0.92;
-    filter: blur(0.5px);
+    opacity: 0.5;
+    filter: blur(1.4px);
   }
   100% {
-    transform: translate3d(calc(var(--dx, 0) * 52vw), calc(var(--fy, 0) * 42vh), 0)
+    transform: translate3d(calc((var(--dx, 0) + var(--sx, 0)) * 17vw), calc(var(--fy, 0) * 26vh), 0)
       rotate(var(--fr, 0deg)) scale(var(--fs, 1.3));
     opacity: 0;
     filter: blur(7px);
   }
+}
+/* 火星：沿各自的角度直線甩出去，末段縮小並淡掉 */
+@keyframes spark-fly {
+  0% { transform: rotate(var(--sa, 0deg)) translateX(0) scale(0.6); opacity: 0; }
+  12% { opacity: 1; transform: rotate(var(--sa, 0deg)) translateX(calc(var(--sd, 20vmin) * 0.16)) scale(1.15); }
+  100% { transform: rotate(var(--sa, 0deg)) translateX(var(--sd, 20vmin)) scale(0.35); opacity: 0; }
+}
+/* 撞擊瞬間的閃光：亮得快、收得更快，不要蓋住後面的碎塊 */
+@keyframes flash-pop {
+  0% { opacity: 0; transform: scale(0.35); }
+  16% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.5); }
 }
 @keyframes flash {
   0% { opacity: 0; }
@@ -979,6 +1072,7 @@ body.mobile-home-open {
   .gate.go .seam-light, .gate-hint, .godlight, .haze, .cloudbelt,
   .emperor, .puff, .puff i, .veil, .flyer, .flyer .bob, .band, .mote,
   .censer .smoke path, .title .glyph, .glyph-face, .title .shard,
+  .sparks i, .impact-flash,
   .break-flash, .break-wave {
     animation: none !important;
     transition: none !important;

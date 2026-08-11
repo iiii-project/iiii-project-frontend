@@ -1061,6 +1061,98 @@ onBeforeUnmount(() => scannerEl.value?.stop())
   .steps li.on span { display: inline; font-size: 12px; }
   .row { flex-direction: column; }
   .btn { width: 100%; }
+
+  /* ── 手機一頁不捲動 ──
+     與求籤流程同一套作法：整頁鎖成一個 dvh 的直向 flex、卡片撐滿剩餘空間、
+     動作列貼在卡片底部，每一步的按鈕就都落在同一個位置。
+     直向留白與選項高度改成跟著螢幕高度縮放，矮螢幕（如 500px 高）也塞得下。 */
+  .lookup-page {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  /* 直排 flex 的子元素不會自動撐滿，寬度要寫明，否則會縮成內容寬擠在左邊 */
+  .bar {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  .wrap {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  /* 前三步：撐滿、不捲。
+     overflow-y: auto 是安全閥而不是常態——真實手機高度（667px 以上）都塞得下，
+     但若遇到極矮的視窗（例如桌機把視窗拉到 500px 高），寧可讓卡片內部捲，
+     也不要被外層的 overflow: hidden 把送出按鈕整顆裁掉。 */
+  .panel:not(.result) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: clamp(16px, 3vh, 28px) 18px clamp(14px, 2.4vh, 24px);
+  }
+  .panel:not(.result) .row {
+    margin-top: auto;
+    padding-top: clamp(12px, 2.6vh, 22px);
+  }
+  /* 籤詩那一頁例外：內容本來就可能很長（放大字級更長），
+     整頁不捲的話會直接裁掉籤文，所以讓卡片自己內部捲。 */
+  .panel.result {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  /* 以下每一項都是為了讓「一頁裝完」在 667px 高（iPhone SE）也成立。
+     第二步原本需要 665px 而只有 513px，差 152px；大頭是 5 列選項共 365px，
+     而每列裡的圖示就佔 44px——所以圖示跟著螢幕高度縮是最有效的一刀。 */
+  .kicker { margin-bottom: clamp(6px, 1.2vh, 10px); }
+  .bar { gap: clamp(6px, 1.4vh, 10px); }
+  .lede { margin-bottom: clamp(8px, 1.6vh, 18px); }
+  .choice-list { gap: clamp(6px, 0.9vh, 8px); }
+  .choice-row {
+    min-height: 0;
+    gap: clamp(9px, 1.8vh, 14px);
+    padding: clamp(7px, 1vh, 12px) 14px;
+  }
+  .choice-icon {
+    width: clamp(30px, 4.8vh, 40px);
+    height: clamp(30px, 4.8vh, 40px);
+  }
+  .btn { min-height: clamp(42px, 6.6vh, 48px); padding: clamp(9px, 1.6vh, 13px) 20px; }
+  .ask { min-height: clamp(64px, 10vh, 150px); }
+}
+
+/* 矮螢幕（iPhone SE 這一類 667px 高，或桌機把視窗拉扁）：
+   壓縮到極限之後仍差約 126px，一頁裝完就必須捨棄一項內容。
+   選擇捨棄選項的副標（「身體、看病、平安」這種），因為主標題本身已經說得清楚，
+   而「上一步／下一步」被裁掉或要捲才按得到的代價高得多。
+   高一點的手機（>720px）維持完整、副標照舊顯示。 */
+@media (max-width: 640px) and (max-height: 720px) {
+  .choice-desc { display: none; }
+  .choice-icon { width: 30px; height: 30px; }
+  .lede { font-size: calc(12.5px * var(--fs, 1)); line-height: 1.62; margin-bottom: 8px; }
+  .ask-tools { margin-top: 6px; }
+  .panel:not(.result) { padding-bottom: 12px; }
+  /* 第三步的輸入框：矮螢幕給 56px（約兩行），仍夠看到自己打的字 */
+  .ask { min-height: 56px; }
+  .ask-tools { gap: 8px; }
+  /* 籤號／方向的摘要：上下兩列各佔約 50px，收成緊排的單列。
+     送出前確認籤號很重要，所以壓縮而不是隱藏。 */
+  .summary { margin-top: 10px; }
+  .summary > div { padding: 0.35rem 0.2rem; gap: 10px; }
+  .summary dt { flex-basis: 4.5em; font-size: calc(12px * var(--fs, 1)); line-height: 1.5; }
+  .summary dd { font-size: calc(13px * var(--fs, 1)); line-height: 1.5; }
 }
 
 @media (hover: none) {
