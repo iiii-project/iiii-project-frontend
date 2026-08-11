@@ -247,7 +247,6 @@ onBeforeUnmount(() => {
     <!-- ============ 舞台 ============ -->
     <div class="stage" aria-hidden="true">
       <div class="layer sky" :style="{ backgroundImage: `url(${heroBackgroundSrc})` }"></div>
-      <div class="rays"></div>
       <div class="layer halo-glow"></div>
 
       <!-- 中央玉皇大帝：站在畫中廟宇與旭日之間的留白處 -->
@@ -286,7 +285,6 @@ onBeforeUnmount(() => {
 
     <!-- ============ 主視覺文案 ============ -->
     <main class="celestial-hero">
-      <p class="celestial-eyebrow">雲深不知處　神明在人間</p>
       <h1 class="title"><span
           v-for="char in TITLE_CHARS"
           :key="char"
@@ -419,30 +417,10 @@ body.celestial-home-open {
 
 /* 佛光：疊在畫中旭日位置上的暈光，加強日光感 */
 .halo-glow {
-  background: radial-gradient(30% 22% at 50% 34%, rgba(255, 238, 190, 0.85), rgba(255, 232, 170, 0.3) 45%, rgba(255, 255, 255, 0) 72%);
+  background: radial-gradient(30% 22% at 50% 34%, rgba(255, 238, 190, 0.5), rgba(255, 232, 170, 0.16) 45%, rgba(255, 255, 255, 0) 72%);
   mix-blend-mode: screen;
   animation: breathe 9s ease-in-out infinite;
 }
-.rays {
-  position: absolute;
-  top: -40%;
-  left: 50%;
-  width: 180vmax;
-  height: 180vmax;
-  margin-left: -90vmax;
-  pointer-events: none;
-  transform-origin: 50% 50%;
-  background: repeating-conic-gradient(
-    from 0deg at 50% 50%,
-    rgba(255, 240, 200, 0.34) 0deg 3deg,
-    rgba(255, 240, 200, 0) 3deg 11deg
-  );
-  -webkit-mask-image: radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.55) 34%, transparent 68%);
-  mask-image: radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.55) 34%, transparent 68%);
-  opacity: 0.55;
-  animation: spin 150s linear infinite;
-}
-
 /* ===================== 中央玉皇大帝 ===================== */
 /* 站滿整個「旭日頭頂～廟宇屋脊」的縱深：頭頂貼著太陽上緣、腳貼著廟頂，
    用 vh 定寬（而非 vw）是因為這段縱深是畫作垂直方向上的固定比例，
@@ -657,9 +635,11 @@ body.celestial-home-open {
   filter: blur(18px);
   will-change: transform;
 }
-.mist.m1 { left: -18%; top: 44%; width: 78vw; height: 34vh; animation: mist-a 46s ease-in-out infinite; }
+/* m1／m3 蓋到畫面下半部的廟宇，濃度壓低一點，廟身的細節才看得出來；
+   m2／m4 在上半部框山景，維持原本濃度。 */
+.mist.m1 { left: -18%; top: 44%; width: 78vw; height: 34vh; animation: mist-a 46s ease-in-out infinite; opacity: 0.45; }
 .mist.m2 { right: -22%; top: 36%; width: 86vw; height: 38vh; animation: mist-b 58s ease-in-out infinite; opacity: 0.85; }
-.mist.m3 { left: 10%; bottom: -8%; width: 96vw; height: 40vh; animation: mist-a 38s ease-in-out infinite reverse; }
+.mist.m3 { left: 10%; bottom: -8%; width: 96vw; height: 40vh; animation: mist-a 38s ease-in-out infinite reverse; opacity: 0.35; }
 .mist.m4 { right: 4%; top: 8%; width: 52vw; height: 26vh; animation: mist-b 64s ease-in-out infinite reverse; opacity: 0.6; }
 
 /* 金色光點 */
@@ -678,6 +658,10 @@ body.celestial-home-open {
 
 /* ===================== 前景內容 ===================== */
 .celestial-hero {
+  /* .title 的字級本身就是 clamp() 出來的響應式值，下面 .actions 對齊用的寬度／
+     位移是照這個字級等比例算出來的（見 .actions 註解），所以共用同一個變數，
+     視窗窄到 .title 字變小時，按鈕排也會跟著等比縮，不會對不上。 */
+  --hero-title-fs: clamp(58px, 12vw, 132px);
   position: relative;
   z-index: 5;
   height: 100%;
@@ -712,7 +696,7 @@ body.celestial-home-open {
 
 .title {
   margin: 0;
-  font-size: clamp(58px, 12vw, 132px);
+  font-size: var(--hero-title-fs);
   font-weight: 700;
   letter-spacing: 0.16em;
   text-indent: 0.16em;
@@ -768,12 +752,23 @@ body.celestial-home-open {
   animation: reveal 1.4s 0.7s ease-out forwards;
 }
 
+/* 寬度／位移是照 .title 實測反推的比例算出來的，不是寫死的 px：
+   .title 有 text-indent 把「籤」往右推了一截，但「運」那端沒有對應的縮排，
+   兩個字的實際墨色範圍在 .title 的幾何置中線上並不對稱——字級 132px（桌機
+   常見寬度下 .title 吃到 clamp() 的頂點）時量出來是墨色寬 501.6px、
+   整排要再往右挪 21.1px 才會貼齊，換算成字級的倍數正好是 3.8 倍寬、
+   0.16 倍位移（0.16 跟 .title 自己的 text-indent 是同一個值，不是巧合）。
+   兩邊都用 var(--hero-title-fs) 算，視窗窄到 .title 字變小時兩邊才會一起縮，
+   不會像固定 px 那樣只在字級頂到 132px 的寬螢幕才對得上。 */
 .actions {
-  margin-top: 46px;
+  margin-top: 12px;
   display: flex;
+  width: calc(var(--hero-title-fs) * 3.8);
+  max-width: 100%;
+  transform: translateX(calc(var(--hero-title-fs) * 0.16));
   gap: 18px;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: space-between;
   opacity: 0;
   animation: reveal 1.4s 0.9s ease-out forwards;
 }
@@ -782,26 +777,26 @@ body.celestial-home-open {
   border: 0;
   cursor: pointer;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 17px;
   letter-spacing: 0.28em;
   text-indent: 0.28em;
-  padding: 17px 42px;
+  padding: 19px 46px;
   border-radius: 999px;
   transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, color 0.25s ease;
 }
 .btn-primary {
   background: linear-gradient(150deg, var(--jiang-hong), var(--jiang-hong-deep));
   color: var(--gold-soft);
-  box-shadow: 0 14px 34px rgba(122, 38, 38, 0.3), inset 0 0 0 1px rgba(242, 226, 179, 0.35);
+  box-shadow: 0 14px 34px rgba(122, 38, 38, 0.3), inset 0 0 0 2px rgba(242, 226, 179, 0.4);
 }
 .btn-primary:hover {
   transform: translateY(-3px);
-  box-shadow: 0 20px 44px rgba(122, 38, 38, 0.38), inset 0 0 0 1px rgba(242, 226, 179, 0.6);
+  box-shadow: 0 20px 44px rgba(122, 38, 38, 0.38), inset 0 0 0 2px rgba(242, 226, 179, 0.65);
 }
 .btn-ghost {
   background: rgba(255, 255, 255, 0.62);
   color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--gold-line), 0 10px 26px rgba(120, 90, 50, 0.12);
+  box-shadow: inset 0 0 0 2px var(--gold-line), 0 10px 26px rgba(120, 90, 50, 0.12);
   backdrop-filter: blur(6px);
 }
 .btn-ghost:hover {
@@ -816,7 +811,7 @@ body.celestial-home-open {
 
 /* 教學影片入口 */
 .tutorial-link {
-  margin-top: 22px;
+  margin-top: 14px;
   opacity: 0;
   animation: reveal 1.4s 1.05s ease-out forwards;
 }
@@ -903,9 +898,6 @@ body.celestial-home-open {
 .tutorial-close:hover { background: rgba(122, 38, 38, 0.85); transform: scale(1.06); }
 
 /* ===================== 動畫 ===================== */
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 @keyframes breathe {
   0%, 100% { opacity: 0.82; }
   50% { opacity: 1; }
@@ -1098,6 +1090,21 @@ body.celestial-home-open {
   .btn-ghost:active { transform: scale(0.98); }
 }
 
+/* .actions 對齊 .title 的 3.8 倍寬公式，是照兩顆按鈕「並排不換行」量出來的；
+   視窗窄到一個程度（實測約 950–1000px 之間），公式算出的寬度會小於兩顆按鈕
+   本身的最小內容寬度，flex-wrap 就會把它們拆成兩行、右邊那顆整個掉位。
+   桌機版路由只保證視窗 > 640px（見 src/utils/device.ts），640–1024px 這段
+   還是有機會出現，所以在還沒真的窄到需要整排改直式（見下面 640px 那段）之前，
+   先在這裡放棄跟標題精準對齊，退回單純置中，讓兩顆按鈕至少不會拆行、不會爆版。 */
+@media (max-width: 1024px) {
+  .actions {
+    width: auto;
+    max-width: 480px;
+    transform: none;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 640px) {
   .celestial-home {
     /* 手機瀏覽器的網址列會吃掉 100vh，用 dvh 才不會被截 */
@@ -1167,7 +1174,7 @@ body.celestial-home-open {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rays, .mist, .mote, .halo-glow,
+  .mist, .mote, .halo-glow,
   .sovereign, .sovereign-float, .title .glyph,
   .is-ascending, .title .shard, .glyph-face, .puff, .puff .churn,
   .fogbank, .swirl, .break-flash, .break-wave {
