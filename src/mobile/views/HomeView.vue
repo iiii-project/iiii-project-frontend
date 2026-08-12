@@ -14,8 +14,9 @@ const prefersReducedMotion = () =>
 /* ── 音效：與桌機版同一支音檔。音檔前 1.5 秒是空白，
    從撞擊點往回抓，聲音才會正好落在門敞開的那一刻。 ── */
 const logoUrl = new URL('../../assets/images/logo.png', import.meta.url).href
-/* 神明改用高解析的 jade.png（與 AR 儀式疊圖同一張），不再用內嵌 SVG */
-const jadeUrl = new URL('../../assets/images/jade.png', import.meta.url).href
+/* 神明與背景都跟桌機首頁同一組（見 desktop/views/HomeView.vue），
+   兩邊的第一印象要一致，不再用內嵌 SVG 與純 CSS 漸層天空。 */
+const jadeUrl = new URL('../../assets/images/jade-emperor.png', import.meta.url).href
 const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
 const AUDIO_IMPACT = 1.5
 const AUDIO_PREROLL = 0.04
@@ -435,12 +436,17 @@ body.mobile-home-open {
   inset: 0;
   overflow: hidden;
 }
+/* 天光：與桌機同一張水墨山水（廟宇立於群山、旭日高懸）。
+   錨點貼底的理由跟桌機一樣——圖上緣本來就留了大片空白天空，
+   手機是直幅、裁切更兇，寧可多切天空也要讓廟宇完整留在畫面裡。 */
 .sky {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(120% 60% at 50% 12%, rgba(255, 252, 242, 0.95) 0%, rgba(255, 244, 214, 0.7) 30%, rgba(255, 255, 255, 0) 66%),
-    linear-gradient(180deg, #b9d3d8 0%, #cfe0dc 20%, #e6e0cd 44%, #f4e6cc 64%, #fbf6ea 100%);
+  background-color: #f3e6d2;
+  background-image: url('@/assets/images/blackground.jpg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
 }
 .godlight {
   position: absolute;

@@ -9,6 +9,7 @@
    大小、八卦的轉向、印文選字與做舊缺口的位置——同一支籤永遠畫出同一張符
    （這是他的符，不能每次按都不同），不同籤則明顯不同。 */
 import { splitPoem } from './poem'
+import { makeQrDataUrl } from './qr'
 import { formatRocDate } from './roc'
 
 export interface AmuletData {
@@ -22,10 +23,16 @@ export interface AmuletData {
   note?: string | null
   /** 祈福日期，預設今天 */
   date?: Date
+  /* 回訪連結（/fortune/<sessionId>）。給了就在符面蓋一枚 QR，
+     符被存下來或轉傳出去之後，掃一下就能回到這一支籤。
+     沒給就不畫——例如離線籤沒有場次編號，畫了也是死連結。 */
+  shareUrl?: string | null
 }
 
 const WIDTH = 600
 const HEIGHT = 900
+/** 輸出倍率：座標仍以 600×900 思考，實際像素放大這麼多倍（見 renderAmulet） */
+const OUTPUT_SCALE = 2
 
 type Tier = 'auspicious' | 'neutral' | 'caution'
 
@@ -276,16 +283,75 @@ function wrapText(
 }
 
 /** 畫出平安符，回傳 PNG 的 data URL */
+/* 把 QR 蓋到符面上。
+   刻意產 2 倍解析度再縮著畫：符是要被存進相簿、甚至被別人翻拍的，
+   QR 的模組邊緣一模糊就掃不出來。
+   下面墊一塊米白底板也是為了掃描對比——深色符面直接疊 QR 會讓相機辨識變差。 */
+async function drawShareQr(
+  ctx: CanvasRenderingContext2D,
+  url: string,
+  centerX: number,
+  centerY: number,
+  size: number,
+  gold: string
+): Promise<void> {
+  let qrUrl = ''
+  try {
+    /* 來源解析度給到繪製尺寸的 4 倍：符本身已經以 2 倍輸出，
+       再多留一倍才能在「被壓縮縮圖」之後還有足夠的模組像素可掃。
+       errorCorrectionLevel 維持 M（見 utils/qr），容錯與模組數的平衡較好。 */
+    qrUrl = await makeQrDataUrl(url, size * 4)
+  } catch {
+    return // 產不出來就不畫，符本身照樣成立
+  }
+  const image = await new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = qrUrl
+  })
+  if (!image) return
+
+  const pad = 7
+  const x = centerX - size / 2
+  const y = centerY - size / 2
+
+  ctx.save()
+  ctx.fillStyle = '#fbf9f5'
+  ctx.fillRect(x - pad, y - pad, size + pad * 2, size + pad * 2)
+  ctx.strokeStyle = gold
+  ctx.globalAlpha = 0.75
+  ctx.lineWidth = 1.5
+  ctx.strokeRect(x - pad, y - pad, size + pad * 2, size + pad * 2)
+  ctx.globalAlpha = 1
+  ctx.drawImage(image, x, y, size, size)
+  ctx.restore()
+
+  // 說明：小字、貼在碼下面，讓人知道這是可以掃的
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.font = '11.5px "Noto Serif TC", serif'
+  ctx.fillStyle = 'rgba(242,226,179,0.8)'
+  ctx.fillText('掃 碼 回 看 這 支 籤', centerX, Math.min(y + size + pad + 17, 812))
+  ctx.restore()
+}
+
 export async function renderAmulet(data: AmuletData): Promise<string> {
   const tier = tierOf(data.level)
   const theme = THEMES[tier]
   const rand = seedFrom(data.number)
 
+  /* 以 2 倍解析度輸出（1200×1800）。
+     動機是 QR：符被轉傳時通訊軟體會壓縮縮圖，實測 600×900 的符縮到 40%
+     之後 QR 就掃不出來了。把畫布放大、再用 ctx.scale 把座標系縮回原本的
+     600×900，下面所有既有的排版座標都不用改，卻多了一倍的像素可以被壓。
+     整張符的線條與字也跟著變銳利。 */
   const canvas = document.createElement('canvas')
-  canvas.width = WIDTH
-  canvas.height = HEIGHT
+  canvas.width = WIDTH * OUTPUT_SCALE
+  canvas.height = HEIGHT * OUTPUT_SCALE
   const ctx = canvas.getContext('2d')
   if (!ctx) return ''
+  ctx.scale(OUTPUT_SCALE, OUTPUT_SCALE)
 
   // 底色：吉凶決定主色，籤號決定色相微偏，同一等級的籤也不會長得一樣
   const hueShift = Math.round((rand() - 0.5) * 26)
@@ -382,6 +448,13 @@ export async function renderAmulet(data: AmuletData): Promise<string> {
   drawBagua(ctx, WIDTH / 2, baguaY, 44, theme.gold, 0.6, rand() * Math.PI)
   const sealText = theme.seals[Math.floor(rand() * theme.seals.length)] ?? theme.seals[0]
   drawSeal(ctx, 448, baguaY + 4, 80, sealText, rand)
+
+  /* 回訪 QR：擺在八卦（中央 300）的左邊 152，正好與右邊的硃印（448）對稱，
+     所以構圖是「左碼、中八卦、右印」，不是硬塞一塊。
+     y 跟著八卦走，八卦的上下界已經避開頁腳（826/852），這裡不會壓到字。 */
+  if (data.shareUrl) {
+    await drawShareQr(ctx, data.shareUrl, 150, baguaY + 2, 112, theme.gold)
+  }
 
   ctx.font = '13px "Noto Serif TC", serif'
   ctx.fillStyle = 'rgba(242,226,179,0.55)'
