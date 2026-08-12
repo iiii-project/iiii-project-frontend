@@ -126,6 +126,7 @@ onBeforeUnmount(() => {
       <span v-if="showGanzhi" class="ganzhi">{{ ganzhi }}</span>
       <span v-if="title" class="title">{{ title }}</span>
     </figcaption>
+
   </figure>
 </template>
 

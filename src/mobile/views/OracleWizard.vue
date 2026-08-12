@@ -604,8 +604,8 @@ function restart() {
                 <div v-else class="qr-fallback">QR 產生中…</div>
               </div>
               <div class="take-away-text">
-                <h4>把 這 支 籤 帶 走</h4>
-                <p>用手機掃描，推開廟門就能收下這支籤，隨時回來看。</p>
+                <h4>現 在 用 手 機 帶 走</h4>
+                <p>用手機掃描，推開廟門就能收下這支籤。想留成圖片的話，下面的平安符也帶著同一個連結。</p>
                 <p v-if="shareUrl" class="share-url">{{ shareUrl }}</p>
               </div>
             </div>
@@ -622,7 +622,8 @@ function restart() {
                   ganzhi: fortune.ganzhi,
                   level: fortune.grade,
                   poem: fortune.poem,
-                  note: fortune.modern || fortune.explain
+                  note: fortune.modern || fortune.explain,
+                  shareUrl: canShare ? shareUrl : null
                 }"
               />
             </div>

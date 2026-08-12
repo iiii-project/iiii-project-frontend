@@ -12,6 +12,7 @@ import { toUserMessage } from '@/api/client'
 import { getDivination } from '@/api/divinationApi'
 import type { DivinationSession } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
+import { fortuneShareUrl } from '@/utils/qr'
 import AmuletButton from '../components/AmuletButton.vue'
 import FontScaleControl from '../components/FontScaleControl.vue'
 import FortunePoem from '../components/FortunePoem.vue'
@@ -135,7 +136,8 @@ onBeforeUnmount(() => {
             ganzhi: fortune.ganzhi,
             level: fortune.fortune_level,
             poem: fortune.poem,
-            note: fortune.translation
+            note: fortune.translation,
+            shareUrl: fortuneShareUrl(sessionId)
           }"
         />
         <button class="btn" type="button" @click="router.push('/')">回 首 頁 求 籤</button>
