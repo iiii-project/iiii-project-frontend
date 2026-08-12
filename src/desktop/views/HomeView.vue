@@ -303,7 +303,6 @@ onBeforeUnmount(() => {
         >{{ char }}</span
         ></span></h1>
       <p class="subtitle">誠 心 一 問 · 天 意 自 來</p>
-      <p class="desc">合十靜心，於雲霧之間叩問神明。線上求籤、擲筊解惑，把廟埕的溫度帶到你身邊。</p>
       <div class="actions">
         <button class="btn btn-primary" type="button" :disabled="isAscending" @click="enterHall()">入 殿 求 籤</button>
         <button class="btn btn-ghost" type="button" @click="go('/lookup')">線 上 查 籤</button>
@@ -667,7 +666,7 @@ body.celestial-home-open {
   position: absolute;
   inset: 0;
   background-repeat: no-repeat;
-  background-position: center bottom;
+  background-position: center calc(100% + 80px);
   background-size: 100% auto;
   pointer-events: none;
 }
