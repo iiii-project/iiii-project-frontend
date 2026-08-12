@@ -101,6 +101,79 @@ function playAscendChime() {
   }
 }
 
+/* 背景音樂：進首頁就開始播，播完自動從頭再來，一直循環。
+   不用 <audio loop> 的原生硬切，是因為銜接處聽得出喀一聲；改成自己在快播完時
+   淡出，ended 事件觸發後歸零重播、再淡入，循環才聽不出接點。 */
+const templeMusicUrl = new URL('../../assets/audio/templemusic.mp3', import.meta.url).href
+const TEMPLE_MUSIC_VOLUME = 0.5
+const MUSIC_FADE_MS = 1800
+let templeMusic: HTMLAudioElement | null = null
+let musicFadeRaf = 0
+let musicFadingOut = false
+
+function fadeAudioVolume(audio: HTMLAudioElement, target: number, duration: number) {
+  if (musicFadeRaf) cancelAnimationFrame(musicFadeRaf)
+  const start = audio.volume
+  const startedAt = performance.now()
+  const step = (now: number) => {
+    const t = duration > 0 ? Math.min(1, (now - startedAt) / duration) : 1
+    audio.volume = start + (target - start) * t
+    musicFadeRaf = t < 1 ? requestAnimationFrame(step) : 0
+  }
+  musicFadeRaf = requestAnimationFrame(step)
+}
+
+function primeTempleMusic() {
+  if (templeMusic) return
+  const audio = new Audio(templeMusicUrl)
+  audio.preload = 'auto'
+  audio.volume = 0
+  templeMusic = audio
+
+  // 快播完時提早淡出，避免循環接點卡一聲
+  audio.addEventListener('timeupdate', () => {
+    if (!Number.isFinite(audio.duration) || musicFadingOut) return
+    const remainingMs = (audio.duration - audio.currentTime) * 1000
+    if (remainingMs <= MUSIC_FADE_MS) {
+      musicFadingOut = true
+      fadeAudioVolume(audio, 0, Math.max(remainingMs, 50))
+    }
+  })
+  audio.addEventListener('ended', () => {
+    musicFadingOut = false
+    audio.currentTime = 0
+    void audio.play().then(() => fadeAudioVolume(audio, TEMPLE_MUSIC_VOLUME, MUSIC_FADE_MS)).catch(() => undefined)
+  })
+  audio.load()
+}
+
+/* 瀏覽器的自動播放政策只允許「已有使用者互動過」的頁面播放有聲音的媒體，
+   直接在 mounted 呼叫 play() 十之八九會被擋。先試一次，被拒絕就退而求其次，
+   等使用者在頁面上第一次點擊/按鍵，才真的開始播（一樣有淡入，不會突然很大聲）。 */
+function startTempleMusic() {
+  primeTempleMusic()
+  const audio = templeMusic
+  if (!audio) return
+  audio.volume = 0
+  const attempt = audio.play()
+  if (attempt && typeof attempt.catch === 'function') {
+    attempt
+      .then(() => fadeAudioVolume(audio, TEMPLE_MUSIC_VOLUME, MUSIC_FADE_MS))
+      .catch(() => {
+        const resume = () => {
+          void audio.play().then(() => fadeAudioVolume(audio, TEMPLE_MUSIC_VOLUME, MUSIC_FADE_MS)).catch(() => undefined)
+        }
+        window.addEventListener('pointerdown', resume, { once: true })
+        window.addEventListener('keydown', resume, { once: true })
+      })
+  }
+}
+
+function stopTempleMusic() {
+  if (musicFadeRaf) cancelAnimationFrame(musicFadeRaf)
+  templeMusic?.pause()
+}
+
 const TITLE_CHARS = ['籤', '好', '運']
 
 // 入殿轉場用的霧絮：自中心朝四方捲開，角度均分再各自帶點偏移
@@ -167,6 +240,7 @@ onMounted(() => {
   document.body.classList.add('celestial-home-open')
   buildMotes()
   primeAscendSound() // 先把音檔載好，按下去才不會有延遲
+  startTempleMusic()
   window.addEventListener('keydown', onKeydown)
   if (!prefersReducedMotion()) {
     window.addEventListener('pointermove', onPointerMove, { passive: true })
@@ -179,6 +253,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   if (raf) cancelAnimationFrame(raf)
   if (ascendTimer) clearTimeout(ascendTimer)
+  stopTempleMusic()
   const root = document.documentElement
   root.style.removeProperty('--px')
   root.style.removeProperty('--py')
@@ -303,6 +378,7 @@ onBeforeUnmount(() => {
         >{{ char }}</span
         ></span></h1>
       <p class="subtitle">誠 心 一 問 · 天 意 自 來</p>
+      
       <div class="actions">
         <button class="btn btn-primary" type="button" :disabled="isAscending" @click="enterHall()">入 殿 求 籤</button>
         <button class="btn btn-ghost" type="button" @click="go('/lookup')">線 上 查 籤</button>
@@ -359,6 +435,11 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="ascend-veil" aria-hidden="true"></div>
+
+    <!-- 背景音樂版權標示 -->
+    <p class="music-credit">
+      <a href="https://breakingcopyright.com/song/neutrin05-timeless" target="_blank" rel="noopener noreferrer">Timeless</a> by Neutrin05
+    </p>
   </div>
 </template>
 
@@ -867,6 +948,27 @@ body.celestial-home-open {
   border-style: solid;
   border-width: 5px 0 5px 8px;
   border-color: transparent transparent transparent var(--jiang-hong);
+}
+
+/* 背景音樂版權標示：放右下角、字很小，不搶畫面但需要時看得到、點得到 */
+.music-credit {
+  position: fixed;
+  right: 16px;
+  bottom: 12px;
+  z-index: 20;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: rgba(91, 70, 53, 0.55);
+  pointer-events: auto;
+}
+.music-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.music-credit a:hover {
+  color: var(--jiang-hong);
 }
 
 /* 教學影片視窗 */
