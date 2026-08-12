@@ -436,10 +436,14 @@ onBeforeUnmount(() => {
 
     <div class="ascend-veil" aria-hidden="true"></div>
 
-    <!-- 背景音樂版權標示 -->
-    <p class="music-credit">
-      <a href="https://breakingcopyright.com/song/neutrin05-timeless" target="_blank" rel="noopener noreferrer">Timeless</a> by Neutrin05
-    </p>
+    <!-- 背景音樂版權標示：預設收成一顆小圖示，滑過／focus 到才展開文字，
+         平常不佔畫面，但版權資訊仍找得到、點得到 -->
+    <div class="music-credit">
+      <span class="music-credit-icon" aria-hidden="true">♪</span>
+      <span class="music-credit-text">
+        <a href="https://breakingcopyright.com/song/neutrin05-timeless" target="_blank" rel="noopener noreferrer">Timeless</a> by Neutrin05
+      </span>
+    </div>
   </div>
 </template>
 
@@ -950,17 +954,51 @@ body.celestial-home-open {
   border-color: transparent transparent transparent var(--jiang-hong);
 }
 
-/* 背景音樂版權標示：放右下角、字很小，不搶畫面但需要時看得到、點得到 */
+/* 背景音樂版權標示：預設只露一顆小圖示，不佔畫面；滑過／focus 到展開文字。
+   版權條款通常只要求「找得到」，不用整段常駐畫面上。 */
 .music-credit {
   position: fixed;
   right: 16px;
   bottom: 12px;
   z-index: 20;
-  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   letter-spacing: 0.02em;
   color: rgba(91, 70, 53, 0.55);
-  pointer-events: auto;
+}
+.music-credit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--gold-line);
+  background: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  line-height: 1;
+  flex: none;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+.music-credit:hover .music-credit-icon,
+.music-credit:focus-within .music-credit-icon {
+  opacity: 1;
+}
+.music-credit-text {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+}
+.music-credit:hover .music-credit-text,
+.music-credit:focus-within .music-credit-text {
+  max-width: 220px;
+  opacity: 1;
 }
 .music-credit a {
   color: inherit;
