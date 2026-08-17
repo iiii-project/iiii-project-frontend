@@ -18,6 +18,9 @@ const router = useRouter()
 // 籤詩字級由右上角控制，設定跨頁共用（見 utils/fontScale）
 const { scaleStyle } = useFontScale()
 
+// 第一～三步（選方向／說心事／確認送出）共用的地面背景
+const groundSrc = new URL('../../assets/images/ground2.png', import.meta.url).href
+
 const healthyIcon = new URL('../../assets/images/healthy.png', import.meta.url).href
 const homeIcon = new URL('../../assets/images/home.png', import.meta.url).href
 const moneyIcon = new URL('../../assets/images/money.png', import.meta.url).href
@@ -417,6 +420,15 @@ function restart() {
       <div class="cloud c3"></div>
     </div>
 
+    <!-- 地面背景：只在前三步（選方向／說心事／確認送出）出現，
+         AR 儀式（第四步）跟看籤結果（第五步）各自有自己的畫面，不需要這層 -->
+    <div
+      v-if="step <= 3"
+      class="oracle-ground"
+      :style="{ backgroundImage: `url(${groundSrc})` }"
+      aria-hidden="true"
+    ></div>
+
     <!-- 籤詩字級：只在看籤的那一步出現，免得跟步驟列擠在同一個角落 -->
     <FontScaleControl v-if="step === 5" />
 
@@ -453,7 +465,7 @@ function restart() {
       </div>
 
       <!-- 步驟一：選方向 -->
-      <section v-else-if="step === 1" class="panel">
+      <section v-else-if="step === 1" class="panel intro">
         <p class="kicker">第 一 步</p>
         <h2>今天想請示哪一方面？</h2>
         <p class="lede">先讓神明知道你要問的方向，指點才會落在心坎上。</p>
@@ -480,8 +492,8 @@ function restart() {
       </section>
 
       <!-- 步驟二：說心事 -->
-      <section v-else-if="step === 2" class="panel">
-        <p class="kicker">第 二 步 · {{ chosen?.label }}</p>
+      <section v-else-if="step === 2" class="panel confide">
+        <p class="kicker">第 二 步 </p>
         <h2>想跟神明說什麼？</h2>
         <p class="lede">
           像在神明面前稟告一樣，說清楚人、事、時間，解籤會更貼近你的處境。
@@ -527,7 +539,7 @@ function restart() {
       </section>
 
       <!-- 步驟三：確認送出 -->
-      <section v-else-if="step === 3" class="panel">
+      <section v-else-if="step === 3" class="panel confide">
         <p class="kicker">第 三 步</p>
         <h2>確認要向神明請示的內容</h2>
         <p class="lede">再看一次，確定沒問題就誠心送出。</p>
@@ -536,7 +548,7 @@ function restart() {
         <dl class="summary">
           <div>
             <dt>所問方向</dt>
-            <dd><img class="chosen-icon" :src="chosen?.icon" alt="" /> {{ chosen?.label }}</dd>
+            <dd class="chosen-value"><img class="chosen-icon lit" :src="chosen?.icon" alt="" /> {{ chosen?.label }}</dd>
           </div>
           <div>
             <dt>要問的事</dt>
@@ -880,6 +892,17 @@ body.ar-ritual-open { overflow: hidden; }
 .cloud.c2 { right: -18%; top: 48%; width: 78vw; height: 34vh; animation: drift-b 64s ease-in-out infinite; }
 .cloud.c3 { left: 8%; bottom: -10%; width: 90vw; height: 32vh; animation: drift-a 46s ease-in-out infinite reverse; }
 
+/* 地面背景：貼底鋪滿寬度，蓋在雲霧背景之上、內容面板之下 */
+.oracle-ground {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: 100% auto;
+}
+
 /* ── 頂部與步驟列 ── */
 .oracle-bar {
   position: relative;
@@ -984,6 +1007,37 @@ body.ar-ritual-open { overflow: hidden; }
   letter-spacing: 0.05em;
   color: rgba(91, 70, 53, 0.85);
 }
+
+/* 步驟一（開場白）／步驟二（說心事）／步驟三（確認送出）共用同一套
+   開場排版：第 X 步／標題／說明，三句都置中，標題走思源宋體粗體，
+   跟其他步驟的左對齊版面區隔出來。 */
+.panel.intro .kicker, .panel.intro h2, .panel.intro .lede,
+.panel.confide .kicker, .panel.confide h2, .panel.confide .lede {
+  text-align: center;
+}
+/* kicker 保留原本的寬字距（「第　一　步」牌匾感不能拿掉），
+   但置中時最後一個字後面那份字距一樣會把整行往左推半份寬度，
+   跟已經真置中的 h2 對不齊；用 text-indent 補回一半字距抵銷掉，
+   兩行字才會疊在同一條中線上。 */
+.panel.intro .kicker, .panel.confide .kicker {
+  font-size: 20px;
+  font-weight: 900;
+  text-indent: 0.18em;
+}
+.panel.intro h2, .panel.confide h2 {
+  font-family: 'Noto Serif TC', serif;
+  font-size: clamp(28px, 4.4vw, 40px);
+  font-weight: 900;
+  /* letter-spacing 在置中文字的最後一個字後面也會多留一份間距，
+     等於整段字往左偏了半份間距的寬度才是「幾何置中」；蓋掉它，
+     字才會真的對齊在框的正中間，不會看起來偏向一邊。 */
+  letter-spacing: 0;
+}
+/* 「今天想請示哪一方面？」十個字是偶數，幾何正中心會落在
+   第5字「示」跟第6字「哪」的中間縫，不會剛好對到單一個字上；
+   往右推半個字寬，「示」的中心才會疊到「第一步」裡「一」的中心。
+   這個微調是照這句字數量身算的，步驟二標題字數不同，不套用。 */
+.panel.intro h2 { text-indent: 0.65em; }
 
 /* ── 分類：沿用舊版的大圖示清單 ── */
 /* 桌機橫著排：由左而右、換行往下，不要一路往下堆成細長條。
@@ -1090,7 +1144,7 @@ body.ar-ritual-open { overflow: hidden; }
 .mic-icon svg { width: 16px; height: 16px; }
 .mic-icon path { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .mic-icon path:first-child { fill: currentColor; stroke: none; }
-.mic-label { font-size: 13px; letter-spacing: 0.2em; text-indent: 0.2em; }
+.mic-label { font-size: 13px; font-weight: 700; letter-spacing: 0.2em; text-indent: 0.2em; }
 
 /* 錄音中：轉為醬紅底＋跳動聲波 */
 .mic.on {
@@ -1258,6 +1312,18 @@ body.ar-ritual-open { overflow: hidden; }
 .summary dd { flex: 1; margin: 0; font-size: 17px; line-height: 1.8; color: var(--ink); word-break: break-word; }
 .summary dd.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--ink-soft); }
 .chosen-icon { width: 20px; height: 20px; object-fit: contain; vertical-align: -4px; margin-right: 2px; }
+/* 所問方向：這是使用者選的那個方向，要像點燈一樣亮出來，
+   跟「要問的事」那種純文字輸入區隔開，一眼就知道是自己選的選項。 */
+.chosen-value {
+  font-weight: 700;
+  color: var(--jiang-hong-deep);
+  text-shadow: 0 0 10px rgba(255, 189, 92, 0.55), 0 0 22px rgba(255, 189, 92, 0.3);
+}
+.chosen-icon.lit {
+  width: 24px;
+  height: 24px;
+  filter: brightness(1.18) saturate(1.25) drop-shadow(0 0 7px rgba(255, 189, 92, 0.75));
+}
 
 /* ── 按鈕 ── */
 .row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 26px; }

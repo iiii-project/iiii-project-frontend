@@ -204,14 +204,23 @@
 @keyframes fadeIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
 
 .btn-line{
-  pointer-events:auto; padding:0.65rem 2.2rem; border-radius:999px; cursor:pointer; background: transparent;
-  color:var(--jiang-hong); font-weight:500; letter-spacing:0.35em; font-size:13px; border:1px solid var(--jiang-hong);
-  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+  pointer-events:auto; padding:0.75rem 2.4rem; border-radius:999px; cursor:pointer; background: transparent;
+  color:var(--jiang-hong); font-weight:600; letter-spacing:0.3em; font-size:16px; border:1px solid var(--jiang-hong);
+  box-shadow: 0 4px 0 rgba(166,58,58,0.32), 0 8px 18px rgba(166,58,58,0.14);
+  transition: transform 0.2s ease, background 0.25s ease, color 0.25s ease, box-shadow 0.2s ease;
 }
-.btn-line:hover{ background: rgba(166,58,58,0.08); box-shadow:0 4px 14px rgba(166,58,58,0.15); }
-.btn-line:active{ transform:scale(0.97); }
+.btn-line:hover{
+  background: rgba(166,58,58,0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 rgba(166,58,58,0.38), 0 12px 24px rgba(166,58,58,0.2);
+}
+.btn-line:active{
+  transform: translateY(3px);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  box-shadow: 0 1px 0 rgba(166,58,58,0.32), 0 3px 8px rgba(166,58,58,0.16);
+}
 .btn-line:disabled{ opacity:0.4; cursor:not-allowed; }
-.btn-line:disabled:hover{ background:transparent; box-shadow:none; }
+.btn-line:disabled:hover{ background:transparent; transform:none; box-shadow: 0 4px 0 rgba(166,58,58,0.32), 0 8px 18px rgba(166,58,58,0.14); }
 
 /* ===================== 擲筊結果標籤 ===================== */
 .result-card{ padding: 1.4rem 2.5rem; }
