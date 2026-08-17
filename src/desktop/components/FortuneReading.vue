@@ -3,6 +3,7 @@
    原本是把四段全部往下貼，手機要滑好幾個螢幕，讀的人抓不到重點；
    改成籤詩之下一排分頁，想看哪段點哪段，內容都在同一個位置出現。 */
 import { computed, ref, watch } from 'vue'
+import MarkdownText from '@/components/MarkdownText.vue'
 
 interface ReadingInterpretation {
   overall_meaning?: string
@@ -73,13 +74,13 @@ watch(
 
     <div class="pane" role="tabpanel">
       <template v-if="active === 'plain'">
-        <p v-if="translation">{{ translation }}</p>
-        <p v-if="explanation" class="soft">{{ explanation }}</p>
+        <MarkdownText v-if="translation" :value="translation" />
+        <MarkdownText v-if="explanation" class="soft" :value="explanation" />
       </template>
 
       <template v-else-if="active === 'reading'">
-        <p v-if="interpretation?.overall_meaning">{{ interpretation.overall_meaning }}</p>
-        <p v-if="interpretation?.relation_to_question" class="quote">{{ interpretation.relation_to_question }}</p>
+        <MarkdownText v-if="interpretation?.overall_meaning" :value="interpretation.overall_meaning" />
+        <MarkdownText v-if="interpretation?.relation_to_question" class="quote" :value="interpretation.relation_to_question" />
         <p v-if="pending && !interpretation?.overall_meaning" class="waiting">
           <span class="smoke" aria-hidden="true"><i></i><i></i><i></i></span>
           神明正在為你解這支籤，稍待片刻…
@@ -88,13 +89,17 @@ watch(
 
       <template v-else-if="active === 'actions'">
         <ul>
-          <li v-for="(item, i) in interpretation?.suggested_actions ?? []" :key="`a${i}`">{{ item }}</li>
+          <li v-for="(item, i) in interpretation?.suggested_actions ?? []" :key="`a${i}`">
+            <MarkdownText :value="item" as="span" inline />
+          </li>
         </ul>
       </template>
 
       <template v-else-if="active === 'warnings'">
         <ul class="warn">
-          <li v-for="(item, i) in interpretation?.warnings ?? []" :key="`w${i}`">{{ item }}</li>
+          <li v-for="(item, i) in interpretation?.warnings ?? []" :key="`w${i}`">
+            <MarkdownText :value="item" as="span" inline />
+          </li>
         </ul>
       </template>
     </div>
@@ -156,27 +161,51 @@ watch(
   padding: 16px 2px 0;
   animation: pane-in 0.26s ease-out both;
 }
-.pane p {
+.pane p,
+.pane :deep(p),
+.pane :deep(h3),
+.pane :deep(h4),
+.pane :deep(h5) {
   margin: 0 0 12px;
   font-size: calc(14.5px * var(--fs, 1));
   line-height: 2;
   letter-spacing: 0.03em;
   color: var(--ink-soft, #5b4635);
 }
-.pane .soft { color: rgba(91, 70, 53, 0.72); }
+.pane :deep(h3),
+.pane :deep(h4),
+.pane :deep(h5) {
+  color: var(--jiang-hong-deep, #7a2626);
+  font-weight: 700;
+}
+.pane .soft,
+.pane .soft :deep(*) { color: rgba(91, 70, 53, 0.72); }
 .pane .quote {
   padding-left: 12px;
   border-left: 2px solid rgba(212, 175, 55, 0.5);
   color: var(--ink, #3a2c22);
 }
-.pane ul { margin: 0; padding-left: 1.25em; }
-.pane li {
+.pane ul,
+.pane :deep(ul),
+.pane :deep(ol) { margin: 0 0 12px; padding-left: 1.25em; }
+.pane li,
+.pane :deep(li) {
   margin-bottom: 8px;
   font-size: calc(14.5px * var(--fs, 1));
   line-height: 1.95;
   color: var(--ink-soft, #5b4635);
 }
-.pane ul.warn li { color: rgba(166, 58, 58, 0.92); }
+.pane ul.warn li,
+.pane ul.warn :deep(*) { color: rgba(166, 58, 58, 0.92); }
+.pane :deep(strong) { color: var(--ink, #3a2c22); font-weight: 700; }
+.pane :deep(em) { font-style: normal; color: var(--jiang-hong-deep, #7a2626); }
+.pane :deep(code) {
+  padding: 0.08em 0.35em;
+  border-radius: 4px;
+  background: rgba(212, 175, 55, 0.14);
+  font-family: inherit;
+}
+.pane :deep(a) { color: var(--jiang-hong-deep, #7a2626); text-underline-offset: 3px; }
 
 /* 等解籤：延用站上香煙裊裊的語彙，不要轉圈圈 */
 .waiting {
