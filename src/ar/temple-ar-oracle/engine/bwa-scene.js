@@ -43,6 +43,11 @@ function loadJiaoTemplates() {
   return jiaoTemplatesPromise;
 }
 
+// 筊杯落地後的最終高度：跟鏡頭視線焦點（camera.lookAt 的 y）對齊，
+// 這樣擲出的結果會停在畫面正中間，而不是偏向畫面下方。
+// 地板（陰影承接面）跟著往上移，維持跟原本一樣「杯底貼地」的相對距離（0.1）。
+const REST_Y = -0.2;
+
 export function createBwaScene(state) {
   let renderer, scene, camera, cupA, cupB, ground, light;
   let holding = false;
@@ -98,7 +103,7 @@ export function createBwaScene(state) {
     // 💡 相機調整：拉遠距離 (7 -> 8.5)，仰角拉高，讓視角更自然、筊杯看起來變小
     camera = new THREE.PerspectiveCamera(25, w / h, 0.1, 50);
     camera.position.set(0, 2.0, 8.5);
-    camera.lookAt(0, -0.2, 0);
+    camera.lookAt(0, REST_Y, 0);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
@@ -118,7 +123,7 @@ export function createBwaScene(state) {
     const groundMat = new THREE.ShadowMaterial({ opacity: 0.25 });
     ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -1.2;
+    ground.position.y = REST_Y - 0.1;
     ground.receiveShadow = true;
     scene.add(ground);
 
@@ -201,9 +206,12 @@ export function createBwaScene(state) {
     }
     holding = false;
     state.bwaTossing = true;
-    const restY = -1.1;
+    const restY = REST_Y;
     const gravity = 4.8;
     // 從畫面上半部開始下落，整段掉落都在鏡頭內，避免只看見最後落地的結果。
+    // x 座標維持在這個起始位置不再位移：原本每格畫面還會往中間漂 0.012，
+    // 但下落＋彈跳全程加總起來格數不少，兩杯會一路漂到對方原本的位置去，
+    // 落地時反而擠在中間、幾乎貼在一起，兩顆筊杯的結果看不清楚。
     cupA.position.set(-0.78, 1.55, 0.15);
     cupB.position.set(0.78, 1.85, 0.1);
     cupA.rotation.set(-0.7, 0.35, -0.4);
@@ -218,7 +226,6 @@ export function createBwaScene(state) {
       if (!doneA) {
         vyA -= gravity * dt;
         cupA.position.y += vyA * dt;
-        cupA.position.x += 0.012;
         cupA.rotation.x += 0.16;
         cupA.rotation.y += 0.09;
         if (cupA.position.y <= restY) {
@@ -241,7 +248,6 @@ export function createBwaScene(state) {
       if (!doneB) {
         vyB -= gravity * dt;
         cupB.position.y += vyB * dt;
-        cupB.position.x -= 0.012;
         cupB.rotation.x += 0.14;
         cupB.rotation.z += 0.12;
         if (cupB.position.y <= restY) {
