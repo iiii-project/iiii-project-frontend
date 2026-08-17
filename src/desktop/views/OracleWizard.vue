@@ -1056,7 +1056,9 @@ body.ar-ritual-open { overflow: hidden; }
   width: 100%;
   height: 100%;
   min-height: 82px;
-  padding: 0.9rem 1.1rem;
+  /* 上下內距縮小，把省下來的空間讓給 icon，卡片本身的框（min-height／
+     border／圓角／底色）都沒有變動，只有裡面比較擠一點。 */
+  padding: 0.35rem 1.1rem;
   border-radius: 16px;
   border: 1px solid var(--gold-line);
   background: #fffdf8;
@@ -1066,7 +1068,7 @@ body.ar-ritual-open { overflow: hidden; }
   transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 .choice-row:hover { border-color: rgba(166, 58, 58, 0.45); }
-.choice-icon { flex: 0 0 auto; width: 46px; height: 46px; object-fit: contain; }
+.choice-icon { flex: 0 0 auto; width: 68px; height: 68px; object-fit: contain; }
 .choice-text { flex: 1 1 auto; min-width: 0; }
 .choice-label { display: block; font-size: 19px; font-weight: 700; color: var(--ink); letter-spacing: 0.04em; }
 .choice-desc { display: block; margin-top: 3px; font-size: 14px; color: var(--ink-soft); letter-spacing: 0.02em; }
