@@ -882,27 +882,57 @@ body.celestial-home-open {
   text-indent: 0.28em;
   padding: 19px 46px;
   border-radius: 999px;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, color 0.25s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.25s ease, color 0.25s ease;
 }
 .btn-primary {
   background: linear-gradient(150deg, var(--jiang-hong), var(--jiang-hong-deep));
   color: var(--gold-soft);
-  box-shadow: 0 14px 34px rgba(122, 38, 38, 0.3), inset 0 0 0 2px rgba(242, 226, 179, 0.4);
+  box-shadow:
+    0 5px 0 #5a1f1f,
+    0 14px 34px rgba(122, 38, 38, 0.3),
+    inset 0 0 0 2px rgba(242, 226, 179, 0.4);
 }
 .btn-primary:hover {
   transform: translateY(-3px);
-  box-shadow: 0 20px 44px rgba(122, 38, 38, 0.38), inset 0 0 0 2px rgba(242, 226, 179, 0.65);
+  box-shadow:
+    0 8px 0 #5a1f1f,
+    0 20px 44px rgba(122, 38, 38, 0.38),
+    inset 0 0 0 2px rgba(242, 226, 179, 0.65);
+}
+.btn-primary:active {
+  transform: translateY(3px);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  box-shadow:
+    0 1px 0 #5a1f1f,
+    0 4px 10px rgba(122, 38, 38, 0.28),
+    inset 0 0 0 2px rgba(242, 226, 179, 0.4);
 }
 .btn-ghost {
   background: rgba(255, 255, 255, 0.62);
   color: var(--ink);
-  box-shadow: inset 0 0 0 2px var(--gold-line), 0 10px 26px rgba(120, 90, 50, 0.12);
+  box-shadow:
+    inset 0 0 0 2px var(--gold-line),
+    0 5px 0 rgba(120, 90, 50, 0.28),
+    0 10px 26px rgba(120, 90, 50, 0.12);
   backdrop-filter: blur(6px);
 }
 .btn-ghost:hover {
   transform: translateY(-3px);
   background: rgba(255, 255, 255, 0.86);
   color: var(--jiang-hong);
+  box-shadow:
+    inset 0 0 0 2px var(--gold-line),
+    0 8px 0 rgba(120, 90, 50, 0.32),
+    0 16px 34px rgba(120, 90, 50, 0.18);
+}
+.btn-ghost:active {
+  transform: translateY(3px);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow:
+    inset 0 0 0 2px var(--gold-line),
+    0 1px 0 rgba(120, 90, 50, 0.28),
+    0 4px 10px rgba(120, 90, 50, 0.14);
 }
 .btn:focus-visible {
   outline: 2px solid var(--jiang-hong);
@@ -954,51 +984,17 @@ body.celestial-home-open {
   border-color: transparent transparent transparent var(--jiang-hong);
 }
 
-/* 背景音樂版權標示：預設只露一顆小圖示，不佔畫面；滑過／focus 到展開文字。
-   版權條款通常只要求「找得到」，不用整段常駐畫面上。 */
+/* 背景音樂版權標示：放右下角、字很小，不搶畫面但需要時看得到、點得到 */
 .music-credit {
   position: fixed;
   right: 16px;
   bottom: 12px;
   z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  margin: 0;
   font-size: 11px;
   letter-spacing: 0.02em;
   color: rgba(91, 70, 53, 0.55);
-}
-.music-credit-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid var(--gold-line);
-  background: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
-  line-height: 1;
-  flex: none;
-  opacity: 0.6;
-  transition: opacity 0.2s ease;
-}
-.music-credit:hover .music-credit-icon,
-.music-credit:focus-within .music-credit-icon {
-  opacity: 1;
-}
-.music-credit-text {
-  display: inline-block;
-  max-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  opacity: 0;
-  transition: max-width 0.25s ease, opacity 0.2s ease;
-}
-.music-credit:hover .music-credit-text,
-.music-credit:focus-within .music-credit-text {
-  max-width: 220px;
-  opacity: 1;
+  pointer-events: auto;
 }
 .music-credit a {
   color: inherit;

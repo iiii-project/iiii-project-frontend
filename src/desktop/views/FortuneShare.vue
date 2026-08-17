@@ -90,7 +90,6 @@ onBeforeUnmount(() => {
           :poem="fortune.poem"
           :number="fortune.number"
           :ganzhi="fortune.ganzhi"
-          :level="fortune.fortune_level"
           :title="fortune.title"
         />
 

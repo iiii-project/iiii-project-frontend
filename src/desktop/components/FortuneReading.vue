@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* 白話、神明指點、建議、留意——分頁呈現，一次只讀一段。
+/* 白話、神明指點、建議——分頁呈現，一次只讀一段。
    原本是把四段全部往下貼，手機要滑好幾個螢幕，讀的人抓不到重點；
    改成籤詩之下一排分頁，想看哪段點哪段，內容都在同一個位置出現。 */
 import { computed, ref, watch } from 'vue'
@@ -8,7 +8,6 @@ interface ReadingInterpretation {
   overall_meaning?: string
   relation_to_question?: string
   suggested_actions?: string[]
-  warnings?: string[]
 }
 
 const props = defineProps<{
@@ -33,7 +32,6 @@ const tabs = computed<Tab[]>(() => {
     list.push({ key: 'reading', label: '神明指點' })
   }
   if (props.interpretation?.suggested_actions?.length) list.push({ key: 'actions', label: '可以這樣做' })
-  if (props.interpretation?.warnings?.length) list.push({ key: 'warnings', label: '要留意' })
   return list
 })
 
@@ -89,12 +87,6 @@ watch(
       <template v-else-if="active === 'actions'">
         <ul>
           <li v-for="(item, i) in interpretation?.suggested_actions ?? []" :key="`a${i}`">{{ item }}</li>
-        </ul>
-      </template>
-
-      <template v-else-if="active === 'warnings'">
-        <ul class="warn">
-          <li v-for="(item, i) in interpretation?.warnings ?? []" :key="`w${i}`">{{ item }}</li>
         </ul>
       </template>
     </div>
@@ -176,7 +168,6 @@ watch(
   line-height: 1.95;
   color: var(--ink-soft, #5b4635);
 }
-.pane ul.warn li { color: rgba(166, 58, 58, 0.92); }
 
 /* 等解籤：延用站上香煙裊裊的語彙，不要轉圈圈 */
 .waiting {

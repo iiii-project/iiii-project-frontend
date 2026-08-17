@@ -585,7 +585,6 @@ function restart() {
               :poem="fortune.poem"
               :number="fortune.no"
               :ganzhi="fortune.ganzhi"
-              :level="fortune.grade"
             />
           </div>
 

@@ -507,7 +507,6 @@ onBeforeUnmount(() => scannerEl.value?.stop())
             :poem="fortune.poem"
             :number="fortune.number"
             :ganzhi="fortune.ganzhi"
-            :level="fortune.fortune_level"
             :title="fortune.title"
           />
         </div>

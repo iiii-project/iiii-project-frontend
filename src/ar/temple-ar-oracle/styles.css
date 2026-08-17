@@ -62,8 +62,6 @@
 
 #ar-decoration{ position:fixed; inset:0; z-index:3; pointer-events:none; overflow:hidden; mix-blend-mode: screen; transition: filter 0.35s ease; }
 #ar-decoration svg, #ar-decoration img{ position:absolute; filter: drop-shadow(0 0 6px rgba(212,175,55,0.25)); }
-.ar-cloud-tl{ top:3vh; left:2vw; width:min(20vw,220px); opacity:0.55; animation: arFloat 9s ease-in-out infinite; }
-.ar-cloud-tr{ top:4vh; right:2vw; width:min(17vw,190px); opacity:0.5; animation: arFloat 11s ease-in-out infinite 1s; transform:scaleX(-1); }
 .ar-coins-bl{ bottom:4vh; left:3vw; width:min(9vw,90px); opacity:0.3; animation: arFloat 8s ease-in-out infinite 0.5s; }
 .ar-scroll-br{ bottom:3vh; right:3vw; width:min(7vw,70px); opacity:0.3; animation: arFloat 10s ease-in-out infinite 1.5s; }
 .ar-dragon-l{ top:14vh; left:0.5vw; height:72vh; opacity:0.14; animation: arDrift 16s ease-in-out infinite; }
@@ -110,11 +108,29 @@
   box-shadow: 0 24px 60px rgba(120,90,50,0.18), inset 0 1px 0 rgba(255,255,255,0.6);
   color: var(--ink);
 }
-.ornament-row{ display:flex; align-items:center; justify-content:center; gap:10px; }
-.ornament-row svg{ opacity:0.8; }
 .hairline{ height:1px; width:36px; margin:0 auto; background: var(--gold); opacity:0.75; }
-.eyebrow{ font-size:11px; letter-spacing:0.5em; color:var(--morandi-dust); text-transform:uppercase; font-weight:400; }
 .gold-text{ background:linear-gradient(180deg, #fbf1d8 0%, var(--gold) 55%, #b8933f 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+/* 三大儀式標題（誠心默念／祈願抽籤／擲筊請示）：比一般 gold-text 更大、更有份量，
+   金＋朱紅雙色漸層取代單一金色，加上暖金光暈，字型走楷書調性貼近廟宇匾額感。 */
+.ritual-title{
+  font-family: "Noto Serif TC", "STKaiti", "Kaiti TC", "DFKai-SB", "KaiTi", cursive, serif;
+  font-size: 2.1rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  line-height: 1.3;
+  background: linear-gradient(180deg, #f4dfa0 0%, var(--gold) 45%, var(--jiang-hong) 82%, var(--jiang-hong-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 18px rgba(212,175,55,0.4), 0 0 36px rgba(166,58,58,0.18);
+}
+@media (min-width:768px){
+  .ritual-title{ font-size: 2.75rem; }
+}
+/* 標題卡：跟 px-14/py-6 通用工具class脫鉤，才能單獨縮小這三張卡，
+   不影響共用同一組utility class的擲筊結果卡（bwa-result-panel）。 */
+.ritual-card{ padding: 1.1rem 2.25rem; }
 .scene{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; pointer-events:none; }
 .hidden{ display:none !important; }
 
@@ -184,7 +200,6 @@
 #bwa-three-container.tossable{ pointer-events:auto; cursor:pointer; }
 #bwa-three-container canvas{ display:block; width:100%; height:100%; }
 
-.divider-gold{ height:1px; width:44px; margin:1rem auto; background: var(--gold); opacity:0.7; }
 .fade-in{ animation: fadeIn 0.7s ease both; }
 @keyframes fadeIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
 
@@ -199,12 +214,21 @@
 .btn-line:disabled:hover{ background:transparent; box-shadow:none; }
 
 /* ===================== 擲筊結果標籤 ===================== */
+.result-card{ padding: 1.4rem 2.5rem; }
 #bwa-result-panel{
   z-index:40 !important;
   background: rgba(12,9,8,0.82) !important;
   backdrop-filter: blur(26px) saturate(1.2) !important;
-  box-shadow: 0 0 0 1px rgba(255,215,0,0.65), 0 0 40px rgba(212,175,55,0.35), 0 24px 70px rgba(0,0,0,0.7) !important;
+  box-shadow:
+    0 0 0 1px rgba(255,215,0,0.65),
+    0 7px 0 rgba(0,0,0,0.55),
+    0 0 40px rgba(212,175,55,0.35),
+    0 24px 70px rgba(0,0,0,0.7) !important;
 }
+#bwa-result-title{ white-space: nowrap; }
+/* 說明文字目前顏色沿用淺色卡片的深色墨字，疊在這個深色結果卡上看不清楚，
+   乾脆連同上面的分隔線一起收掉，卡片只留標題一行，不留空白。 */
+#bwa-result-desc{ display:none; }
 #bwa-result-panel.reveal{ animation: resultFreezeZoom 0.6s cubic-bezier(.2,.8,.25,1.1) both; }
 @keyframes resultFreezeZoom{
   0%{ transform: scale(0.82); opacity:0; }
@@ -319,7 +343,7 @@
    這裡直接等價換算成固定值的具名 class，數值與原始完全相同： */
 .ar-top-10{ top:10vh; }
 .ar-top-7vh{ top:7vh; }
-.ar-bottom-9vh{ bottom:9vh; }
+.ar-bottom-9vh{ bottom:20vh; }
 .ar-py-8vh{ padding-top:8vh; padding-bottom:8vh; }
 .text-13px{ font-size:13px; }
 .tracking-05em{ letter-spacing:0.5em; }

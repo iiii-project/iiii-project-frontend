@@ -578,7 +578,6 @@ function restart() {
               :poem="fortune.poem"
               :number="fortune.no"
               :ganzhi="fortune.ganzhi"
-              :level="fortune.grade"
             />
           </div>
 
@@ -899,8 +898,9 @@ body.ar-ritual-open { overflow: hidden; }
   background: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: 13px;
-  letter-spacing: 0.14em;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   color: var(--ink-soft);
   padding: 6px 2px;
 }
@@ -910,27 +910,29 @@ body.ar-ritual-open { overflow: hidden; }
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
+  gap: 8px 22px;
   margin: 0 0 0 auto;
   padding: 0;
 }
 .steps li {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
-  letter-spacing: 0.1em;
-  color: rgba(91, 70, 53, 0.5);
+  gap: 9px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(91, 70, 53, 0.75);
 }
 .steps i {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: 1px solid var(--gold-line);
   font-style: normal;
-  font-size: 11px;
+  font-size: 15px;
+  font-weight: 700;
   background: rgba(255, 255, 255, 0.6);
 }
 .steps li.on { color: var(--jiang-hong); }
@@ -962,10 +964,11 @@ body.ar-ritual-open { overflow: hidden; }
 .panel.center { text-align: center; }
 .kicker {
   margin: 0 0 12px;
-  font-size: 11.5px;
-  letter-spacing: 0.42em;
-  text-indent: 0.42em;
-  color: var(--gold);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.36em;
+  text-indent: 0.36em;
+  color: #b8860b;
 }
 .panel h2 {
   margin: 0 0 10px;
@@ -1226,6 +1229,7 @@ body.ar-ritual-open { overflow: hidden; }
 .optional-note {
   display: block;
   margin-top: 6px;
+  font-weight: 700;
   color: rgba(166, 58, 58, 0.75);
 }
 .dd-note {
@@ -1262,24 +1266,58 @@ body.ar-ritual-open { overflow: hidden; }
   border: 0;
   cursor: pointer;
   font-family: inherit;
-  font-size: 14px;
-  letter-spacing: 0.24em;
-  text-indent: 0.24em;
-  padding: 15px 36px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  padding: 17px 40px;
   border-radius: 999px;
-  transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 .btn.primary {
   background: linear-gradient(150deg, var(--jiang-hong), var(--jiang-hong-deep));
   color: var(--gold-soft);
-  box-shadow: 0 12px 28px rgba(122, 38, 38, 0.28);
+  box-shadow:
+    0 5px 0 #5a1f1f,
+    0 12px 28px rgba(122, 38, 38, 0.28);
 }
 .btn.ghost {
   background: rgba(255, 255, 255, 0.7);
   color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--gold-line);
+  box-shadow:
+    inset 0 0 0 1px var(--gold-line),
+    0 5px 0 rgba(120, 90, 50, 0.28),
+    0 10px 22px rgba(120, 90, 50, 0.14);
 }
 .btn:hover:not(:disabled) { transform: translateY(-2px); }
+.btn.primary:hover:not(:disabled) {
+  box-shadow:
+    0 7px 0 #5a1f1f,
+    0 16px 34px rgba(122, 38, 38, 0.32);
+}
+.btn.ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 0 0 1px var(--gold-line),
+    0 7px 0 rgba(120, 90, 50, 0.32),
+    0 14px 28px rgba(120, 90, 50, 0.18);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(3px);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn.primary:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 #5a1f1f,
+    0 4px 10px rgba(122, 38, 38, 0.24);
+}
+.btn.ghost:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    inset 0 0 0 1px var(--gold-line),
+    0 1px 0 rgba(120, 90, 50, 0.28),
+    0 4px 10px rgba(120, 90, 50, 0.12);
+}
 .btn:disabled { opacity: 0.55; cursor: default; }
 
 /* ── 等待動畫：香煙裊裊 ── */

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /* 籤紙。
    一支籤最重要的就是那四句，所以它不跟白話、解籤擠成一團文字，而是自己一張紙：
-   宣紙底、雙紅框、直排右起、句與句之間有界線，吉凶蓋成一枚硃印，干支落在紙腳。
+   宣紙底、雙紅框、直排右起、句與句之間有界線，干支蓋成一枚硃印，紙腳再落一次款。
    四句一個字一個字浮出來，讀的人自然會先看這裡。
-   句子太長（例如資料塞了白話長句）排不成欄時，自動退回橫排。 */
+   句子太長（例如資料塞了白話長句）排不成欄時，自動退回橫排。
+   六十甲子籤本來就沒有「上上籤／中吉／大吉」這種吉凶分級，硃印蓋的是干支本身。 */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { fitsVertical, splitPoem } from '@/utils/poem'
 
@@ -12,7 +13,6 @@ const props = withDefaults(
     poem?: string | null
     number?: number | string | null
     ganzhi?: string | null
-    level?: string | null
     title?: string | null
     /** 外面還沒準備好給人看（例如廟門還沒推開）時先按住，別讓動畫白播 */
     hold?: boolean
@@ -95,8 +95,8 @@ onBeforeUnmount(() => {
       <div class="head-row">
         <span class="head-spacer" aria-hidden="true"></span>
         <p v-if="number !== null && number !== undefined" class="no">第 {{ number }} 籤</p>
-        <!-- 吉凶：蓋一枚硃印，不做成標籤 -->
-        <span v-if="level" class="seal">{{ level }}</span>
+        <!-- 干支：蓋一枚硃印，不做成標籤 -->
+        <span v-if="ganzhi" class="seal">{{ ganzhi }}</span>
         <span v-else class="head-spacer" aria-hidden="true"></span>
       </div>
       <p class="rule" aria-hidden="true"><i></i><b>❖</b><i></i></p>
