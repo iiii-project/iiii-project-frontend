@@ -897,7 +897,10 @@ body.ar-ritual-open { overflow: hidden; }
 .cloud.c2 { right: -18%; top: 48%; width: 78vw; height: 34vh; animation: drift-b 64s ease-in-out infinite; }
 .cloud.c3 { left: 8%; bottom: -10%; width: 90vw; height: 32vh; animation: drift-a 46s ease-in-out infinite reverse; }
 
-/* 地面背景：貼底鋪滿寬度，蓋在雲霧背景之上、內容面板之下 */
+/* 地面背景：整張鋪滿螢幕，蓋在雲霧背景之上、內容面板之下。
+   之前用 background-size: 100% auto 只鎖寬度，圖片本身的長寬比
+   一矮，頂部就會空一截露出後面的 sky-wash；改用 cover 讓圖片
+   永遠填滿這個 fixed 全螢幕層，不論視窗比例。 */
 .oracle-ground {
   position: fixed;
   inset: 0;
@@ -905,7 +908,7 @@ body.ar-ritual-open { overflow: hidden; }
   pointer-events: none;
   background-repeat: no-repeat;
   background-position: center bottom;
-  background-size: 100% auto;
+  background-size: cover;
 }
 
 /* ── 頂部與步驟列 ── */
