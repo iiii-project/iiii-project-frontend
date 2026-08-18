@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { sendWhenReady } from '@/live2d/websocketService'
 
-const GREETING_TEXT = '我是你的語音助手，可以用說話或是打字的方式和我對話，進一步詢問籤詩相關的內容。'
+const GREETING_TEXT = '我是你的解籤助手金鶴，有任何問題都可以問我喔！'
 
 /**
  * 全站共用的小夥伴開合狀態（原本是 OracleWizard.vue 內的 companionOpened/
@@ -15,16 +15,10 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
     hasGreeted: false
   }),
   actions: {
-    /* announce=false 給求籤儀式用：自動彈出來講階段指引時，不要再搶著講一次
-       通用自介——但一樣算「已經打過招呼」，之後手動點開也不會補講。 */
-    open(announce = true) {
+    open() {
       if (this.isVisible) return
       this.isVisible = true
       this.hasOpenedOnce = true
-
-      if (this.hasGreeted) return
-      this.hasGreeted = true
-      if (announce) sendWhenReady({ type: 'speak-text', text: GREETING_TEXT })
     },
     toggle() {
       if (this.isVisible) {
@@ -32,6 +26,15 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
         return
       }
       this.open()
+    },
+    /* 自我介紹跟「開不開」分開處理：open() 在頁面一載入就會呼叫（見
+       Live2DCompanionWidget.vue），那個當下沒有使用者手勢，瀏覽器 autoplay
+       政策會擋掉這時候播放的語音。真正會出聲的 greet()，只在使用者點角色
+       打開聊天室（一個真正的使用者手勢）時才呼叫，且只講一次。 */
+    greet() {
+      if (this.hasGreeted) return
+      this.hasGreeted = true
+      sendWhenReady({ type: 'speak-text', text: GREETING_TEXT })
     }
   }
 })

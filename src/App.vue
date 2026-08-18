@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, defineAsyncComponent, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import Live2DCompanionWidget from '@/live2d/Live2DCompanionWidget.vue'
+
+/* Live2D 小夥伴整套引擎（webSDK Framework + onnxruntime VAD 相關 composable）目前是
+   全站最大的一塊前端程式碼。改成動態 import 讓它獨立成一個 chunk，
+   不再跟著 App.vue 一起塞進進站就要下載、解析的主 bundle——
+   不然每一頁（含還沒用到小夥伴的頁面）都要先扛著這包重量才能開始渲染。 */
+const Live2DCompanionWidget = defineAsyncComponent(() => import('@/live2d/Live2DCompanionWidget.vue'))
 
 const route = useRoute()
 const isImmersiveRoute = computed(() => route.meta.immersive === true)

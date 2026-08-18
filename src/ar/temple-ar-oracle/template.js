@@ -11,8 +11,8 @@
    ========================================================================= */
 /* 三階段（插香/抽籤/擲筊）進場的「神明實景」疊加圖層：廟宇內部照 + 玉皇大帝神像照
    （神像照本身已去背，直接疊在背景照上方置中即可，不需要另外合成一張圖）。 */
-const ritualOverlayBgUrl = new URL('../../assets/images/temple_background.jpg', import.meta.url).href
-const ritualOverlayEmperorUrl = new URL('../../assets/images/jade.png', import.meta.url).href
+const ritualOverlayBgUrl = new URL('../../assets/images/temple_background.webp', import.meta.url).href
+const ritualOverlayEmperorUrl = new URL('../../assets/images/jade.webp', import.meta.url).href
 
 export function renderTemplate() {
   return `

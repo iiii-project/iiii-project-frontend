@@ -1,50 +1,45 @@
 <script setup lang="ts">
 /**
- * 全站浮動的 Live2D 小夥伴（FAB 按鈕 + 聊天面板），從原本只在 OracleWizard.vue
- * 解籤結果步驟才出現的頁面內元件搬出來，掛在 App.vue 讓每個頁面都有。
+ * 全站浮動的 Live2D 小夥伴，從原本只在 OracleWizard.vue 解籤結果步驟才出現的
+ * 頁面內元件搬出來，掛在 App.vue 讓每個頁面都有。現在預設一直開著、佔滿全螢幕，
+ * 不再有 FAB 按鈕跟收合面板那一套。
  * 桌面／手機各自的 Live2DCompanion.vue 內容目前逐字元相同，但比照全站既有的
  * desktop/mobile 分離慣例，仍依裝置動態選其中一份渲染，之後兩邊要各自演化不受影響。
  */
-import { computed, onMounted, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted } from 'vue'
 import { isMobileViewport } from '@/utils/device'
 import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
-import { useInterrupt } from '@/composables/useInterrupt'
-import DesktopLive2DCompanion from '@/desktop/components/live2d/Live2DCompanion.vue'
-import MobileLive2DCompanion from '@/mobile/components/live2d/Live2DCompanion.vue'
+
+/* 這兩支才是真正扛著整套 Live2D 引擎（webSDK Framework、useLive2DModel）的元件；
+   動態 import 讓桌機/手機只在真的要顯示小夥伴的當下，各自去下載自己那一份，
+   不會兩份都跟著這支外層元件一起載入。 */
+const DesktopLive2DCompanion = defineAsyncComponent(() => import('@/desktop/components/live2d/Live2DCompanion.vue'))
+const MobileLive2DCompanion = defineAsyncComponent(() => import('@/mobile/components/live2d/Live2DCompanion.vue'))
 
 const companion = useLive2DCompanionStore()
 const Live2DCompanion = computed(() => (isMobileViewport() ? MobileLive2DCompanion : DesktopLive2DCompanion))
 
-/* 預設展開，不用等使用者點 FAB。announce=false：這是頁面剛載入、還沒有任何使用者
-   互動的當下，瀏覽器的 autoplay 政策會擋掉這時候播放的語音，所以跳過通用自介語音
-   （面板本身照常展開），等使用者真的有互動之後（打字、點麥克風、或進求籤儀式）
-   要播放的語音才不會被擋。 */
-onMounted(() => companion.open(false))
-
-/* 收起面板要立刻停止說話：interrupt() 內部會檢查 aiState 是不是 thinking-speaking，
-   不是這個狀態時呼叫是安全的 no-op，不用另外判斷。 */
-const { interrupt } = useInterrupt()
-watch(
-  () => companion.isVisible,
-  (visible, wasVisible) => {
-    if (!visible && wasVisible) interrupt()
+/* 這裡只負責讓小夥伴可見（isVisible），不觸發自我介紹語音——那個當下沒有使用者
+   手勢，瀏覽器的 autoplay 政策會擋掉。自我介紹改成使用者點角色開聊天室時才講
+   （見 companionStore.greet()，一個真正的使用者手勢）。companionStore 仍保留
+   isVisible/hasOpenedOnce 狀態，因為 OracleWizard.vue 的求籤儀式流程也會呼叫
+   companion.open()。
+   延後到瀏覽器閒置（或最長 1.5 秒）才開：一開就跟著載 Cubism Core、連 WebSocket，
+   如果緊接在 app 剛掛載、首頁開門動畫還在跑的當下就做，會搶首屏渲染的主執行緒，
+   造成剛進站那幾秒明顯卡頓。沒有 requestIdleCallback 的瀏覽器退回 setTimeout。 */
+onMounted(() => {
+  const open = () => companion.open()
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(open, { timeout: 1500 })
+  } else {
+    window.setTimeout(open, 300)
   }
-)
+})
 </script>
 
 <template>
   <Teleport to="body">
-    <button
-      type="button"
-      class="live2d-fab"
-      :class="{ 'is-open': companion.isVisible }"
-      :aria-label="companion.isVisible ? '收起小夥伴' : '打開小夥伴聊聊'"
-      @click="companion.toggle()"
-    >
-      <span class="live2d-fab__icon">{{ companion.isVisible ? '✕' : '🔮' }}</span>
-      <span v-if="!companion.isVisible" class="live2d-fab__pulse" aria-hidden="true"></span>
-    </button>
-    <div class="live2d-companion" :class="{ 'is-open': companion.isVisible }">
+    <div class="live2d-companion">
       <component :is="Live2DCompanion" v-if="companion.hasOpenedOnce" />
     </div>
   </Teleport>
@@ -53,72 +48,12 @@ watch(
 <style>
 .live2d-companion {
   position: fixed;
-  left: 16px;
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  z-index: 50;
-  width: min(340px, 46vw);
-  height: min(460px, 62vh);
-  transform-origin: bottom left;
-  transform: scale(0.82) translateY(14px);
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s ease;
-}
-.live2d-companion.is-open {
-  transform: scale(1) translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-@media (max-width: 640px) {
-  .live2d-companion {
-    left: 12px;
-    bottom: calc(78px + env(safe-area-inset-bottom));
-    width: min(220px, 58vw);
-    height: min(320px, 42vh);
-  }
-}
-
-/* ── 小夥伴的呼叫鈕：一顆藏在左下角的圓鈕，點了才把角色跟聊天框叫出來 ── */
-.live2d-fab {
-  position: fixed;
-  left: calc(16px + env(safe-area-inset-left));
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 55;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 1px solid rgba(212, 175, 55, 0.55);
-  background: radial-gradient(circle at 32% 28%, #fff3d6, #d4af37 42%, #a63a3a 100%);
-  box-shadow: 0 10px 24px rgba(120, 60, 40, 0.32), inset 0 0 0 2px rgba(255, 253, 240, 0.35);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.live2d-fab:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 14px 28px rgba(120, 60, 40, 0.38); }
-.live2d-fab:active { transform: scale(0.96); }
-.live2d-fab.is-open {
-  background: radial-gradient(circle at 32% 28%, #fff9ec, #f2e2b3 45%, #7a2626 100%);
-}
-.live2d-fab__icon {
-  font-size: 24px;
-  line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(58, 28, 15, 0.35));
-}
-.live2d-fab__pulse {
-  position: absolute;
   inset: 0;
-  border-radius: 50%;
-  border: 2px solid rgba(212, 175, 55, 0.55);
-  animation: live2d-fab-pulse 2.4s ease-out infinite;
+  z-index: 50;
+  /* 這層本身沒有任何可視內容，只是拿來 teleport 全螢幕子元件的容器——如果不設
+     none，它自己這個空 div 就會蓋住整個畫面吃走點擊，底下頁面的按鈕、連結全部
+     點不到。真正該接收點擊的角色本體/按鈕，各自在自己的子元件裡明講
+     pointer-events:auto（見 Live2DCompanion.vue）。 */
   pointer-events: none;
-}
-@keyframes live2d-fab-pulse {
-  0% { transform: scale(1); opacity: 0.65; }
-  100% { transform: scale(1.55); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .live2d-fab__pulse { animation: none; }
-  .live2d-companion { transition: none; }
 }
 </style>

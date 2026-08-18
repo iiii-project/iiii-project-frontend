@@ -7,8 +7,9 @@ import { initializeLive2D } from '@/live2d/webSDK/engine/entry'
 
 // 移植自 use-live2d-model.ts。修正原始碼裡兩個死路徑：window.LAppDefine / window.LAppLive2DManager
 // 從未真的被賦值到 window，原本靠它們判斷的分支永遠不會執行——這裡改成直接 import class 呼叫。
-// 也拿掉了 Electron 專屬的滑鼠穿透（pet mode hover）邏輯與死碼 playAudioWithLipSync（原本就沒人呼叫，
-// 且依賴同一個不存在的 window.LAppLive2DManager）。
+// 也拿掉了死碼 playAudioWithLipSync（原本就沒人呼叫，且依賴同一個不存在的 window.LAppLive2DManager）。
+// 原本 Electron 專屬的滑鼠穿透（pet mode hover，用 Electron 的 setIgnoreMouseEvents）邏輯當時也一併拿掉了，
+// 但角色畫布現在蓋滿全螢幕後這個需求又回來了，改用瀏覽器可行的方式重做：見 isHovering / handleWindowMouseMove。
 
 interface Position {
   x: number
@@ -41,8 +42,13 @@ function parseModelUrl(url: string): { baseUrl: string; modelDir: string; modelF
   }
 }
 
-export function useLive2DModel(modelInfo: Ref<ModelInfo | undefined>, canvasRef: Ref<HTMLCanvasElement | null>) {
+export function useLive2DModel(
+  modelInfo: Ref<ModelInfo | undefined>,
+  canvasRef: Ref<HTMLCanvasElement | null>,
+  onCharacterTap?: () => void
+) {
   const isDragging = ref(false)
+  const isHovering = ref(false)
   const position = ref<Position>({ x: 0, y: 0 })
 
   const dragStartPos = { x: 0, y: 0 }
@@ -198,6 +204,8 @@ export function useLive2DModel(modelInfo: Ref<ModelInfo | undefined>, canvasRef:
       const distanceMoved = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
 
       if (timeElapsed < TAP_DURATION_THRESHOLD_MS && distanceMoved < DRAG_DISTANCE_THRESHOLD_PX) {
+        onCharacterTap?.()
+
         const allowTapMotion = modelInfo.value?.pointerInteractive !== false
         const tapMotions = (modelInfo.value as any)?.tapMotions
         if (allowTapMotion && tapMotions) {
@@ -219,6 +227,42 @@ export function useLive2DModel(modelInfo: Ref<ModelInfo | undefined>, canvasRef:
   function handleMouseLeave() {
     if (isDragging.value) handleMouseUp(null)
     isPotentialTap = false
+  }
+
+  /* 畫布現在蓋滿全螢幕，但角色本體只佔畫面一小塊，其餘都是透明的——如果整片畫布
+     一直吃走滑鼠事件，底下頁面的按鈕、連結全部點不到。做法是預設讓畫布
+     pointer-events:none（見 Live2DCompanion.vue 的 :style 綁定），只有滑鼠真的
+     移到角色身上時才切成 auto，讓點擊穿透到角色以外的區域。
+     監聽掛在 window 上而不是畫布本身：畫布在 pointer-events:none 時本來就收不到
+     mousemove，只有 window 層級的監聽不受這個影響，才有辦法持續偵測游標有沒有
+     移回角色身上。 */
+  function computeHitOnCanvas(clientX: number, clientY: number): boolean {
+    const adapter = (window as any).getLAppAdapter?.()
+    const canvas = canvasRef.value
+    const view = LAppDelegate.getInstance()?.getView()
+    const model = adapter?.getModel()
+    if (!canvas || !view || !model) return false
+
+    const rect = canvas.getBoundingClientRect()
+    const x = clientX - rect.left
+    const y = clientY - rect.top
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return false
+
+    const scale = canvas.width / canvas.clientWidth
+    const modelX = view._deviceToScreen.transformX(x * scale)
+    const modelY = view._deviceToScreen.transformY(y * scale)
+
+    return model.anyhitTest(modelX, modelY) !== null || model.isHitOnModel(modelX, modelY)
+  }
+
+  function handleWindowMouseMove(e: MouseEvent) {
+    // 拖曳中途游標本來就可能滑出角色不透明的範圍，這時不能把 pointer-events 收回去，
+    // 不然拖到一半滑鼠事件會被畫布放掉，角色卡在半路動不了。
+    if (isDragging.value) {
+      isHovering.value = true
+      return
+    }
+    isHovering.value = computeHitOnCanvas(e.clientX, e.clientY)
   }
 
   function exposeDebugHelpers() {
@@ -268,14 +312,19 @@ export function useLive2DModel(modelInfo: Ref<ModelInfo | undefined>, canvasRef:
     console.log('Live2D Debug functions exposed to window.Live2DDebug')
   }
 
-  onMounted(exposeDebugHelpers)
+  onMounted(() => {
+    exposeDebugHelpers()
+    window.addEventListener('mousemove', handleWindowMouseMove)
+  })
   onBeforeUnmount(() => {
     delete (window as any).Live2DDebug
+    window.removeEventListener('mousemove', handleWindowMouseMove)
   })
 
   return {
     position,
     isDragging,
+    isHovering,
     handlers: {
       onMousedown: handleMouseDown,
       onMousemove: handleMouseMove,

@@ -7,7 +7,7 @@ import { onBeforeUnmount, ref } from 'vue'
 const props = withDefaults(defineProps<{ hint?: string }>(), { hint: '輕 觸 推 門' })
 const emit = defineEmits<{ opening: []; opened: [] }>()
 
-const logoUrl = new URL('../../assets/images/logo.png', import.meta.url).href
+const logoUrl = new URL('../../assets/images/logo.webp', import.meta.url).href
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -201,14 +201,14 @@ onBeforeUnmount(() => {
       <div class="leaf-edge"></div>
       <!-- logo 左半：直接放在門扇裡，跟著門扇同一個 3D 變換走 -->
       <div class="logo-half">
-        <div class="logo-art"><img :src="logoUrl" alt="" /></div>
+        <div class="logo-art"><img :src="logoUrl" alt="" decoding="async" fetchpriority="high" /></div>
       </div>
     </div>
     <div class="leaf right" aria-hidden="true">
       <div class="leaf-face"><span class="studs"></span><span class="ring"></span></div>
       <div class="leaf-edge"></div>
       <div class="logo-half">
-        <div class="logo-art"><img :src="logoUrl" alt="" /></div>
+        <div class="logo-art"><img :src="logoUrl" alt="" decoding="async" fetchpriority="high" /></div>
       </div>
     </div>
 

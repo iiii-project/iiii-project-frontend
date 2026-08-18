@@ -13,10 +13,10 @@ const prefersReducedMotion = () =>
 
 /* ── 音效：與桌機版同一支音檔。音檔前 1.5 秒是空白，
    從撞擊點往回抓，聲音才會正好落在門敞開的那一刻。 ── */
-const logoUrl = new URL('../../assets/images/logo.png', import.meta.url).href
+const logoUrl = new URL('../../assets/images/logo.webp', import.meta.url).href
 /* 神明與背景都跟桌機首頁同一組（見 desktop/views/HomeView.vue），
    兩邊的第一印象要一致，不再用內嵌 SVG 與純 CSS 漸層天空。 */
-const jadeUrl = new URL('../../assets/images/jade-emperor.png', import.meta.url).href
+const jadeUrl = new URL('../../assets/images/jade-emperor.webp', import.meta.url).href
 const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
 const AUDIO_IMPACT = 1.5
 const AUDIO_PREROLL = 0.04
@@ -255,7 +255,7 @@ onBeforeUnmount(() => {
       <div class="haze h1"></div>
       <div class="haze h2"></div>
       <div class="emperor">
-        <img :src="jadeUrl" alt="" />
+        <img :src="jadeUrl" alt="" decoding="async" fetchpriority="high" />
       </div>
       <div class="cloudbelt"></div>
 
@@ -443,7 +443,7 @@ body.mobile-home-open {
   position: absolute;
   inset: 0;
   background-color: #f3e6d2;
-  background-image: url('@/assets/images/blackground.jpg');
+  background-image: url('@/assets/images/blackground.webp');
   background-repeat: no-repeat;
   background-position: center bottom;
   background-size: cover;
@@ -485,7 +485,7 @@ body.mobile-home-open {
   width: min(84vw, 380px);
   transform: translate3d(-50%, -54%, 0) scale(0.92);
   opacity: 0;
-  /* 舊的內嵌 SVG 是剪影，糊一點才有距離感；換成實拍的 jade.png 後
+  /* 舊的內嵌 SVG 是剪影，糊一點才有距離感；換成實拍的 jade.webp 後
      2.4px 會整張失焦，只留一點空氣感就夠 */
   filter: blur(0.7px);
   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 58%, rgba(0, 0, 0, 0.35) 82%, transparent 96%);

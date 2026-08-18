@@ -62,13 +62,13 @@ function step() {
 }
 
 // 玉皇大帝：去背後的插畫，取代原本的手繪 SVG
-const jadeEmperorSrc = new URL('../../assets/images/jade-emperor.png', import.meta.url).href
+const jadeEmperorSrc = new URL('../../assets/images/jade-emperor.webp', import.meta.url).href
 
 // 首頁背景：水墨山水，廟宇立於群山之間、旭日高懸
-const heroBackgroundSrc = new URL('../../assets/images/blackground.jpg', import.meta.url).href
+const heroBackgroundSrc = new URL('../../assets/images/blackground.webp', import.meta.url).href
 
 // 左右下角祥雲：單張圖已經把兩側雲紋畫在一起、中間留空（見 .corner-clouds 註解）
-const cornerCloudsSrc = new URL('../../assets/images/cloud.png', import.meta.url).href
+const cornerCloudsSrc = new URL('../../assets/images/cloud.webp', import.meta.url).href
 
 // 入殿音效：實際錄好的廟宇音檔，點擊當下才播（瀏覽器要有使用者手勢才允許）
 const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
@@ -330,7 +330,7 @@ onBeforeUnmount(() => {
       <!-- 中央玉皇大帝：站在畫中廟宇與旭日之間的留白處 -->
       <div class="sovereign">
         <span class="sovereign-float">
-          <img :src="jadeEmperorSrc" alt="" class="sovereign-img" />
+          <img :src="jadeEmperorSrc" alt="" class="sovereign-img" decoding="async" fetchpriority="high" />
         </span>
       </div>
 
@@ -744,7 +744,7 @@ body.celestial-home-open {
   background: radial-gradient(120% 90% at 50% 42%, rgba(0, 0, 0, 0) 52%, rgba(90, 64, 32, 0.14) 100%);
 }
 
-/* 左右下角祥雲：cloud.png 本身就是「兩側雲紋 + 中間留空」畫在同一張圖上，
+/* 左右下角祥雲：cloud.webp 本身就是「兩側雲紋 + 中間留空」畫在同一張圖上，
    所以直接鋪滿整個舞台寬度、貼底，中間那塊透明的 V 型缺口自然只會露出
    左下、右下兩個三角區的雲紋，不用切兩張圖或自己再切 clip-path。 */
 .corner-clouds {

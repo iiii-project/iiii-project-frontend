@@ -26,8 +26,10 @@ interface UseLive2DWebSocketOptions {
     displayText?: any
     expressions?: any
   }) => void
-  startMic: () => Promise<void>
-  stopMic: () => void
+  // 現在這個嵌入場景沒有麥克風（STT 已移除），這兩個保留是因為後端理論上還是可能送
+  // start-mic/stop-mic 控制訊息（沿用同一套協定），選填、收到就安全地當no-op。
+  startMic?: () => Promise<void>
+  stopMic?: () => void
 }
 
 export function useLive2DWebSocket(options: UseLive2DWebSocketOptions) {
@@ -42,11 +44,11 @@ export function useLive2DWebSocket(options: UseLive2DWebSocketOptions) {
     switch (controlText) {
       case 'start-mic':
         console.log('Starting microphone...')
-        options.startMic()
+        options.startMic?.()
         break
       case 'stop-mic':
         console.log('Stopping microphone...')
-        options.stopMic()
+        options.stopMic?.()
         break
       case 'conversation-chain-start':
         aiState.setAiState('thinking-speaking')

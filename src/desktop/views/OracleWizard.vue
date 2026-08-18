@@ -19,13 +19,13 @@ const router = useRouter()
 const { scaleStyle } = useFontScale()
 
 // 第一～三步（選方向／說心事／確認送出）共用的地面背景
-const groundSrc = new URL('../../assets/images/ground2.png', import.meta.url).href
+const groundSrc = new URL('../../assets/images/ground2.webp', import.meta.url).href
 
-const healthyIcon = new URL('../../assets/images/healthy.png', import.meta.url).href
-const homeIcon = new URL('../../assets/images/home.png', import.meta.url).href
-const moneyIcon = new URL('../../assets/images/money.png', import.meta.url).href
-const wellnessIcon = new URL('../../assets/images/wellness.png', import.meta.url).href
-const godOfWealthIcon = new URL('../../assets/images/god-of-wealth.png', import.meta.url).href
+const healthyIcon = new URL('../../assets/images/healthy.webp', import.meta.url).href
+const homeIcon = new URL('../../assets/images/home.webp', import.meta.url).href
+const moneyIcon = new URL('../../assets/images/money.webp', import.meta.url).href
+const wellnessIcon = new URL('../../assets/images/wellness.webp', import.meta.url).href
+const godOfWealthIcon = new URL('../../assets/images/god-of-wealth.webp', import.meta.url).href
 
 // 沿用舊版（v17）的五個方向與說明文案
 /* arLabel 是傳給 AR 引擎的分類名稱。引擎內部的 CATEGORY_API_MAP 只認得它自己那份
@@ -235,6 +235,12 @@ function onArComplete(event: Event) {
   setBodyLock(false)
   step.value = 5
   void buildShareQr(detail?.sessionId ?? '')
+
+  // 一進解籤頁面就先唸籤詩本身（原文），不是等 AI 解籤——解籤通常還要再等 ~21 秒
+  // 才會透過 onArInterpretation 補進來，籤詩原文這時候已經有了，先讓角色唸給使用者聽。
+  if (fortune.value?.poem) {
+    sendWhenReady({ type: 'speak-text', text: fortune.value.poem })
+  }
 }
 
 /* ── 儀式進行中，小夥伴主動彈出來講解每個階段 ──
@@ -256,7 +262,7 @@ watch(
 
 function guideRitualStage(text: string) {
   if (ritualDismissed) return
-  companionStore.open(false)
+  companionStore.open()
   sendWhenReady({ type: 'speak-text', text })
 }
 
@@ -478,7 +484,7 @@ function restart() {
             type="button"
             @click="chooseCategory(item.value)"
           >
-            <img class="choice-icon" :src="item.icon" alt="" aria-hidden="true" />
+            <img class="choice-icon" :src="item.icon" alt="" aria-hidden="true" loading="lazy" decoding="async" />
             <span class="choice-text">
               <span class="choice-label">{{ item.label }}</span>
               <span class="choice-desc">{{ item.hint }}</span>

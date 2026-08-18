@@ -1,18 +1,25 @@
 <script setup lang="ts">
 /**
  * 取代原本的 <iframe> 嵌入：這裡是 live2d-frontend 角色渲染邏輯移植進 Vue 後的容器元件。
- * 只放得下「顯示角色 + 文字/語音聊天」這兩件事（比照原本 pet 模式的功能範圍），
+ * 只放得下「全螢幕顯示角色 + 點角色彈出聊天室」這兩件事（比照原本 pet 模式的功能範圍），
  * 沒有側邊欄/角色切換/群組對話等 window 模式才有的東西。
+ * 沒有語音輸入（STT 已移除）：只能用打字跟金鶴對話，回覆用 TTS 念出來。
+ * 也沒有常駐的狀態列/舉手打斷鈕——聊天室只在點角色時彈出，關掉聊天室角色還是留在畫面上。
+ *
+ * 跟 desktop 版的差異：這裡角色容器維持 pointer-events:auto（見下面 CSS），不像桌機版
+ * 用滑鼠懸浮動態切換——觸控螢幕沒有「移過去但還沒點」的懸浮狀態，沒辦法用同一招做
+ * 點擊穿透，這裡先讓「點角色開聊天室」這個核心功能穩定可用，畫布蓋滿螢幕會擋住底下
+ * 按鈕這件事留待之後另外處理。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useAiStateStore } from '@/stores/aiStateStore'
 import { useLive2DConfigStore } from '@/stores/live2dConfigStore'
 import { useLive2DChatStore } from '@/stores/live2dChatStore'
+import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 import { useLive2DModel } from '@/composables/useLive2DModel'
 import { useLive2DResize } from '@/composables/useLive2DResize'
 import { resetExpression } from '@/composables/useLive2DExpression'
 import { useAudioTask } from '@/composables/useAudioTask'
-import { useMicVAD } from '@/composables/useMicVAD'
 import { useInterrupt } from '@/composables/useInterrupt'
 import { useLive2DWebSocket } from '@/composables/useLive2DWebSocket'
 import { loadCubismCore } from '@/live2d/loadCubismCore'
@@ -20,52 +27,36 @@ import { loadCubismCore } from '@/live2d/loadCubismCore'
 const aiState = useAiStateStore()
 const config = useLive2DConfigStore()
 const chat = useLive2DChatStore()
+const companion = useLive2DCompanionStore()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const modelInfoRef = computed(() => config.modelInfo)
 
-const { canvasRef } = useLive2DResize(containerRef, modelInfoRef)
-const { isDragging, handlers } = useLive2DModel(modelInfoRef, canvasRef)
-const { addAudioTask } = useAudioTask()
-const { micOn, startMic, stopMic, pauseListening, resumeListening } = useMicVAD()
-const { interrupt } = useInterrupt()
-const ws = useLive2DWebSocket({ addAudioTask, startMic, stopMic })
+const isChatOpen = ref(false)
 
-/* 角色一開始回應（thinking-speaking，從思考到念完整段話都算）就先暫停收音，
-   離開這個狀態（不管是正常講完回到 idle，還是被使用者按「打斷」變成 interrupted）
-   就恢復收音——避免角色自己講話的聲音被麥克風錄進去，也讓對話變成清楚的一來一回。
-   不是只看 idle：按了「打斷」之後不一定會馬上有下一句話，若只看 idle，打斷後
-   使用者會發現麥克風一直沒反應。 */
+/* 點角色開聊天室，是這個元件裡唯一真正的使用者手勢——自我介紹（會出聲）
+   放在這裡呼叫，才過得了瀏覽器的 autoplay 政策。greet() 內部自己擋了只講一次，
+   所以每次點開都呼叫也沒關係。 */
+function toggleChat() {
+  isChatOpen.value = !isChatOpen.value
+  if (isChatOpen.value) companion.greet()
+}
+
+const { canvasRef } = useLive2DResize(containerRef, modelInfoRef)
+const { isDragging, handlers } = useLive2DModel(modelInfoRef, canvasRef, toggleChat)
+const { addAudioTask } = useAudioTask()
+const { interrupt } = useInterrupt()
+const ws = useLive2DWebSocket({ addAudioTask })
+
+/* 角色講完話（回到 idle）就把表情重置回預設，避免停在講話中途的表情上。 */
 watch(
   () => aiState.aiState,
-  (state, previous) => {
-    if (previous === 'thinking-speaking' && state !== 'thinking-speaking') {
-      resumeListening()
-    } else if (state === 'thinking-speaking' && previous !== 'thinking-speaking') {
-      pauseListening()
-    }
+  (state) => {
     if (state !== 'idle') return
     const lappAdapter = (window as any).getLAppAdapter?.()
     if (lappAdapter) resetExpression(lappAdapter, modelInfoRef.value)
   }
 )
-
-const lastAIMessage = computed(() => {
-  const aiMessages = chat.messages.filter((m) => m.role === 'ai')
-  return aiMessages.length > 0 ? aiMessages[aiMessages.length - 1].content : ''
-})
-const hasAIMessages = computed(() => chat.messages.some((m) => m.role === 'ai'))
-
-// aiState 內部值是英文狀態機代號，這裡轉成使用者看得懂、跟角色語氣搭的說法
-const STATE_LABELS: Record<string, string> = {
-  idle: '在旁邊陪你',
-  'thinking-speaking': '正在回應…',
-  interrupted: '被打斷了',
-  loading: '準備中…',
-  listening: '聽你說…',
-  waiting: '思考中…'
-}
-const stateLabel = computed(() => STATE_LABELS[aiState.aiState] ?? aiState.aiState)
 
 const inputValue = ref('')
 const isComposing = ref(false)
@@ -88,30 +79,13 @@ function handleKeyPress(e: KeyboardEvent) {
   }
 }
 
-function handleInputChange() {
-  aiState.setAiState('waiting')
-}
-
-async function handleMicToggle() {
-  if (micOn.value) {
-    stopMic()
-    if (aiState.aiState === 'listening') aiState.setAiState('idle')
-  } else {
-    await startMic()
-  }
-}
-
-function handleInterrupt() {
-  interrupt()
+function closeChat() {
+  isChatOpen.value = false
 }
 
 onMounted(async () => {
   await loadCubismCore()
   ws.connect()
-})
-
-onBeforeUnmount(() => {
-  stopMic()
 })
 </script>
 
@@ -129,35 +103,33 @@ onBeforeUnmount(() => {
     <canvas id="canvas" ref="canvasRef" class="live2d-companion-canvas" :style="{ cursor: isDragging ? 'grabbing' : 'default' }" />
   </div>
 
-  <div class="live2d-chat">
-    <div v-if="hasAIMessages && lastAIMessage" class="live2d-chat__bubble">
-      <span class="live2d-chat__bubble-tag">米粒</span>
-      <p class="live2d-chat__bubble-text">{{ lastAIMessage }}</p>
+  <div v-if="isChatOpen" class="live2d-chatpanel">
+    <div class="live2d-chatpanel__header">
+      <span class="live2d-chatpanel__title">金鶴</span>
+      <button type="button" class="live2d-chatpanel__close" title="關閉" @click="closeChat">✕</button>
     </div>
 
-    <div class="live2d-chat__status">
-      <span class="live2d-chat__state" :class="`is-${aiState.aiState}`">
-        <i class="live2d-chat__state-dot" aria-hidden="true"></i>{{ stateLabel }}
-      </span>
-      <div class="live2d-chat__actions">
-        <button type="button" class="live2d-chat__icon-btn" title="麥克風" @click="handleMicToggle">
-          {{ micOn ? '🎤' : '🔇' }}
-        </button>
-        <button type="button" class="live2d-chat__icon-btn" title="打斷" @click="handleInterrupt">✋</button>
+    <div class="live2d-chatpanel__messages">
+      <div
+        v-for="message in chat.messages"
+        :key="message.id"
+        class="live2d-chatpanel__bubble"
+        :class="message.role === 'human' ? 'is-human' : 'is-ai'"
+      >
+        {{ message.content }}
       </div>
     </div>
 
-    <div class="live2d-chat__input-row">
+    <div class="live2d-chatpanel__input-row">
       <input
         v-model="inputValue"
-        class="live2d-chat__input"
-        placeholder="想問米粒什麼呢？"
-        @input="handleInputChange"
+        class="live2d-chatpanel__input"
+        placeholder="想問金鶴什麼呢？"
         @keydown="handleKeyPress"
         @compositionstart="isComposing = true"
         @compositionend="isComposing = false"
       />
-      <button type="button" class="live2d-chat__send" title="送出" @click="handleSend">➤</button>
+      <button type="button" class="live2d-chatpanel__send" title="送出" @click="handleSend">➤</button>
     </div>
   </div>
 </template>
@@ -175,106 +147,94 @@ onBeforeUnmount(() => {
   display: block;
 }
 
-/* ── 聊天面板：溫暖紙色調 + 圓角泡泡，跟解籤頁的籤紙/金線視覺呼應 ──
+/* ── 聊天室：點角色才彈出，溫暖紙色調 + 圓角泡泡，跟解籤頁的籤紙/金線視覺呼應 ──
    （這幾個顏色跟 OracleWizard.vue 的 --jiang-hong/--gold 系列同一組值——
    這裡是 Teleport 到 body 的獨立元件，CSS 變數繼承不到，所以直接寫死。） */
-.live2d-chat {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
-  z-index: 5;
+.live2d-chatpanel {
+  position: fixed;
+  left: 96px;
+  bottom: 16px;
+  z-index: 6;
+  width: min(360px, calc(100vw - 112px));
+  max-height: min(60vh, 520px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 253, 244, 0.97), rgba(253, 246, 230, 0.95));
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  box-shadow: 0 12px 30px rgba(120, 60, 40, 0.28);
   font-family: 'Noto Serif TC', serif;
 }
 
-.live2d-chat__bubble {
-  position: relative;
-  padding: 9px 12px 10px;
-  border-radius: 16px 16px 16px 6px;
-  background: linear-gradient(180deg, rgba(255, 253, 244, 0.96), rgba(253, 246, 230, 0.94));
-  border: 1px solid rgba(212, 175, 55, 0.45);
-  box-shadow: 0 8px 18px rgba(120, 60, 40, 0.18);
-  max-height: 84px;
-  overflow-y: auto;
-}
-.live2d-chat__bubble-tag {
-  display: inline-block;
-  margin-bottom: 2px;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  color: #a63a3a;
-  font-weight: 700;
-}
-.live2d-chat__bubble-text {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: #3a2c22;
-}
-
-.live2d-chat__status {
+.live2d-chatpanel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 4px;
-}
-
-.live2d-chat__state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #a63a3a, #7a2626);
   color: #fff3d6;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  flex: 0 0 auto;
 }
-.live2d-chat__state-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f2e2b3;
-  box-shadow: 0 0 0 0 rgba(242, 226, 179, 0.6);
-}
-.live2d-chat__state.is-listening .live2d-chat__state-dot,
-.live2d-chat__state.is-thinking-speaking .live2d-chat__state-dot,
-.live2d-chat__state.is-waiting .live2d-chat__state-dot {
-  background: #7ee787;
-  animation: live2d-state-breathe 1.4s ease-in-out infinite;
-}
-@keyframes live2d-state-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(126, 231, 135, 0.5); }
-  50% { box-shadow: 0 0 0 4px rgba(126, 231, 135, 0); }
-}
-
-.live2d-chat__actions {
-  display: flex;
-  gap: 5px;
-}
-
-.live2d-chat__icon-btn {
-  border: 1px solid rgba(255, 253, 244, 0.35);
-  background: rgba(255, 253, 244, 0.14);
-  color: #fff3d6;
-  border-radius: 999px;
-  width: 26px;
-  height: 26px;
+.live2d-chatpanel__title {
   font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.live2d-chatpanel__close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  padding: 4px;
 }
-.live2d-chat__icon-btn:hover { background: rgba(255, 253, 244, 0.26); transform: translateY(-1px); }
-.live2d-chat__icon-btn:active { transform: scale(0.94); }
+.live2d-chatpanel__close:hover {
+  opacity: 0.75;
+}
 
-.live2d-chat__input-row {
+.live2d-chatpanel__messages {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.live2d-chatpanel__bubble {
+  max-width: 84%;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 2px 6px rgba(120, 60, 40, 0.1);
+}
+.live2d-chatpanel__bubble.is-human {
+  align-self: flex-end;
+  background: rgba(212, 175, 55, 0.24);
+  color: #3a2c22;
+  border-radius: 14px 14px 4px 14px;
+}
+.live2d-chatpanel__bubble.is-ai {
+  align-self: flex-start;
+  background: rgba(166, 58, 58, 0.1);
+  color: #3a2c22;
+  border-radius: 14px 14px 14px 4px;
+}
+
+.live2d-chatpanel__input-row {
   display: flex;
   gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(212, 175, 55, 0.35);
+  flex: 0 0 auto;
 }
 
-.live2d-chat__input {
+.live2d-chatpanel__input {
   flex: 1;
   min-width: 0;
   border: 1px solid rgba(212, 175, 55, 0.5);
@@ -287,15 +247,15 @@ onBeforeUnmount(() => {
   outline: none;
   box-shadow: inset 0 1px 2px rgba(120, 60, 40, 0.08);
 }
-.live2d-chat__input::placeholder {
+.live2d-chatpanel__input::placeholder {
   color: rgba(91, 70, 53, 0.55);
 }
-.live2d-chat__input:focus {
+.live2d-chatpanel__input:focus {
   border-color: #d4af37;
   box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.22);
 }
 
-.live2d-chat__send {
+.live2d-chatpanel__send {
   flex: 0 0 auto;
   border: 1px solid rgba(255, 253, 240, 0.4);
   background: radial-gradient(circle at 32% 28%, #f2e2b3, #a63a3a 78%);
@@ -307,6 +267,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: transform 0.15s ease;
 }
-.live2d-chat__send:hover { transform: scale(1.06); }
-.live2d-chat__send:active { transform: scale(0.94); }
+.live2d-chatpanel__send:hover {
+  transform: scale(1.06);
+}
+.live2d-chatpanel__send:active {
+  transform: scale(0.94);
+}
 </style>
