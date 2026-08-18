@@ -241,7 +241,12 @@ function onArComplete(event: Event) {
   step.value = 5
   /* 手機上把小夥伴收起來：它的面板是 fixed 貼底，留著會壓住籤詩、分頁與按鈕。
      想追問的人點 🔮 就能再打開。桌機空間夠，不動。 */
-  if (window.matchMedia('(max-width: 640px)').matches) companionStore.isVisible = false
+  if (window.matchMedia('(max-width: 640px)').matches) {
+    companionStore.isVisible = false
+    /* 只設 isVisible 不夠：guideRitualStage() 之後還會呼叫 open()。
+       ritualDismissed 是它的閘門，一起設起來才不會又被彈開。 */
+    ritualDismissed = true
+  }
   void buildShareQr(detail?.sessionId ?? '')
 
   // 一進解籤頁面就先唸籤詩本身（原文），不是等 AI 解籤——解籤通常還要再等 ~21 秒
@@ -1402,6 +1407,10 @@ body.ar-ritual-open { overflow: hidden; }
     min-height: 0;
     display: flex;
     flex-direction: column;
+    /* 原本的 grid 規則帶著 align-items: start，換成 flex 直排後那個值會讓
+       子元素依內容縮寬並靠左——籤紙就會偏在左邊。改成 stretch 撐滿卡片，
+       籤詩本身在紙內是置中的，撐滿之後看起來就在中間。 */
+    align-items: stretch;
     gap: 10px;
   }
   .panel.result .fortune-paper { flex: none; }

@@ -175,6 +175,12 @@ watch(
   padding: 16px 2px 0;
   animation: pane-in 0.26s ease-out both;
 }
+/* 全域的 .markdown-text 是給深色底用的米黃字（見 assets/styles.css），
+   畫在這張近白的籤卡上等於看不見——實測 rgba(242,226,179,0.88)。
+   「可以這樣做」那頁用的是 <MarkdownText as="span" inline>，渲染成 span，
+   所以下面 :deep(p) 的深褐色覆寫不到它。這裡讓它一律繼承容器顏色。 */
+.pane :deep(.markdown-text) { color: inherit; }
+
 .pane p,
 .pane :deep(p),
 .pane :deep(h3),
