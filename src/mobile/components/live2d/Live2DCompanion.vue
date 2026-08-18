@@ -139,6 +139,10 @@ onMounted(async () => {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  /* 先把手機版的 Live2D 角色圖層藏起來（只隱藏視覺，canvas 照常渲染、點擊區
+     照常吃下互動），語音導覽、WebSocket、聊天室都不受影響——見 companion.open()
+     跟 toggleChat() 呼叫端。*/
+  opacity: 0;
 }
 
 .live2d-companion-canvas {
