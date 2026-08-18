@@ -312,7 +312,7 @@ onBeforeUnmount(() => {
 
     <!-- ============ 門後的內容 ============ -->
     <main class="content">
-      <p class="eyebrow">雲深不知處　神明在人間</p>
+      <div class="title-block">
       <h1 class="title"><span
           v-for="char in TITLE_CHARS"
           :key="char"
@@ -336,7 +336,8 @@ onBeforeUnmount(() => {
             '--sdur': spark.dur
           }"
         ></i></span><span class="impact-flash" aria-hidden="true"></span></h1>
-      <p class="subtitle">誠 心 一 問 · 天 意 自 來</p>
+      <p class="subtitle">誠心一問 · 天意自來</p>
+      </div>
       <div class="actions">
         <button class="btn primary" type="button" :disabled="isAscending" @click="enterHall">入 殿 求 籤</button>
         <button class="btn ghost" type="button" @click="go('/lookup')">線 上 查 籤</button>
@@ -601,7 +602,6 @@ body.mobile-home-open {
   z-index: 7;
   justify-content: center;
 }
-.ascending .eyebrow,
 .ascending .subtitle,
 .ascending .actions,
 .ascending .tutorial-link {
@@ -657,13 +657,6 @@ body.mobile-home-open {
   animation: break-wave 0.8s cubic-bezier(0.15, 0.7, 0.3, 1) 0.32s forwards;
 }
 
-.eyebrow {
-  margin: 0 0 14px;
-  font-size: 11px;
-  letter-spacing: 0.34em;
-  text-indent: 0.34em;
-  color: var(--ink-soft);
-}
 .title {
   position: relative; /* 火星與閃光以標題中心為原點 */
   margin: 0;
@@ -729,12 +722,23 @@ body.mobile-home-open {
 }
 .ascending .impact-flash { animation: flash-pop 0.42s ease-out 0.3s forwards; }
 
+/* 標題與副標同一組：容器寬度由標題（三個大字）決定，
+   副標再撐滿這個寬度，兩行的左右邊緣就會對齊。 */
+.title-block {
+  width: fit-content;
+  margin: 0 auto;
+}
+/* 副標要與標題同寬：用分散對齊（text-align-last: justify）把字距攤開，
+   而不是靠 letter-spacing 硬湊——字數或字級一改，硬湊的寬度就對不上了。
+   字距交給 justify 之後就不再需要 letter-spacing 與補償用的 text-indent。 */
 .subtitle {
-  margin: 14px 0 0;
-  font-size: 13px;
+  width: 100%;
+  margin: 16px 0 0;
+  font-size: 17px;
   font-weight: 300;
-  letter-spacing: 0.24em;
-  text-indent: 0.24em;
+  text-align: justify;
+  text-align-last: justify;
+  -webkit-text-align-last: justify;
   color: var(--ink-soft);
 }
 .actions {
@@ -1062,7 +1066,6 @@ body.mobile-home-open {
 
 /* 螢幕偏矮（橫放）時把內容壓縮 */
 @media (max-height: 560px) {
-  .eyebrow { display: none; }
   .title { font-size: clamp(40px, 13vh, 62px); }
   .subtitle { margin-top: 10px; }
   .actions { margin-top: 18px; flex-direction: row; max-width: 420px; }

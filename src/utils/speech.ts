@@ -102,7 +102,7 @@ export function useSpeechInput(options: UseSpeechInputOptions) {
         hint.value = '找不到麥克風，請確認裝置是否接上。'
       } else if (event.error === 'network') {
         // 語音辨識靠雲端，離線時只能請他打字
-        hint.value = '目前沒有連線，語音輸入需要網路；可以直接打字，或留白送出。'
+        hint.value = '語音輸入需要網路，請直接打字。'
       } else if (event.error !== 'aborted') {
         hint.value = '語音辨識中斷了，請再試一次或直接打字。'
       }

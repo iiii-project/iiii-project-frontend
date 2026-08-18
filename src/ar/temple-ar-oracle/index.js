@@ -205,7 +205,7 @@ class TempleArOracle extends HTMLElement {
   _makeApi(apiBase){
     return createDivinationApi(apiBase, {
       onOffline: () => {
-        this._emit('offline', { message: '目前連不上伺服器，已改用離線籤詩繼續，稍後可重新求籤取得 AI 解籤' });
+        this._emit('offline', { message: '目前離線，已改用內建籤詩' });
         this._emit('toast', { message: '目前離線，先為你以預設籤詩完成這次請示' });
       },
     });

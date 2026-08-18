@@ -503,7 +503,6 @@ function restart() {
         <h2>想跟神明說什麼？</h2>
         <p class="lede">
           像在神明面前稟告一樣，說清楚人、事、時間，解籤會更貼近你的處境。
-          <span class="optional-note">不想打字也沒關係——可以用說的，或直接跳過，神明會依你選的方向指點。</span>
         </p>
         <div class="ask-wrap" :class="{ recording: isRecording }">
           <textarea
@@ -585,7 +584,7 @@ function restart() {
       <section v-else class="panel result" :style="scaleStyle">
         <p class="kicker">第 五 步 · 神 明 回 應</p>
         <p v-if="isOffline" class="ar-notice offline">
-          目前連不上伺服器，以下是離線的預設籤詩與解說；恢復連線後可重新求籤取得 AI 解籤。
+          目前離線，AI 解籤暫時無法提供。
         </p>
 
         <div class="result-grid">
@@ -621,7 +620,7 @@ function restart() {
             </div>
 
             <p v-else class="take-away-offline">
-              這次是離線籤詩，沒有留下線上紀錄，暫時無法用 QR 帶走；連線恢復後重新求籤即可。
+              離線籤詩沒有留下紀錄，無法用 QR 帶走。
             </p>
 
             <!-- 平安符：符面依這一支籤而不同，可下載帶走 -->
@@ -1288,12 +1287,6 @@ body.ar-ritual-open { overflow: hidden; }
 .summary.compact dt { flex: 0 0 4.8em; font-size: calc(12.5px * var(--fs, 1)); }
 .summary.compact dd { font-size: calc(13.5px * var(--fs, 1)); color: var(--ink-soft); }
 
-.optional-note {
-  display: block;
-  margin-top: 6px;
-  font-weight: 700;
-  color: rgba(166, 58, 58, 0.75);
-}
 .dd-note {
   color: rgba(91, 70, 53, 0.55);
   font-size: 13px;

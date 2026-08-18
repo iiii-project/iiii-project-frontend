@@ -219,7 +219,7 @@ body.fortune-share-open {
   flex: none;
   margin: 0 0 8px;
   text-align: center;
-  font-size: 11.5px;
+  font-size: 13px;
   letter-spacing: 0.42em;
   text-indent: 0.42em;
   color: var(--gold);
@@ -264,14 +264,14 @@ body.fortune-share-open {
 .mini-level {
   padding: 2px 9px;
   border-radius: 999px;
-  font-size: calc(11.5px * var(--fs, 1));
+  font-size: calc(12.5px * var(--fs, 1));
   letter-spacing: 0.12em;
   color: #fdf5e2;
   background: linear-gradient(150deg, var(--jiang-hong), var(--jiang-hong-deep));
 }
 .toggle-hint {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12.5px;
   letter-spacing: 0.24em;
   text-indent: 0.24em;
 }

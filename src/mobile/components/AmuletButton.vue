@@ -143,7 +143,7 @@ function close() {
 }
 .amulet-kicker {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 13px;
   letter-spacing: 0.42em;
   text-indent: 0.42em;
   color: rgba(242, 226, 179, 0.8);
@@ -172,7 +172,7 @@ function close() {
 }
 .amulet-hint {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.8;
   color: rgba(242, 226, 179, 0.55);
 }

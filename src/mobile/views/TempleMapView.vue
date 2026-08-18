@@ -235,7 +235,7 @@ nav { display: flex; gap: 28px; font-size: 14px; color: #6f5d4c; }
 nav a.router-link-active { color: #a63a3a; }
 .map-content { width: min(1240px, calc(100% - 40px)); margin: 0 auto; padding: 56px 0 26px; }
 .map-intro { max-width: 530px; }
-.eyebrow { margin: 0 0 11px; color: #a63a3a; font-size: 11px; font-weight: 600; letter-spacing: .3em; }
+.eyebrow { margin: 0 0 11px; color: #a63a3a; font-size: 12.5px; font-weight: 600; letter-spacing: .3em; }
 h1 { margin: 0; font-size: clamp(34px, 5vw, 58px); font-weight: 600; letter-spacing: .08em; }
 .map-intro > p:last-child { color: #6f5d4c; line-height: 1.9; }
 .map-stage { position: relative; height: min(66vh, 710px); min-height: 510px; margin-top: 26px; overflow: hidden; border: 1px solid rgba(212,175,55,.52); border-radius: 8px; background: radial-gradient(circle at 49% 42%, #fffdf8 0, #f3e7cf 75%); box-shadow: 0 28px 65px rgba(74,50,25,.17); }

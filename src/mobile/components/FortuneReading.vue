@@ -19,6 +19,12 @@ const props = defineProps<{
   interpretation?: ReadingInterpretation | null
   /** AI 解籤還在路上 */
   pending?: boolean
+  /* 「帶走」這一頁：QR 與網址。之前 QR 是貼在分頁外面的一整塊，
+     在手機上把籤詩與解籤一起往下推；收進分頁之後版面只需要一個高度。 */
+  shareUrl?: string | null
+  qrDataUrl?: string | null
+  /** 沒有可分享的連結時（例如離線籤）要給的交代，有值就仍然顯示這一頁 */
+  offlineHint?: string | null
 }>()
 
 interface Tab {
@@ -33,6 +39,8 @@ const tabs = computed<Tab[]>(() => {
     list.push({ key: 'reading', label: '神明指點' })
   }
   if (props.interpretation?.suggested_actions?.length) list.push({ key: 'actions', label: '可以這樣做' })
+  // 「帶走」放在最後：先讀懂籤，再談怎麼帶回家
+  if (props.shareUrl || props.offlineHint) list.push({ key: 'takeaway', label: '帶 走' })
   return list
 })
 
@@ -83,6 +91,16 @@ watch(
           <span class="smoke" aria-hidden="true"><i></i><i></i><i></i></span>
           神明正在為你解這支籤，稍待片刻…
         </p>
+      </template>
+
+      <template v-else-if="active === 'takeaway'">
+        <div v-if="shareUrl" class="takeaway">
+          <img v-if="qrDataUrl" class="takeaway-qr" :src="qrDataUrl" alt="掃描以在手機上開啟這支籤" />
+          <div v-else class="takeaway-qr is-pending">QR 產生中…</div>
+          <p>用手機掃描，推開廟門就能收下這支籤。想留成圖片的話，平安符也帶著同一個連結。</p>
+          <p class="takeaway-url">{{ shareUrl }}</p>
+        </div>
+        <p v-else>{{ offlineHint }}</p>
       </template>
 
       <template v-else-if="active === 'actions'">
@@ -145,6 +163,12 @@ watch(
 }
 .tab.on::after { transform: scaleX(1); }
 
+.reading {
+  /* 外層給了高度就吃滿，並讓 pane 成為唯一會捲的區塊 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .pane {
   /* 切換分頁時高度不要抖動 */
   min-height: 120px;
@@ -194,6 +218,32 @@ watch(
   font-family: inherit;
 }
 .pane :deep(a) { color: var(--jiang-hong-deep, #7a2626); text-underline-offset: 3px; }
+
+/* 「帶走」這一頁：QR 置中，說明與網址跟著它。
+   QR 尺寸跟著字級一起放大——長輩把字調大時，碼也要好掃。 */
+.takeaway { text-align: center; }
+.takeaway-qr {
+  display: block;
+  width: calc(150px * var(--fs, 1));
+  height: calc(150px * var(--fs, 1));
+  margin: 0 auto 12px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #fffdf6;
+  box-shadow: 0 6px 18px rgba(120, 90, 50, 0.16);
+}
+.takeaway-qr.is-pending {
+  display: grid;
+  place-items: center;
+  font-size: calc(12.5px * var(--fs, 1));
+  color: rgba(91, 70, 53, 0.55);
+}
+.takeaway-url {
+  font-size: calc(12px * var(--fs, 1)) !important;
+  line-height: 1.7 !important;
+  word-break: break-all;
+  color: rgba(91, 70, 53, 0.6) !important;
+}
 
 /* 等解籤：延用站上香煙裊裊的語彙，不要轉圈圈 */
 .waiting {

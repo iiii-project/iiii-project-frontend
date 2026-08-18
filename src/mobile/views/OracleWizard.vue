@@ -87,6 +87,11 @@ const enterWisps = Array.from({ length: 12 }, (_, index) => {
     churn: `${1.2 + (index % 6) * 0.25}s`
   }
 })
+/* 籤紙可收起：手機一頁裝不下「完整籤紙 + 解籤」，收起時只留一條籤號列，
+   空間全讓給解籤（與掃碼分享頁同一套作法，見 FortuneShare.vue）。 */
+const paperCollapsed = ref(false)
+function togglePaper() { paperCollapsed.value = !paperCollapsed.value }
+
 const showEnterMist = ref(true)
 let mistTimer = 0
 
@@ -234,6 +239,9 @@ function onArComplete(event: Event) {
   if (detail?.interpretation?.offline) isOffline.value = true
   setBodyLock(false)
   step.value = 5
+  /* 手機上把小夥伴收起來：它的面板是 fixed 貼底，留著會壓住籤詩、分頁與按鈕。
+     想追問的人點 🔮 就能再打開。桌機空間夠，不動。 */
+  if (window.matchMedia('(max-width: 640px)').matches) companionStore.isVisible = false
   void buildShareQr(detail?.sessionId ?? '')
 
   // 一進解籤頁面就先唸籤詩本身（原文），不是等 AI 解籤——解籤通常還要再等 ~21 秒
@@ -494,7 +502,6 @@ function restart() {
         <h2>想跟神明說什麼？</h2>
         <p class="lede">
           像在神明面前稟告一樣，說清楚人、事、時間，解籤會更貼近你的處境。
-          <span class="optional-note">不想打字也沒關係——可以用說的，或直接跳過，神明會依你選的方向指點。</span>
         </p>
         <div class="ask-wrap" :class="{ recording: isRecording }">
           <textarea
@@ -579,45 +586,42 @@ function restart() {
            解籤動輒好幾百字，全部貼成一長條沒有人會讀完。 -->
       <section v-else class="panel result" :style="scaleStyle">
         <p class="kicker">第 五 步 · 神 明 回 應</p>
-        <p v-if="isOffline" class="ar-notice offline">
-          目前連不上伺服器，以下是離線的預設籤詩與解說；恢復連線後可重新求籤取得 AI 解籤。
-        </p>
 
         <div class="result-grid">
           <!-- 左：這支籤本身 -->
           <div v-if="fortune" class="fortune-paper">
             <FortunePoem
+              v-show="!paperCollapsed"
               variant="paper"
               :poem="fortune.poem"
               :number="fortune.no"
               :ganzhi="fortune.ganzhi"
             />
           </div>
+          <!-- 收起／展開籤紙：解籤讀不夠時把籤紙收成一條 -->
+          <button v-if="fortune" class="paper-toggle" type="button" :aria-expanded="!paperCollapsed" @click="togglePaper">
+            <template v-if="paperCollapsed">
+              <span class="mini-no">第 {{ fortune.no }} 籤</span>
+              <span v-if="fortune.ganzhi" class="mini-ganzhi">{{ fortune.ganzhi }}</span>
+              <span class="toggle-hint">展 開 籤 紙 ▼</span>
+            </template>
+            <span v-else class="toggle-hint">收 起 籤 紙 ▲</span>
+          </button>
 
           <!-- 右：讀的部分 -->
           <div class="result-side">
+            <!-- 籤紙固定在上，這一區才捲：解籤、平安符、摘要、動作按鈕都在裡面 -->
+            <div class="result-scroll">
+            <p v-if="isOffline" class="ar-notice offline">目前離線，AI 解籤暫時無法提供。</p>
             <FortuneReading
               :translation="fortune?.explain"
               :explanation="fortune?.modern"
               :interpretation="interpretation"
               :pending="waitingInterpretation"
+              :share-url="canShare ? shareUrl : null"
+              :qr-data-url="qrDataUrl"
+              :offline-hint="canShare ? null : '離線籤詩沒有留下紀錄，無法用 QR 帶走。'"
             />
-
-            <div v-if="canShare" class="take-away">
-              <div class="qr-frame">
-                <img v-if="qrDataUrl" :src="qrDataUrl" alt="掃描以在手機上開啟這支籤" width="150" height="150" />
-                <div v-else class="qr-fallback">QR 產生中…</div>
-              </div>
-              <div class="take-away-text">
-                <h4>現 在 用 手 機 帶 走</h4>
-                <p>用手機掃描，推開廟門就能收下這支籤。想留成圖片的話，下面的平安符也帶著同一個連結。</p>
-                <p v-if="shareUrl" class="share-url">{{ shareUrl }}</p>
-              </div>
-            </div>
-
-            <p v-else class="take-away-offline">
-              這次是離線籤詩，沒有留下線上紀錄，暫時無法用 QR 帶走；連線恢復後重新求籤即可。
-            </p>
 
             <!-- 平安符：符面依這一支籤而不同，可下載帶走 -->
             <div v-if="fortune" class="amulet-row">
@@ -646,13 +650,15 @@ function restart() {
                 </dd>
               </div>
             </dl>
+
+            <div class="row">
+              <button class="btn ghost" type="button" @click="restart">再問一題</button>
+              <button class="btn primary" type="button" @click="router.push('/')">回 首 頁</button>
+            </div>
+            </div>
           </div>
         </div>
 
-        <div class="row">
-          <button class="btn ghost" type="button" @click="restart">再問一題</button>
-          <button class="btn primary" type="button" @click="router.push('/')">回 首 頁</button>
-        </div>
       </section>
 
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -942,7 +948,7 @@ body.ar-ritual-open { overflow: hidden; }
   border-radius: 50%;
   border: 1px solid var(--gold-line);
   font-style: normal;
-  font-size: 11px;
+  font-size: 12.5px;
   background: rgba(255, 255, 255, 0.6);
 }
 .steps li.on { color: var(--jiang-hong); }
@@ -974,7 +980,7 @@ body.ar-ritual-open { overflow: hidden; }
 .panel.center { text-align: center; }
 .kicker {
   margin: 0 0 12px;
-  font-size: 11.5px;
+  font-size: 13px;
   letter-spacing: 0.42em;
   text-indent: 0.42em;
   color: var(--gold);
@@ -1185,7 +1191,7 @@ body.ar-ritual-open { overflow: hidden; }
   box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.45), 0 8px 18px rgba(120, 90, 50, 0.12);
 }
 .qr-frame img { width: 100%; height: 100%; display: block; }
-.qr-fallback { font-size: 11.5px; letter-spacing: 0.1em; color: rgba(91, 70, 53, 0.55); text-align: center; }
+.qr-fallback { font-size: 13px; letter-spacing: 0.1em; color: rgba(91, 70, 53, 0.55); text-align: center; }
 .take-away-text { min-width: 0; }
 .take-away-text h4 {
   margin: 0 0 6px;
@@ -1202,7 +1208,7 @@ body.ar-ritual-open { overflow: hidden; }
 .share-url {
   margin-top: 6px !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px !important;
+  font-size: 12px !important;
   word-break: break-all;
   color: rgba(91, 70, 53, 0.55) !important;
 }
@@ -1226,11 +1232,6 @@ body.ar-ritual-open { overflow: hidden; }
 .summary.compact dt { flex: 0 0 4.8em; font-size: calc(12.5px * var(--fs, 1)); }
 .summary.compact dd { font-size: calc(13.5px * var(--fs, 1)); color: var(--ink-soft); }
 
-.optional-note {
-  display: block;
-  margin-top: 6px;
-  color: rgba(166, 58, 58, 0.75);
-}
 .dd-note {
   color: rgba(91, 70, 53, 0.55);
   font-size: 13px;
@@ -1387,6 +1388,40 @@ body.ar-ritual-open { overflow: hidden; }
 }
 
 @media (max-width: 640px) {
+  /* 結果頁同樣鎖成一個畫面：籤紙固定高度不捲，解籤那一塊吃掉剩下的空間、
+     由 FortuneReading 內部的 .pane 自己捲。籤紙收起來就是把空間讓給它。 */
+  .panel.result {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel.result .result-grid {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .panel.result .fortune-paper { flex: none; }
+  .panel.result .result-side {
+    flex: 1;
+    /* 至少留給解籤這麼高，否則籤紙在字級「大」時會把它壓成 0，
+       子元素就會全部畫在同一個位置疊成一團（實測過的災難）。 */
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel.result .result-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .panel.result .amulet-row { margin-top: 10px; }
+
   /* 手機只留一層 14px 的邊界，內容才不會被三層 padding 擠成細長條。
      填資料時不該捲動：整頁鎖成一個 dvh 的直向 flex，內容在剩餘空間裡置中。
      下方留白從 28px 收成 10px，那 18px 正是原本溢出捲軸的來源。 */
@@ -1477,6 +1512,79 @@ body.ar-ritual-open { overflow: hidden; }
     grid-template-columns: 1fr;
     gap: 18px;
   }
+}
+
+/* 矮螢幕（第一代 SE 這類 568px 高，或桌機把視窗拉扁）：
+   一般手機（667px 以上）用上面的 clamp 就塞得下，但 568px 差得更多，
+   必須再捨棄一層資訊。與查籤頁同一套取捨——捨選項副標，保住動作按鈕，
+   因為「下一步」被裁掉或要捲才按得到的代價高得多。 */
+@media (max-width: 640px) and (max-height: 720px) {
+  .choice-desc { display: none; }
+  .choice-icon { width: 30px; height: 30px; }
+  /* 選項列本來有 min-height: 82px 撐著，不解掉的話隱藏副標與縮小圖示都是白做的。
+     解掉之後靠 padding 維持約 52px 的點擊區，手指仍然好按。 */
+  .choice-row { min-height: 0; padding: 8px 14px; }
+  .choice-list { gap: 6px; }
+  .kicker { margin-bottom: 6px; }
+  h2 { margin-bottom: 6px; }
+  .lede { line-height: 1.6; margin-bottom: 8px; }
+  /* 輸入框在一般手機上會被 flex 撐滿剩餘空間（那是好事），
+     但矮螢幕上它一撐就把「下一步」擠出畫面。這裡讓它可以縮，並封一個上限。 */
+  .ask-wrap { flex: 0 1 auto; min-height: 0; }
+  .ask { min-height: 56px; max-height: 96px; }
+  .ask-tools { gap: 8px; margin-top: 6px; }
+  .panel:not(.result) { padding-bottom: 12px; }
+  /* 安全閥：真的還是塞不下時，寧可卡片內部能捲，也不要整顆送出鈕消失 */
+  .panel:not(.result) { overflow-y: auto; }
+}
+
+
+/* 極矮螢幕（第一代 SE 這類 568px 高）：
+   到這個高度，說明文字與控制項只能二選一。保留控制項——使用者按不到
+   「下一步」是功能失效，少一段說明只是少一點體貼。標題本身仍說得清楚。 */
+@media (max-width: 640px) and (max-height: 600px) {
+  .lede { display: none; }
+  .ask-wrap { flex: 0 1 auto; min-height: 0; }
+  .ask { min-height: 52px; max-height: 84px; }
+  .offline-note { font-size: calc(11px * var(--fs, 1)); line-height: 1.5; padding: 6px 10px; margin-bottom: 6px; }
+  .summary { margin-top: 6px; }
+  .summary > div { padding: 0.25rem 0.2rem; }
+}
+
+
+/* 收起／展開籤紙的那一條：展開時只是一行提示，收起時變成籤號列 */
+.paper-toggle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  appearance: none;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  background: none;
+  font-family: inherit;
+  color: rgba(91, 70, 53, 0.6);
+}
+.paper-toggle[aria-expanded='false'] {
+  min-height: 44px;
+  background: rgba(255, 253, 246, 0.9);
+  box-shadow: inset 0 0 0 1px var(--gold-line);
+}
+.paper-toggle .mini-no {
+  font-size: calc(15px * var(--fs, 1));
+  font-weight: 700;
+  color: var(--jiang-hong-deep);
+}
+.paper-toggle .mini-ganzhi { font-size: calc(12.5px * var(--fs, 1)); color: var(--ink-soft); }
+.paper-toggle .toggle-hint {
+  margin-left: auto;
+  font-size: calc(12.5px * var(--fs, 1));
+  letter-spacing: 0.12em;
 }
 
 /* 平板寬度就已經放不下兩欄的籤紙，提早收成一欄 */

@@ -123,7 +123,7 @@ function choose(key: string) {
 }
 .fs-title {
   margin: 0 0 8px;
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.3em;
   text-indent: 0.3em;
   color: #b08a2a;
@@ -155,7 +155,7 @@ function choose(key: string) {
   /* 預覽字本身就用該級的大小，不必看說明也知道差多少 */
 }
 .fs-label {
-  font-size: 11px;
+  font-size: 12.5px;
   letter-spacing: 0.08em;
 }
 
@@ -173,7 +173,7 @@ function choose(key: string) {
   }
   .fs-toggle { min-height: 34px; padding: 0 11px 0 10px; gap: 5px; }
   .fs-glyph { font-size: 15px; }
-  .fs-now { font-size: 11px; }
+  .fs-now { font-size: 12.5px; }
   .fs-options { gap: 5px; }
   .fs-option { width: 46px; min-height: 58px; }
 }

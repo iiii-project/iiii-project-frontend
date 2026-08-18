@@ -42,6 +42,11 @@ const moneyIcon = new URL('../../assets/images/money.webp', import.meta.url).hre
 const wellnessIcon = new URL('../../assets/images/wellness.webp', import.meta.url).href
 const godOfWealthIcon = new URL('../../assets/images/god-of-wealth.webp', import.meta.url).href
 
+/* 籤詩固定在結果卡片的最上面（見樣式裡的 position: sticky），
+   但它本身很高，字級開大更高，所以要能收起來把空間讓給解籤。 */
+const paperCollapsed = ref(false)
+function togglePaper() { paperCollapsed.value = !paperCollapsed.value }
+
 // 與求籤流程同一組方向與說明，解籤才會落在同一個語彙裡
 const CATEGORIES: { value: Category; label: string; icon: string; hint: string }[] = [
   { value: 'health', label: '身體健康', icon: healthyIcon, hint: '身體、看病、平安' },
@@ -190,7 +195,7 @@ async function submit() {
   /* 離線：籤詩與籤書解釋都在本地，直接掀結果頁。
      AI 解籤與 QR 都要伺服器，這裡明白講一句，不要讓人以為壞了。 */
   if (isOffline.value) {
-    aiNote.value = '目前沒有連線，以下是本地籤詩與籤書上的解釋。AI 解籤與可帶走的 QR 需要連上伺服器，恢復連線後再送出一次就有。'
+    aiNote.value = '目前離線，AI 解籤與 QR 暫時無法提供。'
     // 離線也要有過場：影片載不到時引擎會自動退成墨染，一樣有東西看
     await revealWithTransition()
     return
@@ -413,7 +418,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
       <section v-else-if="step === 2" class="panel">
         <p class="kicker">第 二 步 · 第 {{ fortune?.number }} 籤</p>
         <p v-if="isOffline" class="offline-note">
-          目前連不上伺服器，這支籤來自機器內建的籤詩資料，籤詩與籤書解釋都能看；AI 解籤要等恢復連線。
+          目前離線，AI 解籤暫時無法提供。
         </p>
         <h1>想請示哪一方面？</h1>
         <p class="lede">先讓神明知道你要問的方向，解籤才會落在心坎上。</p>
@@ -504,83 +509,86 @@ onBeforeUnmount(() => scannerEl.value?.stop())
 
         <div class="paper">
           <FortunePoem
+            v-show="!paperCollapsed"
             :poem="fortune.poem"
             :number="fortune.number"
             :ganzhi="fortune.ganzhi"
             :title="fortune.title"
           />
         </div>
+        <!-- 收起／展開籤詩：收起時只留一條籤號列，仍然固定在最上面 -->
+        <button class="paper-toggle" type="button" :aria-expanded="!paperCollapsed" @click="togglePaper">
+          <template v-if="paperCollapsed">
+            <span class="mini-no">第 {{ fortune.number }} 籤</span>
+            <span v-if="fortune.ganzhi" class="mini-ganzhi">{{ fortune.ganzhi }}</span>
+            <span class="toggle-hint">展 開 籤 詩 ▼</span>
+          </template>
+          <span v-else class="toggle-hint">收 起 籤 詩 ▲</span>
+        </button>
 
-        <p v-if="aiNote" class="ai-note">{{ aiNote }}</p>
+        <!-- 中段：解籤、籤書、摘要。只有這一區會捲，籤詩與動作按鈕固定不動 -->
+        <div class="result-scroll">
+          <p v-if="aiNote" class="ai-note">{{ aiNote }}</p>
 
-        <!-- 白話、典故、AI 解籤：分頁，一次讀一段 -->
-        <FortuneReading
-          :translation="fortune.translation"
-          :explanation="fortune.story"
-          :interpretation="interpretation"
-          :pending="waitingInterpretation"
-        />
-
-        <!-- 籤書的各方向解釋：自己問的那個方向排最前面 -->
-        <div v-if="bookMeanings.length" class="book">
-          <p class="book-title">籤 書 解 釋</p>
-          <div class="book-list">
-            <button
-              v-for="item in bookMeanings"
-              :key="item.label"
-              class="book-item"
-              :class="{ on: shownMeaning?.label === item.label }"
-              type="button"
-              @click="openMeaning = item.label"
-            >
-              {{ item.label }}
-            </button>
-          </div>
-          <p v-if="shownMeaning" class="book-text">{{ shownMeaning.text }}</p>
-        </div>
-
-        <!-- 帶走：線上查籤會留下紀錄，所以給得出 QR；
-             離線時沒有場次可帶走，整塊就不出現（上面的 aiNote 已經說明原因）。 -->
-        <div v-if="shareUrl" class="take-away">
-          <div class="qr-frame">
-            <img v-if="qrDataUrl" :src="qrDataUrl" alt="掃描以在手機上開啟這支籤" width="110" height="110" />
-            <div v-else class="qr-fallback">QR 產生中…</div>
-          </div>
-          <div class="take-away-text">
-            <h4>現 在 用 手 機 帶 走</h4>
-            <p>用手機掃描，推開廟門就能收下這支籤。想留成圖片的話，下面的平安符也帶著同一個連結。</p>
-            <p v-if="shareUrl" class="share-url">{{ shareUrl }}</p>
-          </div>
-        </div>
-
-        <dl class="summary">
-          <div>
-            <dt>要問的事</dt>
-            <dd>
-              {{ askedQuestion }}
-              <span v-if="!hasTypedQuestion" class="dd-note">（未填寫，以所選方向請示）</span>
-            </dd>
-          </div>
-        </dl>
-
-        <!-- 平安符：符面依這一支籤而不同（吉凶配色、印文、雲紋、八卦），可下載帶走 -->
-        <div class="row amulet-row">
-          <AmuletButton
-            :data="{
-              number: fortune.number,
-              ganzhi: fortune.ganzhi,
-              level: fortune.fortune_level,
-              poem: fortune.poem,
-              note: fortune.translation || fortune.general_meaning,
-              shareUrl: shareUrl || null
-            }"
+          <!-- 白話、典故、AI 解籤：分頁，一次讀一段 -->
+          <FortuneReading
+            :translation="fortune.translation"
+            :explanation="fortune.story"
+            :interpretation="interpretation"
+            :share-url="shareUrl || null"
+            :qr-data-url="qrDataUrl"
+            :offline-hint="shareUrl ? null : '離線查詢沒有留下紀錄，無法用 QR 帶走。'"
+            :pending="waitingInterpretation"
           />
+
+          <!-- 籤書的各方向解釋：自己問的那個方向排最前面 -->
+          <div v-if="bookMeanings.length" class="book">
+            <p class="book-title">籤 書 解 釋</p>
+            <div class="book-list">
+              <button
+                v-for="item in bookMeanings"
+                :key="item.label"
+                class="book-item"
+                :class="{ on: shownMeaning?.label === item.label }"
+                type="button"
+                @click="openMeaning = item.label"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+            <p v-if="shownMeaning" class="book-text">{{ shownMeaning.text }}</p>
+          </div>
+
+          <dl class="summary">
+            <div>
+              <dt>要問的事</dt>
+              <dd>
+                {{ askedQuestion }}
+                <span v-if="!hasTypedQuestion" class="dd-note">（未填寫，以所選方向請示）</span>
+              </dd>
+            </div>
+          </dl>
+
+          <!-- 平安符：符面依這一支籤而不同（吉凶配色、印文、雲紋、八卦），可下載帶走 -->
+          <div class="row amulet-row">
+            <AmuletButton
+              :data="{
+                number: fortune.number,
+                ganzhi: fortune.ganzhi,
+                level: fortune.fortune_level,
+                poem: fortune.poem,
+                note: fortune.translation || fortune.general_meaning,
+                shareUrl: shareUrl || null
+              }"
+            />
+          </div>
+
+          <div class="row">
+            <button class="btn ghost" type="button" @click="restart">查 別 支 籤</button>
+            <button class="btn primary" type="button" @click="router.push('/oracle')">我 要 求 籤</button>
+          </div>
         </div>
 
-        <div class="row">
-          <button class="btn ghost" type="button" @click="restart">查 別 支 籤</button>
-          <button class="btn primary" type="button" @click="router.push('/oracle')">我 要 求 籤</button>
-        </div>
       </section>
 
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -929,6 +937,49 @@ onBeforeUnmount(() => scannerEl.value?.stop())
   font-size: calc(12.5px * var(--fs, 1));
   line-height: 1.85;
   color: var(--ink-soft);
+}
+
+.paper-toggle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  appearance: none;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  background: none;
+  font-family: inherit;
+  color: rgba(91, 70, 53, 0.6);
+}
+.paper-toggle[aria-expanded='false'] {
+  min-height: 44px;
+  background: rgba(255, 253, 246, 0.9);
+  box-shadow: inset 0 0 0 1px var(--gold-line);
+}
+.mini-no {
+  font-size: calc(15px * var(--fs, 1));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--jiang-hong-deep);
+}
+.mini-ganzhi {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: calc(12.5px * var(--fs, 1));
+  letter-spacing: 0.12em;
+  color: #fdf5e2;
+  background: linear-gradient(150deg, var(--jiang-hong), var(--jiang-hong-deep));
+}
+.toggle-hint {
+  margin-left: auto;
+  font-size: 12.5px;
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
 }
 
 .book { margin-top: 22px; }

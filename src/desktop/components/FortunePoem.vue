@@ -305,4 +305,12 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .ch, .inked .ch { animation: none; opacity: 1; transform: none; }
 }
+/* 矮螢幕（667px 這類）上，籤紙若吃掉七成畫面，解籤就只剩幾十 px、分頁列都擠不進來。
+   單字上限與內距一起收斂，讓「籤詩 + 解籤」在同一個畫面內都讀得到。 */
+@media (max-width: 640px) and (max-height: 720px) {
+  .qian-paper { padding: 16px 14px 12px; }
+  .body.vertical { --ch: min(calc(20px * var(--fs, 1)), 2.9dvh); margin: 10px 0 2px; }
+  .paper-head { --seal: calc(34px * var(--fs, 1)); }
+  .no { font-size: calc(17px * var(--fs, 1)); }
+}
 </style>
