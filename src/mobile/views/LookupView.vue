@@ -180,6 +180,8 @@ const transitionEl = ref<InstanceType<typeof OracleTransition> | null>(null)
 const interpretation = ref<Interpretation | null>(null)
 const waitingInterpretation = ref(false)
 const aiNote = ref('')
+/* 聊聊那一頁要用它打 chat API */
+const lookupSessionId = ref('')
 const shareUrl = ref('')
 const qrDataUrl = ref('')
 
@@ -235,7 +237,8 @@ async function revealWithTransition() {
 }
 
 async function buildShareQr(sessionId: string) {
-  shareUrl.value = fortuneShareUrl(sessionId)
+  lookupSessionId.value = sessionId
+    shareUrl.value = fortuneShareUrl(sessionId)
   try {
     qrDataUrl.value = await makeQrDataUrl(shareUrl.value, 300)
   } catch {
@@ -538,8 +541,23 @@ onBeforeUnmount(() => scannerEl.value?.stop())
             :share-url="shareUrl || null"
             :qr-data-url="qrDataUrl"
             :offline-hint="shareUrl ? null : '離線查詢沒有留下紀錄，無法用 QR 帶走。'"
+          :session-id="lookupSessionId || null"
             :pending="waitingInterpretation"
-          />
+          >
+            <!-- 平安符：符面依這一支籤而不同，跟 QR／分享放在同一頁 -->
+            <template #takeaway>
+              <AmuletButton
+                :data="{
+                  number: fortune.number,
+                  ganzhi: fortune.ganzhi,
+                  level: fortune.fortune_level,
+                  poem: fortune.poem,
+                  note: fortune.translation || fortune.general_meaning,
+                  shareUrl: shareUrl || null
+                }"
+              />
+            </template>
+          </FortuneReading>
 
           <!-- 籤書的各方向解釋：自己問的那個方向排最前面 -->
           <div v-if="bookMeanings.length" class="book">
@@ -569,19 +587,6 @@ onBeforeUnmount(() => scannerEl.value?.stop())
             </div>
           </dl>
 
-          <!-- 平安符：符面依這一支籤而不同（吉凶配色、印文、雲紋、八卦），可下載帶走 -->
-          <div class="row amulet-row">
-            <AmuletButton
-              :data="{
-                number: fortune.number,
-                ganzhi: fortune.ganzhi,
-                level: fortune.fortune_level,
-                poem: fortune.poem,
-                note: fortune.translation || fortune.general_meaning,
-                shareUrl: shareUrl || null
-              }"
-            />
-          </div>
 
           <div class="row">
             <button class="btn ghost" type="button" @click="restart">查 別 支 籤</button>

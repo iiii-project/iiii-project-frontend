@@ -168,6 +168,8 @@ function setBodyLock(on: boolean) {
 
 /* 籤詩結果頁的 QR：掃了會開 /fortune/<sessionId>，
    在手機上先推廟門、再顯示這一支籤。 */
+/* 聊聊那一頁要拿它去打 chat API；buildShareQr 只用來產 QR，沒有把 id 留下來 */
+const arSessionId = ref('')
 const shareUrl = ref('')
 const qrDataUrl = ref('')
 
@@ -247,6 +249,7 @@ function onArComplete(event: Event) {
        ritualDismissed 是它的閘門，一起設起來才不會又被彈開。 */
     ritualDismissed = true
   }
+  arSessionId.value = detail?.sessionId ?? ''
   void buildShareQr(detail?.sessionId ?? '')
 
   // 一進解籤頁面就先唸籤詩本身（原文），不是等 AI 解籤——解籤通常還要再等 ~21 秒
@@ -626,21 +629,24 @@ function restart() {
               :share-url="canShare ? shareUrl : null"
               :qr-data-url="qrDataUrl"
               :offline-hint="canShare ? null : '離線籤詩沒有留下紀錄，無法用 QR 帶走。'"
-            />
+              :session-id="canShare ? arSessionId : null"
+            >
+              <!-- 平安符：符面依這一支籤而不同，跟 QR／分享放在同一頁 -->
+              <template #takeaway>
+                <AmuletButton
+                  v-if="fortune"
+                  :data="{
+                    number: fortune.no,
+                    ganzhi: fortune.ganzhi,
+                    level: fortune.grade,
+                    poem: fortune.poem,
+                    note: fortune.modern || fortune.explain,
+                    shareUrl: canShare ? shareUrl : null
+                  }"
+                />
+              </template>
+            </FortuneReading>
 
-            <!-- 平安符：符面依這一支籤而不同，可下載帶走 -->
-            <div v-if="fortune" class="amulet-row">
-              <AmuletButton
-                :data="{
-                  number: fortune.no,
-                  ganzhi: fortune.ganzhi,
-                  level: fortune.grade,
-                  poem: fortune.poem,
-                  note: fortune.modern || fortune.explain,
-                  shareUrl: canShare ? shareUrl : null
-                }"
-              />
-            </div>
 
             <dl class="summary compact">
               <div>

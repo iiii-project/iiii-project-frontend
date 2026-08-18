@@ -2,8 +2,10 @@
 /* 白話、神明指點、建議——分頁呈現，一次只讀一段。
    原本是把四段全部往下貼，手機要滑好幾個螢幕，讀的人抓不到重點；
    改成籤詩之下一排分頁，想看哪段點哪段，內容都在同一個位置出現。 */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import MarkdownText from '@/components/MarkdownText.vue'
+import { sendChat } from '@/api/divinationApi'
+import { toUserMessage } from '@/api/client'
 
 interface ReadingInterpretation {
   overall_meaning?: string
@@ -25,6 +27,9 @@ const props = defineProps<{
   qrDataUrl?: string | null
   /** 沒有可分享的連結時（例如離線籤）要給的交代，有值就仍然顯示這一頁 */
   offlineHint?: string | null
+  /* 「聊聊」這一頁要拿場次編號去打後端的 chat；沒有場次（離線籤）就不出現這一頁。
+     後端規定解籤完成後才能聊，而這個元件本來就只在結果頁出現，時機剛好。 */
+  sessionId?: string | null
 }>()
 
 interface Tab {
@@ -39,8 +44,12 @@ const tabs = computed<Tab[]>(() => {
     list.push({ key: 'reading', label: '神明指點' })
   }
   if (props.interpretation?.suggested_actions?.length) list.push({ key: 'actions', label: '可以這樣做' })
-  // 「帶走」放在最後：先讀懂籤，再談怎麼帶回家
-  if (props.shareUrl || props.offlineHint) list.push({ key: 'takeaway', label: '帶 走' })
+  // 有場次才聊得起來（離線籤沒有場次，後端也不會有這支籤的上下文）
+  if (props.sessionId) list.push({ key: 'chat', label: '聊 聊' })
+  /* 「帶回家」放在最後：先讀懂籤，再談怎麼帶走。
+     這一頁同時裝 QR、分享連結與平安符（平安符由外面用 slot 塞進來，
+     這個元件不需要認識它）。 */
+  if (props.shareUrl || props.offlineHint) list.push({ key: 'takeaway', label: '帶 回 家' })
   return list
 })
 
@@ -59,6 +68,74 @@ watch(
   },
   { immediate: true }
 )
+/* ── 帶走：分享連結 ──
+   優先用系統的分享面板（Web Share API），使用者可以直接丟到 LINE 或訊息；
+   桌機或不支援的瀏覽器退回複製到剪貼簿，兩條路都給得出結果。
+   使用者在分享面板按取消會 throw AbortError，那不是錯誤，不要報給他看。 */
+const shareNote = ref('')
+
+async function shareLink() {
+  const url = props.shareUrl
+  if (!url) return
+  shareNote.value = ''
+  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
+  if (nav.share) {
+    try {
+      await nav.share({ title: '籤好運', text: '我求到一支籤，分享給你看看', url })
+      return
+    } catch (error) {
+      if ((error as { name?: string })?.name === 'AbortError') return
+      // 分享失敗就往下退到複製，不要什麼都沒發生
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url)
+    shareNote.value = '連結已複製，貼到訊息裡就能傳給人。'
+  } catch {
+    shareNote.value = '這個瀏覽器不支援分享，請手動複製上面的網址。'
+  }
+}
+
+/* ── 聊聊：就這支籤追問 ──
+   刻意做得很簡單：一列訊息 + 一個輸入框，不做串流、不做重試。
+   後端有次數上限（回傳 remaining_messages），用完要明講，不要讓人一直打字沒反應。 */
+interface ChatLine { id: number; role: 'user' | 'mili'; text: string }
+const chatLines = ref<ChatLine[]>([])
+const chatInput = ref('')
+const chatSending = ref(false)
+const chatError = ref('')
+const chatRemaining = ref<number | null>(null)
+const chatBodyEl = ref<HTMLElement | null>(null)
+let chatSeq = 0
+
+const chatDisabled = computed(() => chatSending.value || chatRemaining.value === 0)
+
+async function scrollChatToEnd() {
+  await nextTick()
+  const el = chatBodyEl.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+async function sendChatMessage() {
+  const text = chatInput.value.trim()
+  const id = props.sessionId
+  if (!text || !id || chatDisabled.value) return
+  chatError.value = ''
+  chatLines.value.push({ id: ++chatSeq, role: 'user', text })
+  chatInput.value = ''
+  chatSending.value = true
+  void scrollChatToEnd()
+  try {
+    const result = await sendChat(id, text)
+    chatLines.value.push({ id: ++chatSeq, role: 'mili', text: String(result.reply ?? '').trim() || '（沒有回覆）' })
+    chatRemaining.value = result.remaining_messages
+  } catch (error) {
+    chatError.value = toUserMessage(error)
+  } finally {
+    chatSending.value = false
+    void scrollChatToEnd()
+  }
+}
 </script>
 
 <template>
@@ -93,14 +170,46 @@ watch(
         </p>
       </template>
 
+      <!-- 聊聊：就這支籤追問。米粒當背景，訊息浮在她前面 -->
+      <template v-else-if="active === 'chat'">
+        <div class="chat">
+          <div ref="chatBodyEl" class="chat-body">
+            <p v-if="!chatLines.length" class="chat-empty">想再問什麼都可以，例如「這支籤是說我該換工作嗎？」</p>
+            <div v-for="line in chatLines" :key="line.id" class="chat-line" :class="line.role">
+              <span class="chat-bubble">{{ line.text }}</span>
+            </div>
+            <p v-if="chatSending" class="chat-typing">米粒正在想…</p>
+          </div>
+          <p v-if="chatError" class="chat-error">{{ chatError }}</p>
+          <p v-else-if="chatRemaining === 0" class="chat-error">這次的對話次數用完了，重新求籤就能再聊。</p>
+          <form class="chat-input" @submit.prevent="sendChatMessage">
+            <input
+              v-model="chatInput"
+              type="text"
+              maxlength="120"
+              placeholder="想問米粒什麼呢？"
+              :disabled="chatDisabled"
+            />
+            <button type="submit" :disabled="chatDisabled || !chatInput.trim()">送出</button>
+          </form>
+        </div>
+      </template>
+
       <template v-else-if="active === 'takeaway'">
         <div v-if="shareUrl" class="takeaway">
           <img v-if="qrDataUrl" class="takeaway-qr" :src="qrDataUrl" alt="掃描以在手機上開啟這支籤" />
           <div v-else class="takeaway-qr is-pending">QR 產生中…</div>
           <p>用手機掃描，推開廟門就能收下這支籤。想留成圖片的話，平安符也帶著同一個連結。</p>
+          <button class="share-btn" type="button" @click="shareLink">分 享 連 結</button>
+          <p v-if="shareNote" class="share-note">{{ shareNote }}</p>
           <p class="takeaway-url">{{ shareUrl }}</p>
+          <!-- 平安符：由呼叫端塞進來，符面依這一支籤而不同 -->
+          <div class="takeaway-extra"><slot name="takeaway" /></div>
         </div>
-        <p v-else>{{ offlineHint }}</p>
+        <div v-else>
+          <p>{{ offlineHint }}</p>
+          <div class="takeaway-extra"><slot name="takeaway" /></div>
+        </div>
       </template>
 
       <template v-else-if="active === 'actions'">
@@ -249,6 +358,130 @@ watch(
   line-height: 1.7 !important;
   word-break: break-all;
   color: rgba(91, 70, 53, 0.6) !important;
+}
+
+/* ── 聊聊 ──
+   米粒當背景：用 CSS 變數指進來，值由外面給（見 --chat-chick）。
+   角色本體是 Live2D 的 canvas、不是圖檔，所以這裡吃的是一張靜態圖；
+   還沒給圖時就只有淡淡的暖底，不會出現破圖。 */
+.chat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.chat::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--chat-chick, none) center bottom / auto 78% no-repeat;
+  /* 背景只是陪襯，壓淡才不會跟訊息搶注意力 */
+  opacity: 0.22;
+  pointer-events: none;
+}
+.chat-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 6px;
+}
+.chat-empty {
+  margin: 0 !important;
+  color: rgba(91, 70, 53, 0.6) !important;
+  font-size: calc(13px * var(--fs, 1)) !important;
+}
+.chat-line { display: flex; }
+.chat-line.user { justify-content: flex-end; }
+.chat-bubble {
+  max-width: 82%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: calc(13.5px * var(--fs, 1));
+  line-height: 1.7;
+  background: rgba(255, 253, 246, 0.96);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: var(--ink, #3a2c22);
+}
+.chat-line.user .chat-bubble {
+  background: linear-gradient(150deg, var(--jiang-hong, #a63a3a), var(--jiang-hong-deep, #7a2626));
+  border-color: transparent;
+  color: #fdf5e2;
+}
+.chat-typing {
+  margin: 0 !important;
+  font-size: calc(12.5px * var(--fs, 1)) !important;
+  color: rgba(91, 70, 53, 0.6) !important;
+}
+.chat-error {
+  margin: 6px 0 0 !important;
+  font-size: calc(12.5px * var(--fs, 1)) !important;
+  color: var(--jiang-hong-deep, #7a2626) !important;
+}
+.chat-input {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+}
+.chat-input input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  background: rgba(255, 255, 255, 0.92);
+  font-family: inherit;
+  font-size: calc(13.5px * var(--fs, 1));
+  color: var(--ink, #3a2c22);
+}
+.chat-input button {
+  flex: none;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  background: linear-gradient(150deg, var(--jiang-hong, #a63a3a), var(--jiang-hong-deep, #7a2626));
+  color: #fdf5e2;
+  font-family: inherit;
+  font-size: calc(13px * var(--fs, 1));
+  letter-spacing: 0.1em;
+}
+.chat-input input:disabled, .chat-input button:disabled { opacity: 0.5; }
+
+/* 平安符按鈕：跟分享連結拉開距離，兩者是不同的「帶走」方式 */
+.takeaway-extra { margin-top: 12px; }
+
+/* 分享連結：主要動作，放在說明與網址之間 */
+.share-btn {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin: 4px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  background: linear-gradient(150deg, var(--jiang-hong, #a63a3a), var(--jiang-hong-deep, #7a2626));
+  color: #fdf5e2;
+  font-family: inherit;
+  font-size: calc(14px * var(--fs, 1));
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+}
+.share-note {
+  margin: 0 0 6px !important;
+  font-size: calc(12.5px * var(--fs, 1)) !important;
+  color: var(--jiang-hong-deep, #7a2626) !important;
 }
 
 /* 等解籤：延用站上香煙裊裊的語彙，不要轉圈圈 */
