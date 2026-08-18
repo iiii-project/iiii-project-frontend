@@ -17,7 +17,8 @@ const DesktopLive2DCompanion = defineAsyncComponent(() => import('@/desktop/comp
 const MobileLive2DCompanion = defineAsyncComponent(() => import('@/mobile/components/live2d/Live2DCompanion.vue'))
 
 const companion = useLive2DCompanionStore()
-const Live2DCompanion = computed(() => (isMobileViewport() ? MobileLive2DCompanion : DesktopLive2DCompanion))
+const isMobile = isMobileViewport()
+const Live2DCompanion = computed(() => (isMobile ? MobileLive2DCompanion : DesktopLive2DCompanion))
 
 /* 這裡只負責讓小夥伴可見（isVisible），不觸發自我介紹語音——那個當下沒有使用者
    手勢，瀏覽器的 autoplay 政策會擋掉。自我介紹改成使用者點角色開聊天室時才講
@@ -27,7 +28,11 @@ const Live2DCompanion = computed(() => (isMobileViewport() ? MobileLive2DCompani
    延後到瀏覽器閒置（或最長 1.5 秒）才開：一開就跟著載 Cubism Core、連 WebSocket，
    如果緊接在 app 剛掛載、首頁開門動畫還在跑的當下就做，會搶首屏渲染的主執行緒，
    造成剛進站那幾秒明顯卡頓。沒有 requestIdleCallback 的瀏覽器退回 setTimeout。 */
+/* 手機不放小夥伴：角色是全螢幕 canvas，在手機上會整片蓋在籤詩與按鈕前面
+   （實測過，連分頁標籤都被壓住）。手機版面本來就是「一頁一支籤」，
+   沒有多餘空間給一個常駐角色，所以這裡連自動開啟都跳過。 */
 onMounted(() => {
+  if (isMobileViewport()) return
   const open = () => companion.open()
   if (typeof window.requestIdleCallback === 'function') {
     window.requestIdleCallback(open, { timeout: 1500 })
@@ -38,7 +43,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <Teleport to="body">
+  <!-- v-if 是第二道閘：求籤儀式的 guideRitualStage() 也會呼叫 companion.open()，
+       只擋 onMounted 不夠，手機上一律不渲染。 -->
+  <Teleport v-if="!isMobile" to="body">
     <div class="live2d-companion">
       <component :is="Live2DCompanion" v-if="companion.hasOpenedOnce" />
     </div>

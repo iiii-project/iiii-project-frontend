@@ -243,12 +243,6 @@ function onArComplete(event: Event) {
   step.value = 5
   /* 手機上把小夥伴收起來：它的面板是 fixed 貼底，留著會壓住籤詩、分頁與按鈕。
      想追問的人點 🔮 就能再打開。桌機空間夠，不動。 */
-  if (window.matchMedia('(max-width: 640px)').matches) {
-    companionStore.isVisible = false
-    /* 只設 isVisible 不夠：guideRitualStage() 之後還會呼叫 open()。
-       ritualDismissed 是它的閘門，一起設起來才不會又被彈開。 */
-    ritualDismissed = true
-  }
   arSessionId.value = detail?.sessionId ?? ''
   void buildShareQr(detail?.sessionId ?? '')
 
