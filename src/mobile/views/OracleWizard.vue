@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import type { Category } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
 import { useLocalSpeechInput } from '@/utils/localSpeech'
-import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
+import { fortuneShareUrl } from '@/utils/qr'
 import AmuletButton from '@/mobile/components/AmuletButton.vue'
 import FontScaleControl from '@/mobile/components/FontScaleControl.vue'
 import FortunePoem from '@/mobile/components/FortunePoem.vue'
@@ -88,8 +88,11 @@ const enterWisps = Array.from({ length: 12 }, (_, index) => {
   }
 })
 /* 籤紙可收起：手機一頁裝不下「完整籤紙 + 解籤」，收起時只留一條籤號列，
-   空間全讓給解籤（與掃碼分享頁同一套作法，見 FortuneShare.vue）。 */
-const paperCollapsed = ref(false)
+   空間全讓給解籤（與掃碼分享頁同一套作法，見 FortuneShare.vue）。
+   這裡預設收起——籤詩剛剛在儀式收尾時已經整首唸給使用者聽過一次
+   （見 onArComplete 的 speak-text），此刻最需要空間的是解籤內容，
+   籤號／干支仍留在收合列上，想重看整張籤紙一鍵展開即可。 */
+const paperCollapsed = ref(true)
 function togglePaper() { paperCollapsed.value = !paperCollapsed.value }
 
 const showEnterMist = ref(true)
@@ -166,26 +169,21 @@ function setBodyLock(on: boolean) {
   document.body.classList.toggle('ar-ritual-open', on)
 }
 
-/* 籤詩結果頁的 QR：掃了會開 /fortune/<sessionId>，
-   在手機上先推廟門、再顯示這一支籤。 */
-/* 聊聊那一頁要拿它去打 chat API；buildShareQr 只用來產 QR，沒有把 id 留下來 */
+/* 籤詩結果頁的回訪連結：開 /fortune/<sessionId>，在手機上先推廟門、
+   再顯示這一支籤。連結會畫進平安符符面的 QR 裡（見 utils/amulet.ts），
+   這裡只留網址字串本身，不再另外產一張獨立的 QR 圖。 */
+/* 聊聊那一頁要拿它去打 chat API；buildShareUrl 只用來組連結，沒有把 id 留下來 */
 const arSessionId = ref('')
 const shareUrl = ref('')
-const qrDataUrl = ref('')
 
 /* 離線模式時引擎會自己捏一個 offline-<timestamp> 的編號，後端查無此筆，
-   照樣產 QR 只會得到一個掃了永遠載不到的死連結，所以這種情況不給 QR。 */
+   照樣組連結只會得到一個掃了永遠載不到的死連結，所以這種情況不給連結。 */
 const canShare = ref(false)
 
-async function buildShareQr(id: string) {
+function buildShareUrl(id: string) {
   canShare.value = Boolean(id) && !id.startsWith('offline-')
   if (!canShare.value) return
   shareUrl.value = fortuneShareUrl(id)
-  try {
-    qrDataUrl.value = await makeQrDataUrl(shareUrl.value, 320)
-  } catch {
-    qrDataUrl.value = '' // 產不出來就只顯示網址，不擋畫面
-  }
 }
 
 /* 解籤比過場慢得多（實測 ~21 秒），所以籤詩會先出，
@@ -244,7 +242,7 @@ function onArComplete(event: Event) {
   /* 手機上把小夥伴收起來：它的面板是 fixed 貼底，留著會壓住籤詩、分頁與按鈕。
      想追問的人點 🔮 就能再打開。桌機空間夠，不動。 */
   arSessionId.value = detail?.sessionId ?? ''
-  void buildShareQr(detail?.sessionId ?? '')
+  buildShareUrl(detail?.sessionId ?? '')
 
   // 一進解籤頁面就先唸籤詩本身（原文），不是等 AI 解籤——解籤通常還要再等 ~21 秒
   // 才會透過 onArInterpretation 補進來，籤詩原文這時候已經有了，先讓角色唸給使用者聽。
@@ -393,6 +391,7 @@ function restart() {
   category.value = null
   question.value = ''
   errorMessage.value = ''
+  paperCollapsed.value = true
 }
 </script>
 
@@ -621,14 +620,14 @@ function restart() {
               :interpretation="interpretation"
               :pending="waitingInterpretation"
               :share-url="canShare ? shareUrl : null"
-              :qr-data-url="qrDataUrl"
-              :offline-hint="canShare ? null : '離線籤詩沒有留下紀錄，無法用 QR 帶走。'"
+              :offline-hint="canShare ? null : '離線籤詩沒有留下紀錄，無法生成平安符。'"
               :session-id="canShare ? arSessionId : null"
             >
-              <!-- 平安符：符面依這一支籤而不同，跟 QR／分享放在同一頁 -->
+              <!-- 平安符：符面依這一支籤而不同，inline 模式一進分頁就直接畫出來 -->
               <template #takeaway>
                 <AmuletButton
                   v-if="fortune"
+                  inline
                   :data="{
                     number: fortune.no,
                     ganzhi: fortune.ganzhi,
@@ -1234,8 +1233,8 @@ body.ar-ritual-open { overflow: hidden; }
 /* 這一次問了什麼：收成小字附註，不跟籤詩搶注意力 */
 .summary.compact { margin-top: 18px; }
 .summary.compact > div { padding: 0.6rem 0.2rem; }
-.summary.compact dt { flex: 0 0 4.8em; font-size: calc(12.5px * var(--fs, 1)); }
-.summary.compact dd { font-size: calc(13.5px * var(--fs, 1)); color: var(--ink-soft); }
+.summary.compact dt { flex: 0 0 4.8em; font-size: calc(13.5px * var(--fs, 1)); }
+.summary.compact dd { font-size: calc(15px * var(--fs, 1)); color: var(--ink-soft); }
 
 .dd-note {
   color: rgba(91, 70, 53, 0.55);

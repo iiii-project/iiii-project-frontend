@@ -21,10 +21,10 @@ const props = defineProps<{
   interpretation?: ReadingInterpretation | null
   /** AI 解籤還在路上 */
   pending?: boolean
-  /* 「帶走」這一頁：QR 與網址。之前 QR 是貼在分頁外面的一整塊，
-     在手機上把籤詩與解籤一起往下推；收進分頁之後版面只需要一個高度。 */
+  /* 「帶走」這一頁：分享連結與平安符。之前這裡還有一塊 QR，貼在分頁外面，
+     在手機上把籤詩與解籤一起往下推；收進分頁之後版面只需要一個高度。
+     QR 現在改畫進平安符符面裡（見 utils/amulet.ts），這裡不再單獨顯示。 */
   shareUrl?: string | null
-  qrDataUrl?: string | null
   /** 沒有可分享的連結時（例如離線籤）要給的交代，有值就仍然顯示這一頁 */
   offlineHint?: string | null
   /* 「聊聊」這一頁要拿場次編號去打後端的 chat；沒有場次（離線籤）就不出現這一頁。
@@ -197,14 +197,12 @@ async function sendChatMessage() {
 
       <template v-else-if="active === 'takeaway'">
         <div v-if="shareUrl" class="takeaway">
-          <img v-if="qrDataUrl" class="takeaway-qr" :src="qrDataUrl" alt="掃描以在手機上開啟這支籤" />
-          <div v-else class="takeaway-qr is-pending">QR 產生中…</div>
-          <p>用手機掃描，推開廟門就能收下這支籤。想留成圖片的話，平安符也帶著同一個連結。</p>
+          <!-- 平安符：由呼叫端塞進來（inline 模式直接畫出來，不用再點按鈕），
+               符面依這一支籤而不同，符裡已經藏著回來看這支籤的連結。 -->
+          <div class="takeaway-extra"><slot name="takeaway" /></div>
+          <p>長按平安符圖片就能存到手機相簿，之後想回來看這支籤，符裡的連結一樣能用。</p>
           <button class="share-btn" type="button" @click="shareLink">分 享 連 結</button>
           <p v-if="shareNote" class="share-note">{{ shareNote }}</p>
-          <p class="takeaway-url">{{ shareUrl }}</p>
-          <!-- 平安符：由呼叫端塞進來，符面依這一支籤而不同 -->
-          <div class="takeaway-extra"><slot name="takeaway" /></div>
         </div>
         <div v-else>
           <p>{{ offlineHint }}</p>
@@ -249,7 +247,7 @@ async function sendChatMessage() {
   cursor: pointer;
   padding: 10px 14px 11px;
   font-family: inherit;
-  font-size: calc(13px * var(--fs, 1));
+  font-size: calc(14px * var(--fs, 1));
   letter-spacing: 0.14em;
   color: rgba(91, 70, 53, 0.62);
   white-space: nowrap;
@@ -296,8 +294,8 @@ async function sendChatMessage() {
 .pane :deep(h4),
 .pane :deep(h5) {
   margin: 0 0 12px;
-  font-size: calc(14.5px * var(--fs, 1));
-  line-height: 2;
+  font-size: calc(16px * var(--fs, 1));
+  line-height: 1.9;
   letter-spacing: 0.03em;
   color: var(--ink-soft, #5b4635);
 }
@@ -320,8 +318,8 @@ async function sendChatMessage() {
 .pane li,
 .pane :deep(li) {
   margin-bottom: 8px;
-  font-size: calc(14.5px * var(--fs, 1));
-  line-height: 1.95;
+  font-size: calc(16px * var(--fs, 1));
+  line-height: 1.85;
   color: var(--ink-soft, #5b4635);
 }
 .pane :deep(strong) { color: var(--ink, #3a2c22); font-weight: 700; }
@@ -334,31 +332,8 @@ async function sendChatMessage() {
 }
 .pane :deep(a) { color: var(--jiang-hong-deep, #7a2626); text-underline-offset: 3px; }
 
-/* 「帶走」這一頁：QR 置中，說明與網址跟著它。
-   QR 尺寸跟著字級一起放大——長輩把字調大時，碼也要好掃。 */
+/* 「帶走」這一頁：平安符置中，說明與分享按鈕跟著它。 */
 .takeaway { text-align: center; }
-.takeaway-qr {
-  display: block;
-  width: calc(150px * var(--fs, 1));
-  height: calc(150px * var(--fs, 1));
-  margin: 0 auto 12px;
-  padding: 8px;
-  border-radius: 10px;
-  background: #fffdf6;
-  box-shadow: 0 6px 18px rgba(120, 90, 50, 0.16);
-}
-.takeaway-qr.is-pending {
-  display: grid;
-  place-items: center;
-  font-size: calc(12.5px * var(--fs, 1));
-  color: rgba(91, 70, 53, 0.55);
-}
-.takeaway-url {
-  font-size: calc(12px * var(--fs, 1)) !important;
-  line-height: 1.7 !important;
-  word-break: break-all;
-  color: rgba(91, 70, 53, 0.6) !important;
-}
 
 /* ── 聊聊 ──
    米粒當背景：用 CSS 變數指進來，值由外面給（見 --chat-chick）。

@@ -27,7 +27,9 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   const shake = { active:false, startTime:0, lastY:0, lastVelocitySign:0, oscillations:0, lastFistTime:0 };
 
   // ---- 合十默念狀態 ----
-  const incense = { active:false, startTime:0, visualX:0.5, visualY:0.62, visualTilt:0 };
+  // pausedAt：合十判定短暫失敗時的暫停起點（見 handleIncenseGesture 的寬限期機制），
+  // 不是 0 就代表目前正處於「暫停中，還沒真的歸零」的狀態。
+  const incense = { active:false, startTime:0, pausedAt:0, visualX:0.5, visualY:0.62, visualTilt:0 };
 
   // ---- 捧筊 / 拋擲 狀態 ----
   const cup = {
@@ -177,8 +179,6 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   }
   function handScale(lm){ return dist(lm[0], lm[9]) || 0.0001; }
 
-  let incenseLastSingleHandPos = null;
-
   function updateIncenseFollow(point){
     // MediaPipe coordinates are unmirrored; match the mirrored camera canvas for the AR object.
     const targetX = 1 - point.x;
@@ -225,34 +225,27 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
       } else {
         statusText = '偵測到雙手，請再靠攏一些';
       }
-      incenseLastSingleHandPos = null;
     } else if (handsLm && handsLm.length === 1){
       const c = palmCenter(handsLm[0]);
       centerPt = c;
       hideDualHandUI(); updateFistIndicatorRaw(c);
+      /* 雙手合十時兩手影像高度重疊，MediaPipe 常常只認得到其中一隻手：
+         這裡只要求這隻手落在畫面中央，不再額外要求「完全靜止不動」——
+         手部座標偵測本身就有雜訊，就算手沒動也常被誤判成有在動，
+         反而讓進度動不動就被重置，體感就是「太靈敏、一動就重來」。 */
       const inCenter = c.x > CONFIG.INCENSE_CENTER_X[0] && c.x < CONFIG.INCENSE_CENTER_X[1]
                      && c.y > CONFIG.INCENSE_CENTER_Y[0] && c.y < CONFIG.INCENSE_CENTER_Y[1];
-      let steady = true;
-      if (incenseLastSingleHandPos){
-        const v = dist(c, incenseLastSingleHandPos);
-        steady = v < CONFIG.INCENSE_STILL_VELOCITY_MAX;
-      }
-      incenseLastSingleHandPos = c;
-      if (inCenter && steady){ isClose = true; statusText = '誠心感應中…'; }
-      else if (!inCenter){ statusText = '請將合十的雙手移到畫面正中央'; }
-      else { statusText = '請保持雙手穩定不動'; }
+      if (inCenter){ isClose = true; statusText = '誠心感應中…'; }
+      else { statusText = '請將合十的雙手移到畫面正中央'; }
     } else {
       hideDualHandUI(); hideFistIndicator();
-      incenseLastSingleHandPos = null;
-      if (incense.active){ incense.active = false; els.incenseRing.classList.remove('on'); els.incenseRing.style.setProperty('--p',0); }
-      els.incenseHint.classList.remove('sensing'); els.incenseStick.classList.remove('sensing');
-      els.incenseHint.textContent = statusText;
-      return;
     }
 
     const visualCenter = centerPt ? updateIncenseFollow(centerPt) : null;
 
     if (isClose){
+      // 只要重新判定為合十，就取消任何還在倒數的寬限期，視為進度沒中斷過。
+      incense.pausedAt = 0;
       if (!incense.active){ incense.active = true; incense.startTime = now; els.incenseRing.classList.add('on'); }
       const elapsed = now - incense.startTime;
       const progress = Math.min(1, elapsed / CONFIG.INCENSE_HOLD_MS);
@@ -264,15 +257,28 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
         particleSystem.converge(visualCenter.x*window.innerWidth, visualCenter.y*window.innerHeight, 260, 2 + progress*5);
       }
       if (progress >= 1){ callbacks.completeIncense(); }
-    } else {
+      return;
+    }
+
+    /* 判定為「未合十」的這一格：如果進度正在累積中，先給一段寬限期
+       （CONFIG.INCENSE_RESET_GRACE_MS），寬限期內只更新提示文字、
+       維持目前的進度顯示，不立刻歸零——交疊瞬間漏偵測一兩格是常態，
+       真的放開雙手才需要重來。 */
+    if (incense.active){
+      if (!incense.pausedAt) incense.pausedAt = now;
+      if (now - incense.pausedAt < CONFIG.INCENSE_RESET_GRACE_MS){
+        els.incenseHint.textContent = statusText;
+        return;
+      }
       incense.active = false;
+      incense.pausedAt = 0;
       els.incenseRing.classList.remove('on'); els.incenseRing.style.setProperty('--p',0);
       els.incenseHint.classList.remove('sensing'); els.incenseStick.classList.remove('sensing');
-      els.incenseHint.textContent = statusText;
     }
+    els.incenseHint.textContent = statusText;
   }
   function resetIncenseProgress(){
-    incense.active = false; incenseLastSingleHandPos = null;
+    incense.active = false; incense.pausedAt = 0;
     resetIncenseFollow();
     els.incenseRing.classList.remove('on'); els.incenseRing.style.setProperty('--p',0);
     els.incenseHint.classList.remove('sensing'); els.incenseStick.classList.remove('sensing');

@@ -40,7 +40,8 @@ export const CONFIG = {
   INCENSE_HOLD_MS: 1700,          // 縮短至 1.7 秒，減少枯燥的無感等待
   INCENSE_CENTER_X: [0.28, 0.72], // 單手備援路徑：手部須落在畫面水平置中範圍
   INCENSE_CENTER_Y: [0.3, 0.85],  // 單手備援路徑：手部須落在畫面垂直置中範圍
-  INCENSE_STILL_VELOCITY_MAX: 0.006, // 單手備援路徑：每影格移動量需小於此值才算「穩定」
+  INCENSE_RESET_GRACE_MS: 400,    // 合十判定短暫失敗（如雙手交疊瞬間 MediaPipe 只認到一隻手、或整段追蹤中斷一兩格）時，
+                                   // 在這段寬限時間內先暫停進度、不歸零，避免使用者一個小動作就前功盡棄
   INCENSE_FOLLOW_EASE: 0.18,       // 香跟隨手部時的低通濾波，越小越柔和
   INCENSE_FOLLOW_Y_OFFSET: 0.1,   // 香位於合十雙手稍下方，避免遮住掌心
   INCENSE_TILT_MAX: 8,             // 跟隨手部左右移動時的最大傾角

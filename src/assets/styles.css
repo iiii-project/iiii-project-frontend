@@ -22,11 +22,21 @@
   box-sizing: border-box;
 }
 
+/* 關閉瀏覽器的「水平滑動返回上一頁」手勢：手機是螢幕邊緣滑動、
+   桌機則是觸控板兩指滑動，求籤流程操作密集，很容易被誤判成返回手勢，
+   導致直接跳回瀏覽紀錄的上一頁（通常就是首頁）。只鎖水平方向，
+   不影響一般垂直捲動／下拉。部分瀏覽器要設在 html 才吃得到，
+   所以 html、body 兩邊都設。 */
+html {
+  overscroll-behavior-x: none;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
   background:
     radial-gradient(ellipse at center, rgba(74, 64, 56, 0.7) 0%, rgba(20, 16, 14, 0.92) 58%, #080605 100%),
     var(--wu-mu-hei);

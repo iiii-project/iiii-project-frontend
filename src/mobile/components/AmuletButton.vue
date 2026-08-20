@@ -4,7 +4,7 @@
    八卦轉向與印章做舊），所以每支籤的符都不一樣，而同一支籤永遠是同一張。
 
    手機上長按圖片就能存到相簿；桌機用下面的下載鈕（a[download]）。 */
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { amuletFileName, renderAmulet, type AmuletData } from '@/utils/amulet'
 
 const props = defineProps<{
@@ -12,6 +12,10 @@ const props = defineProps<{
   /** 次要樣式（放在以主要動作為主的按鈕列裡時用） */
   ghost?: boolean
   label?: string
+  /* 直接把符顯示出來（不用再按按鈕開彈窗），用在「帶回家」這種本來就是
+     衝著平安符來的頁面——例如解籤結果頁，一進分頁就先把符畫出來，
+     長按圖片就能存，比多一次點擊再等彈窗少一個步驟。 */
+  inline?: boolean
 }>()
 
 const open = ref(false)
@@ -20,7 +24,6 @@ const dataUrl = ref('')
 const errorMessage = ref('')
 
 async function generate() {
-  open.value = true
   errorMessage.value = ''
   if (dataUrl.value) return // 同一支籤畫過就不必再畫
   isRendering.value = true
@@ -34,48 +37,75 @@ async function generate() {
   }
 }
 
+function openModal() {
+  open.value = true
+  void generate()
+}
+
 function close() {
   open.value = false
+}
+
+if (props.inline) {
+  onMounted(() => void generate())
 }
 </script>
 
 <template>
-  <button class="amulet-trigger" :class="{ ghost }" type="button" @click="generate">
-    <!-- 小硃印記號：比 emoji 收斂，也跟站上的印章語彙一致 -->
-    <svg class="amulet-mark" viewBox="0 0 16 16" aria-hidden="true">
-      <rect x="1.6" y="1.6" width="12.8" height="12.8" rx="1.6" />
-      <path d="M8 4.4v7.2M5.2 7.2h5.6" />
-    </svg>
-    {{ label ?? '求 平 安 符' }}
-  </button>
+  <div v-if="inline" class="amulet-inline">
+    <div class="amulet-stage">
+      <img v-if="dataUrl" :src="dataUrl" class="amulet-img" alt="數位平安符" />
+      <p v-else-if="isRendering" class="amulet-wait">正在為你開符…</p>
+      <p v-else-if="errorMessage" class="amulet-error">{{ errorMessage }}</p>
+    </div>
+    <a
+      v-if="dataUrl"
+      class="amulet-btn primary"
+      :href="dataUrl"
+      :download="amuletFileName(props.data)"
+    >
+      下 載 平 安 符
+    </a>
+  </div>
 
-  <Teleport to="body">
-    <div v-if="open" class="amulet-modal" role="dialog" aria-modal="true" aria-label="數位平安符" @click.self="close">
-      <div class="amulet-box">
-        <p class="amulet-kicker">數 位 平 安 符</p>
+  <template v-else>
+    <button class="amulet-trigger" :class="{ ghost }" type="button" @click="openModal">
+      <!-- 小硃印記號：比 emoji 收斂，也跟站上的印章語彙一致 -->
+      <svg class="amulet-mark" viewBox="0 0 16 16" aria-hidden="true">
+        <rect x="1.6" y="1.6" width="12.8" height="12.8" rx="1.6" />
+        <path d="M8 4.4v7.2M5.2 7.2h5.6" />
+      </svg>
+      {{ label ?? '求 平 安 符' }}
+    </button>
 
-        <div class="amulet-stage">
-          <img v-if="dataUrl" :src="dataUrl" class="amulet-img" alt="數位平安符" />
-          <p v-else-if="isRendering" class="amulet-wait">正在為你開符…</p>
-          <p v-else-if="errorMessage" class="amulet-error">{{ errorMessage }}</p>
-        </div>
+    <Teleport to="body">
+      <div v-if="open" class="amulet-modal" role="dialog" aria-modal="true" aria-label="數位平安符" @click.self="close">
+        <div class="amulet-box">
+          <p class="amulet-kicker">數 位 平 安 符</p>
 
-        <p class="amulet-hint">手機可長按圖片存到相簿，或用下面的按鈕下載。</p>
+          <div class="amulet-stage">
+            <img v-if="dataUrl" :src="dataUrl" class="amulet-img" alt="數位平安符" />
+            <p v-else-if="isRendering" class="amulet-wait">正在為你開符…</p>
+            <p v-else-if="errorMessage" class="amulet-error">{{ errorMessage }}</p>
+          </div>
 
-        <div class="amulet-actions">
-          <a
-            v-if="dataUrl"
-            class="amulet-btn primary"
-            :href="dataUrl"
-            :download="amuletFileName(props.data)"
-          >
-            下 載 平 安 符
-          </a>
-          <button class="amulet-btn" type="button" @click="close">關　閉</button>
+          <p class="amulet-hint">手機可長按圖片存到相簿，或用下面的按鈕下載。</p>
+
+          <div class="amulet-actions">
+            <a
+              v-if="dataUrl"
+              class="amulet-btn primary"
+              :href="dataUrl"
+              :download="amuletFileName(props.data)"
+            >
+              下 載 平 安 符
+            </a>
+            <button class="amulet-btn" type="button" @click="close">關　閉</button>
+          </div>
         </div>
       </div>
-    </div>
-  </Teleport>
+    </Teleport>
+  </template>
 </template>
 
 <style scoped>
@@ -115,6 +145,31 @@ function close() {
   stroke: currentColor;
   stroke-width: 1.3;
   opacity: 0.75;
+}
+
+/* ── inline 模式：直接畫在「帶回家」分頁裡，不開彈窗 ── */
+.amulet-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.amulet-inline .amulet-stage { min-height: 120px; }
+.amulet-inline .amulet-img {
+  max-width: min(64vw, 240px);
+  max-height: 48vh;
+  box-shadow: 0 14px 34px rgba(120, 60, 40, 0.22);
+}
+.amulet-inline .amulet-btn {
+  flex: none;
+  width: 100%;
+  max-width: 260px;
+  /* 這顆 <a> 現在是「帶回家」分頁裡的一般子節點（inline 模式不再靠 Teleport
+     搬到 body 外），FortuneReading.vue 給 markdown 連結用的 .pane :deep(a)
+     顏色規則因為多一層 a 型別選擇器，特異度會贏過上面單純的 .amulet-btn，
+     蓋成籤紅字看不清楚——這裡用 .amulet-inline .amulet-btn 兩個 class
+     把特異度拉高蓋回來。 */
+  color: #f2e2b3;
 }
 
 /* ── 預覽彈窗 ── */
