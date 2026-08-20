@@ -1,0 +1,53 @@
+# 生產環境用(單台 Azure VM)。跟 compose.yaml(本機開發用)的差異:
+#   - 不含 llama 服務 —— 生產環境走外部 LLM API,不在機器上跑 llama.cpp
+#   - frontend 不直接對外開埠,前面多一層 caddy 做 TLS 終止 + 自動憑證更新
+#   - backend/frontend restart 政策改成 always(VM 重開機也要自動長回來)
+#
+# 用法:
+#   cd iiii-project-frontend
+#   docker compose -f compose.prod.yaml up -d --build
+services:
+  backend:
+    build: ../iiii-project-backend
+    restart: always
+    env_file: ../iiii-project-backend/.env
+    volumes:
+      - sqlite_data:/app/data
+      - media_data:/app/media
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build: .
+    restart: always
+    environment:
+      BACKEND_URL: http://backend:8000
+      NGINX_ENVSUBST_FILTER: BACKEND_URL
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+volumes:
+  sqlite_data:
+  media_data:
+  caddy_data:
+  caddy_config:

@@ -3,7 +3,13 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig(() => {
-  const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://iiibackend.dev-serve.me'
+  const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8000'
+  // 用自己的網域(穿透工具、公司內網網域等)存取這個 dev server 時才需要設,
+  // 逗號分隔多個網域。預設不設，Vite 本來就允許 localhost/區網 IP 存取。
+  const devAllowedHosts = (process.env.VITE_DEV_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((host) => host.trim())
+    .filter(Boolean)
 
   return {
   // <temple-ar-oracle> 是原生 Web Component，要告訴 Vue 別把它當成未註冊的元件
@@ -24,7 +30,7 @@ export default defineConfig(() => {
   },
   server: {
     port: 5176,
-    allowedHosts: ['ihappy.dev-serve.me', 'iii.gdtumn.com'],
+    allowedHosts: devAllowedHosts.length ? devAllowedHosts : undefined,
     watch: {
       ignored: ['**/.agents/**', '**/.codex/**', '**/.opencode/**']
     },

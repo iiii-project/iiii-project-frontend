@@ -1,0 +1,9 @@
+# 生產環境專用的邊緣 TLS 終止層。Caddy 會自動跟 Let's Encrypt 申請/更新憑證、
+# 自動處理 http -> https 導向,不需要另外跑 certbot 或寫 renew 排程。
+# {$DOMAIN} 是 Caddy 原生支援的環境變數替換語法,值來自同目錄 .env 的 DOMAIN。
+#
+# 前提:DOMAIN 必須先把 DNS A 記錄指到這台機器的公開 IP,且 NSG/防火牆要開放
+# 80、443 對外——Let's Encrypt 的 HTTP-01 驗證會連回這個網域的 80 埠。
+{$DOMAIN} {
+	reverse_proxy frontend:80
+}

@@ -14,9 +14,9 @@
    邏輯與原始碼逐行相同。
 
    【封裝調整說明】
-   1. `apiBaseUrl` 原本寫死判斷 `window.location.hostname === 'iii.gdtumn.com'`，
-      這是專案原本部署網域的特判。改為由外部呼叫 createDivinationApi(apiBase)
-      時傳入，不再寫死網域，新前端部署到任何網域都要自己決定 apiBase。
+   1. `apiBaseUrl` 原本寫死判斷 `window.location.hostname` 是不是專案原本部署
+      的網域。改為由外部呼叫 createDivinationApi(apiBase) 時傳入，不再寫死
+      網域，新前端部署到任何網域都要自己決定 apiBase。
    2. CATEGORY_API_MAP 只保留 create() 會用到的分類代碼對照表（原始碼同一份，
       未增刪任何一組對照值）。
    ========================================================================= */

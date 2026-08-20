@@ -38,10 +38,10 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
 `vite.config.ts` 用這個變數決定 dev server 要把 `/api`、`/admin`、`/client-ws`（WebSocket）、`/live2d-models`、`/avatars`、`/bg`、`/cache` proxy 到哪個後端：
 
 ```ts
-const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://iiibackend.dev-serve.me'
+const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8000'
 ```
 
-**沒設定的話，預設值 `http://iiibackend.dev-serve.me` 是原作者內部測試用的網域**——不設定不會報錯，但你的 dev server 會把所有 API/WebSocket 請求都轉送到那個外部網址，而不是你自己起的後端，容易讓人誤以為前端本身有問題。
+**沒設定的話，會退回 `http://127.0.0.1:8000`**——也就是預期你本機用預設埠號跑起 `iiii-project-backend`。如果你的後端不是跑在這個位址（換了埠號、跑在別台機器、或用 Docker），就要照下面的方式明確設定，不然 dev server 會連不到你實際的後端。
 
 這裡實測過一個容易踩的坑：**`vite.config.ts` 是用 Node 的 `process.env.VITE_API_PROXY_TARGET` 直接讀值，不是走 Vite 標準的 `import.meta.env`／`.env` 檔案載入流程**，所以寫在 `.env.local` 裡**不會生效**。必須用 shell 環境變數的方式設定：
 
@@ -65,9 +65,15 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
 VITE_PUBLIC_ORIGIN=http://192.168.1.100:5176
 ```
 
-### `server.allowedHosts` 裡的網域
+### `VITE_DEV_ALLOWED_HOSTS`（選用）
 
-`vite.config.ts` 裡還寫了 `allowedHosts: ['ihappy.dev-serve.me', 'iii.gdtumn.com']`——這也是原作者的網域，只是 Vite dev server 允許哪些 Host header 存取的白名單。用 `localhost`/區網 IP 開發完全不受影響，不需要修改；只有你要用自己的網域反向代理/穿透這個 dev server 時才需要把自己的網域加進這個陣列。
+只有你要用自己的網域（穿透工具、公司內網網域等）反向代理/穿透這個 dev server 時才需要設，逗號分隔多個網域：
+
+```bash
+VITE_DEV_ALLOWED_HOSTS=your-tunnel-domain.example.com npm run dev
+```
+
+用 `localhost`/區網 IP 開發完全不受影響，不需要設這個變數。
 
 ## 跟後端的關聯
 
