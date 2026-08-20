@@ -510,7 +510,7 @@ function restart() {
             class="ask"
             rows="5"
             :maxlength="QUESTION_MAX"
-            placeholder="例：我在考慮下個月換工作，想請示這個決定是否合適？　（可留白，或按下方麥克風用說的）"
+            placeholder="例：該不該換工作？"
           ></textarea>
         </div>
         <div class="ask-tools">

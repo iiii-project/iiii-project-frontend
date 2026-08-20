@@ -194,7 +194,7 @@
   opacity:0; pointer-events:none; transform:translate(-50%,-50%); transition: opacity 0.15s ease, border-color 0.15s ease;
 }
 
-/* ===================== 畫面二：捧筊與拋擲（Three.js 3D 渲染）===================== */
+/* ===================== 畫面二：抓杯與拋擲（Three.js 3D 渲染）===================== */
 #bwa-three-container{ position:fixed; inset:0; z-index:11; pointer-events:none; }
 /* 手動模式：改成直接點筊杯擲出，這時容器才需要收事件 */
 #bwa-three-container.tossable{ pointer-events:auto; cursor:pointer; }

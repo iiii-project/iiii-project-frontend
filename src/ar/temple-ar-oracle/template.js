@@ -133,7 +133,7 @@ export function renderTemplate() {
     <div class="glass-card ritual-card absolute ar-top-7vh text-center fade-in">
       <h2 class="ritual-title">擲　筊　請　示</h2>
       <div class="hairline mt-4"></div>
-      <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請伸出雙手，掌心合起捧住筊杯</p>
+      <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請握拳抓住筊杯，往下一丟即可擲出</p>
       <button id="btn-click-bwa" class="btn-line mt-4 hidden" type="button">擲　筊</button>
     </div>
 

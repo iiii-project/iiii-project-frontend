@@ -43,6 +43,22 @@ function loadJiaoTemplates() {
   return jiaoTemplatesPromise;
 }
 
+/* ---- 抓杯（hold）動畫參數 ----
+   舊版 setHoldPosition 是每收到一次手勢座標就把兩顆筊杯硬設到該位置，
+   所以筊杯是「瞬間出現在手上」而且跟著 MediaPipe 的抖動一起跳。
+   改成：setHoldPosition 只記錄目標點，實際位移由 render loop 每格插值，
+   前 GRAB_MS 毫秒播「被抓起來」的動畫（帶弧線抬起＋握緊的旋轉＋放大回饋），
+   之後轉為阻尼跟隨，並依橫向速度給一點慣性傾斜。 */
+const GRAB_MS = 420;          // 抓起動畫長度
+const GRAB_LIFT = 0.45;       // 抓起過程中額外抬高的弧線高度（世界單位）
+const GRAB_SCALE_PUNCH = 0.14; // 抓起瞬間的放大回饋比例
+const GRAB_ROLL = 0.55;       // 抓起過程中兩杯向內握緊的旋轉量（弧度）
+const HOLD_SPREAD = 0.4;      // 手持時兩杯的中心間距（半距）
+const IDLE_SPREAD = 0.5;      // 閒置時兩杯的中心間距（半距）
+const FOLLOW_EASE_A = 0.3;    // 跟手的阻尼係數；兩杯稍微不同，跟隨時會有自然的錯位晃動
+const FOLLOW_EASE_B = 0.24;
+const HOLD_TILT_MAX = 0.35;   // 慣性傾斜上限（弧度）
+
 // 筊杯落地後的最終高度：跟鏡頭視線焦點（camera.lookAt 的 y）對齊，
 // 這樣擲出的結果會停在畫面正中間，而不是偏向畫面下方。
 // 地板（陰影承接面）跟著往上移，維持跟原本一樣「杯底貼地」的相對距離（0.1）。
@@ -55,6 +71,26 @@ export function createBwaScene(state) {
   let container = null;
   let lastScreenPos = { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
   let loopRafId = null;
+
+  /* 抓杯狀態：target 是手的世界座標（由 setHoldPosition 更新），
+     curA/curB 是兩顆筊杯目前實際所在的位置（由 render loop 逐格逼近 target）。
+     from* 記錄「開始被抓起」那一刻的位置與旋轉，抓起動畫就是從這裡插值到手上。 */
+  const hold = {
+    startTime: 0,
+    target: { x: 0, y: 0 },
+    curA: { x: -IDLE_SPREAD, y: 0 },
+    curB: { x: IDLE_SPREAD, y: 0 },
+    fromA: { x: -IDLE_SPREAD, y: 0 },
+    fromB: { x: IDLE_SPREAD, y: 0 },
+    fromRotA: { x: 0, y: 0, z: -Math.PI / 8 },
+    fromRotB: { x: 0, y: 0, z: Math.PI / 8 },
+    tiltA: 0,
+    tiltB: 0,
+  };
+
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
   // 把模型節點複製成一顆獨立的筊杯：重置成原始網格座標（見上方註解），
   // 置中並統一縮放到跟舊版程序化幾何體相近的尺寸，這樣其餘的位置／旋轉／
@@ -83,6 +119,8 @@ export function createBwaScene(state) {
     // 用寬度（X 軸）決定筊杯大小：hold 手持狀態下兩顆筊杯中心距最窄只有 0.8，
     // 寬度抓 0.75 還留一點間隙，不會互相穿插。
     cup.scale.setScalar(0.75 / size.x);
+    // 抓起動畫要對筊杯做放大回饋，先把「原始尺寸」記下來當基準，動畫結束再還原
+    cup.userData.baseScale = cup.scale.x;
     return cup;
   }
 
@@ -144,14 +182,18 @@ export function createBwaScene(state) {
 
   function loop(now) {
     if (!renderer) return;
-    if (cupA && cupB && !holding && !state.bwaTossing) {
-      const time = now * 0.001;
-      // 微弱優雅的懸浮，幅度調小
-      const bob = Math.sin(time * 1.2) * 0.05;
-      cupA.position.y = bob;
-      cupB.position.y = bob;
-      cupA.rotation.z = Math.sin(time) * 0.03 - Math.PI / 8;
-      cupB.rotation.z = Math.cos(time) * 0.03 + Math.PI / 8;
+    if (cupA && cupB && !state.bwaTossing) {
+      if (holding) {
+        updateHold(now);
+      } else {
+        const time = now * 0.001;
+        // 微弱優雅的懸浮，幅度調小
+        const bob = Math.sin(time * 1.2) * 0.05;
+        cupA.position.y = bob;
+        cupB.position.y = bob;
+        cupA.rotation.z = Math.sin(time) * 0.03 - Math.PI / 8;
+        cupB.rotation.z = Math.cos(time) * 0.03 + Math.PI / 8;
+      }
     }
     renderer.render(scene, camera);
     loopRafId = requestAnimationFrame(loop);
@@ -167,8 +209,10 @@ export function createBwaScene(state) {
   }
   window.addEventListener('resize', resize);
 
+  /* 只負責把「手現在在哪」換算成世界座標記下來；真正的位移與旋轉都交給
+     render loop 的 updateHold() 逐格插值，這樣筊杯是「被抓起來並跟著手」，
+     而不是每次收到手勢座標就瞬移過去（也順便濾掉 MediaPipe 的座標抖動）。 */
   function setHoldPosition(nx01, ny01) {
-    holding = true;
     lastScreenPos = { x: nx01 * window.innerWidth, y: ny01 * window.innerHeight };
     if (!cupA || !cupB) return;
     const vFOV = camera.fov * Math.PI / 180;
@@ -176,22 +220,85 @@ export function createBwaScene(state) {
     const worldH = 2 * Math.tan(vFOV / 2) * dist;
     const worldW = worldH * camera.aspect;
 
-    const targetX = (nx01 - 0.5) * worldW;
-    const targetY = -(ny01 - 0.5) * worldH * 0.6;
+    hold.target.x = (nx01 - 0.5) * worldW;
+    hold.target.y = -(ny01 - 0.5) * worldH * 0.6;
 
-    // 手持時的間距縮小
-    cupA.position.set(targetX - 0.4, targetY, 0);
-    cupB.position.set(targetX + 0.4, targetY, 0);
-    cupA.rotation.set(0.2, 0.1, -0.05);
-    cupB.rotation.set(0.2, -0.1, 0.05);
+    if (!holding) {
+      // 剛被抓起：記錄兩顆筊杯此刻（閒置懸浮中）的位置與旋轉當作動畫起點
+      holding = true;
+      hold.startTime = performance.now();
+      hold.fromA = { x: cupA.position.x, y: cupA.position.y };
+      hold.fromB = { x: cupB.position.x, y: cupB.position.y };
+      hold.fromRotA = { x: cupA.rotation.x, y: cupA.rotation.y, z: cupA.rotation.z };
+      hold.fromRotB = { x: cupB.rotation.x, y: cupB.rotation.y, z: cupB.rotation.z };
+      hold.curA = { ...hold.fromA };
+      hold.curB = { ...hold.fromB };
+      hold.tiltA = 0;
+      hold.tiltB = 0;
+    }
+  }
+
+  /* 抓杯動畫（每格呼叫一次）：
+     階段一（t < 1）「被抓起來」——從閒置位置沿弧線抬起飛進手裡，
+     兩杯同時向內握緊旋轉，並帶一次放大回饋，做出「抓住」的手感；
+     階段二（t >= 1）「跟著手」——以阻尼逼近手的位置（兩杯係數略有差異，
+     跟隨時會自然錯位晃動），並依橫向殘餘距離換算慣性傾斜。 */
+  function updateHold(now) {
+    const t = Math.min(1, (now - hold.startTime) / GRAB_MS);
+    const e = easeOutCubic(t);
+    const arc = Math.sin(t * Math.PI); // 0→1→0：抬起再落回手中的弧線
+
+    if (t < 1) {
+      // 抓起中：位置由起點插值到手上，spread 同時從閒置間距收成手持間距
+      const spread = lerp(IDLE_SPREAD, HOLD_SPREAD, e);
+      hold.curA.x = lerp(hold.fromA.x, hold.target.x - spread, e);
+      hold.curA.y = lerp(hold.fromA.y, hold.target.y, e) + arc * GRAB_LIFT;
+      hold.curB.x = lerp(hold.fromB.x, hold.target.x + spread, e);
+      hold.curB.y = lerp(hold.fromB.y, hold.target.y, e) + arc * GRAB_LIFT;
+
+      cupA.rotation.set(lerp(hold.fromRotA.x, 0.2, e), lerp(hold.fromRotA.y, 0.1, e),
+                        lerp(hold.fromRotA.z, -0.05, e) - arc * GRAB_ROLL);
+      cupB.rotation.set(lerp(hold.fromRotB.x, 0.2, e), lerp(hold.fromRotB.y, -0.1, e),
+                        lerp(hold.fromRotB.z, 0.05, e) + arc * GRAB_ROLL);
+
+      const punch = 1 + arc * GRAB_SCALE_PUNCH;
+      cupA.scale.setScalar(cupA.userData.baseScale * punch);
+      cupB.scale.setScalar(cupB.userData.baseScale * punch);
+    } else {
+      // 已在手上：阻尼跟隨。先取殘餘距離當作橫向速度，再更新位置
+      const dxA = (hold.target.x - HOLD_SPREAD) - hold.curA.x;
+      const dxB = (hold.target.x + HOLD_SPREAD) - hold.curB.x;
+      hold.curA.x += dxA * FOLLOW_EASE_A;
+      hold.curA.y += (hold.target.y - hold.curA.y) * FOLLOW_EASE_A;
+      hold.curB.x += dxB * FOLLOW_EASE_B;
+      hold.curB.y += (hold.target.y - hold.curB.y) * FOLLOW_EASE_B;
+
+      // 慣性傾斜：手往哪個方向移動，筊杯就往反方向後仰一點
+      hold.tiltA += (clamp(-dxA * 0.6, -HOLD_TILT_MAX, HOLD_TILT_MAX) - hold.tiltA) * 0.2;
+      hold.tiltB += (clamp(-dxB * 0.6, -HOLD_TILT_MAX, HOLD_TILT_MAX) - hold.tiltB) * 0.2;
+
+      // 握在手上的細微呼吸感，避免完全靜止時看起來像貼圖
+      const breath = Math.sin(now * 0.0026) * 0.025;
+      cupA.rotation.set(0.2, 0.1, -0.05 + hold.tiltA + breath);
+      cupB.rotation.set(0.2, -0.1, 0.05 + hold.tiltB - breath);
+      cupA.scale.setScalar(cupA.userData.baseScale);
+      cupB.scale.setScalar(cupB.userData.baseScale);
+    }
+
+    cupA.position.set(hold.curA.x, hold.curA.y, 0);
+    cupB.position.set(hold.curB.x, hold.curB.y, 0);
   }
 
   function resetIdle() {
     holding = false;
     state.bwaTossing = false;
+    hold.tiltA = 0; hold.tiltB = 0;
     if (!cupA || !cupB) return;
-    cupA.position.set(-0.5, 0, 0);
-    cupB.position.set(0.5, 0, 0);
+    // 抓起動畫可能停在放大狀態，回到閒置一律還原成基準尺寸
+    cupA.scale.setScalar(cupA.userData.baseScale);
+    cupB.scale.setScalar(cupB.userData.baseScale);
+    cupA.position.set(-IDLE_SPREAD, 0, 0);
+    cupB.position.set(IDLE_SPREAD, 0, 0);
     // 預設閒置時：凸面朝上 (0,0,0)
     cupA.rotation.set(0, 0, -Math.PI / 8);
     cupB.rotation.set(0, 0, Math.PI / 8);
@@ -206,6 +313,9 @@ export function createBwaScene(state) {
     }
     holding = false;
     state.bwaTossing = true;
+    // 擲出前先把抓起動畫的放大回饋還原，避免整段落下都維持放大狀態
+    cupA.scale.setScalar(cupA.userData.baseScale);
+    cupB.scale.setScalar(cupB.userData.baseScale);
     const restY = REST_Y;
     const gravity = 4.8;
     // 從畫面上半部開始下落，整段掉落都在鏡頭內，避免只看見最後落地的結果。

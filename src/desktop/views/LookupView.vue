@@ -459,7 +459,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
           :class="{ recording: isRecording }"
           rows="5"
           :maxlength="QUESTION_MAX"
-          placeholder="例：我在考慮下個月換工作，想請示這個決定是否合適？　（可留白，或按下面的麥克風用說的）"
+          placeholder="例：該不該換工作？"
         ></textarea>
         <div class="ask-tools">
           <button
@@ -1112,6 +1112,151 @@ onBeforeUnmount(() => scannerEl.value?.stop())
   .steps li.on span { display: inline; font-size: 12px; }
   .row { flex-direction: column; }
   .btn { width: 100%; }
+
+  /* ── 手機一頁不捲動 ──
+     與求籤流程同一套作法：整頁鎖成一個 dvh 的直向 flex、卡片撐滿剩餘空間、
+     動作列貼在卡片底部，每一步的按鈕就都落在同一個位置。
+     直向留白與選項高度改成跟著螢幕高度縮放，矮螢幕（如 500px 高）也塞得下。 */
+  .lookup-page {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  /* 直排 flex 的子元素不會自動撐滿，寬度要寫明，否則會縮成內容寬擠在左邊 */
+  .bar {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  .wrap {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  /* 前三步：撐滿、不捲。
+     overflow-y: auto 是安全閥而不是常態——真實手機高度（667px 以上）都塞得下，
+     但若遇到極矮的視窗（例如桌機把視窗拉到 500px 高），寧可讓卡片內部捲，
+     也不要被外層的 overflow: hidden 把送出按鈕整顆裁掉。 */
+  .panel:not(.result) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: clamp(16px, 3vh, 28px) 18px clamp(14px, 2.4vh, 24px);
+  }
+  .panel:not(.result) .row {
+    margin-top: auto;
+    padding-top: clamp(12px, 2.6vh, 22px);
+  }
+  /* 籤詩那一頁例外：內容本來就可能很長（放大字級更長），
+     整頁不捲的話會直接裁掉籤文，所以讓卡片自己內部捲。 */
+  /* 籤詩永遠在最上面：卡片自己不捲，改成直排三段——
+     上段（籤詩＋收合列）固定、中段（解籤／籤書／摘要）自己捲、下段（動作按鈕）固定。
+     與掃碼分享頁同一套作法（見 FortuneShare.vue 的 .sheet / .reading-block）。 */
+  .panel.result {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel.result .kicker,
+  .panel.result .paper,
+  .panel.result .paper-toggle { flex: none; }
+  .panel.result .result-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  /* 以下每一項都是為了讓「一頁裝完」在 667px 高（iPhone SE）也成立。
+     第二步原本需要 665px 而只有 513px，差 152px；大頭是 5 列選項共 365px，
+     而每列裡的圖示就佔 44px——所以圖示跟著螢幕高度縮是最有效的一刀。 */
+  .kicker { margin-bottom: clamp(6px, 1.2vh, 10px); }
+  .bar { gap: clamp(6px, 1.4vh, 10px); }
+  .lede { margin-bottom: clamp(8px, 1.6vh, 18px); }
+  .choice-list { gap: clamp(6px, 0.9vh, 8px); }
+  .choice-row {
+    min-height: 0;
+    gap: clamp(9px, 1.8vh, 14px);
+    padding: clamp(7px, 1vh, 12px) 14px;
+  }
+  .choice-icon {
+    width: clamp(30px, 4.8vh, 40px);
+    height: clamp(30px, 4.8vh, 40px);
+  }
+  .btn { min-height: clamp(42px, 6.6vh, 48px); padding: clamp(9px, 1.6vh, 13px) 20px; }
+  .ask { min-height: clamp(64px, 10vh, 150px); }
+}
+
+/* 矮螢幕（iPhone SE 這一類 667px 高，或桌機把視窗拉扁）：
+   壓縮到極限之後仍差約 126px，一頁裝完就必須捨棄一項內容。
+   選擇捨棄選項的副標（「身體、看病、平安」這種），因為主標題本身已經說得清楚，
+   而「上一步／下一步」被裁掉或要捲才按得到的代價高得多。
+   高一點的手機（>720px）維持完整、副標照舊顯示。 */
+@media (max-width: 640px) and (max-height: 720px) {
+  .choice-desc { display: none; }
+  /* 字級開到「大／特大」時，第二步仍會超出約 20〜53px。
+     刪掉選方向那一頁的副標（「先讓神明知道你要問的方向…」）：標題
+     「想請示哪一方面？」已經把事情說完，而選項與「下一步」不能被裁掉。
+     只針對有選項清單的那一頁，其他步驟的說明照舊。 */
+  .panel:has(.choice-list) .lede { display: none; }
+  /* 同理，第三步在「大／特大」字級下也差約 43px。刪掉說明的第二句
+     （「不想打字也沒關係…」）——主按鈕本身就寫著「略過直接送出」，
+     這句話是重複的；籤號／方向的摘要與送出按鈕都保留。 */
+  .panel:has(.ask) .note { display: none; }
+  .choice-icon { width: 30px; height: 30px; }
+  .lede { font-size: calc(12.5px * var(--fs, 1)); line-height: 1.62; margin-bottom: 8px; }
+  .ask-tools { margin-top: 6px; }
+  .panel:not(.result) { padding-bottom: 12px; }
+  /* 離線提示是四五行的長句，在矮螢幕上會把「下一步」擠出畫面。
+     行高與留白收緊、字略縮，訊息完整保留（這種時候更需要看懂發生什麼事）。 */
+  .offline-note {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    font-size: calc(11.5px * var(--fs, 1));
+    line-height: 1.6;
+  }
+  /* 離線提示佔掉約 60px，只有那個狀態需要再擠一次。
+     用 :has() 精準命中，正常連線時選項維持寬鬆好按，不受影響。 */
+  .panel:has(.offline-note) .choice-list { gap: 4px; }
+  .panel:has(.offline-note) .choice-row { padding: 5px 14px; }
+  .panel:has(.offline-note) .choice-icon { width: 26px; height: 26px; }
+  .panel:has(.offline-note) .lede { margin-bottom: 6px; }
+  .panel:has(.offline-note) .offline-note { margin-bottom: 6px; }
+
+  /* 第三步的輸入框：矮螢幕給 56px（約兩行），仍夠看到自己打的字 */
+  .ask { min-height: 56px; }
+  .ask-tools { gap: 8px; }
+  /* 籤號／方向的摘要：上下兩列各佔約 50px，收成緊排的單列。
+     送出前確認籤號很重要，所以壓縮而不是隱藏。 */
+  .summary { margin-top: 10px; }
+  .summary > div { padding: 0.35rem 0.2rem; gap: 10px; }
+  .summary dt { flex-basis: 4.5em; font-size: calc(12px * var(--fs, 1)); line-height: 1.5; }
+  .summary dd { font-size: calc(13px * var(--fs, 1)); line-height: 1.5; }
+}
+
+
+/* 極矮螢幕（第一代 SE 這類 568px 高）：
+   到這個高度，說明文字與控制項只能二選一。保留控制項——使用者按不到
+   「下一步」是功能失效，少一段說明只是少一點體貼。標題本身仍說得清楚。 */
+@media (max-width: 640px) and (max-height: 600px) {
+  .lede { display: none; }
+  .ask-wrap { flex: 0 1 auto; min-height: 0; }
+  .ask { min-height: 52px; max-height: 84px; }
+  .offline-note { font-size: calc(11px * var(--fs, 1)); line-height: 1.5; padding: 6px 10px; margin-bottom: 6px; }
+  .summary { margin-top: 6px; }
+  .summary > div { padding: 0.25rem 0.2rem; }
 }
 
 @media (hover: none) {

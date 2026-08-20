@@ -462,7 +462,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
           :class="{ recording: isRecording }"
           rows="5"
           :maxlength="QUESTION_MAX"
-          placeholder="例：我在考慮下個月換工作，想請示這個決定是否合適？　（可留白，或按下面的麥克風用說的）"
+          placeholder="例：該不該換工作？"
         ></textarea>
         <div class="ask-tools">
           <button
@@ -1215,6 +1215,15 @@ onBeforeUnmount(() => scannerEl.value?.stop())
    高一點的手機（>720px）維持完整、副標照舊顯示。 */
 @media (max-width: 640px) and (max-height: 720px) {
   .choice-desc { display: none; }
+  /* 字級開到「大／特大」時，第二步仍會超出約 20〜53px。
+     刪掉選方向那一頁的副標（「先讓神明知道你要問的方向…」）：標題
+     「想請示哪一方面？」已經把事情說完，而選項與「下一步」不能被裁掉。
+     只針對有選項清單的那一頁，其他步驟的說明照舊。 */
+  .panel:has(.choice-list) .lede { display: none; }
+  /* 同理，第三步在「大／特大」字級下也差約 43px。刪掉說明的第二句
+     （「不想打字也沒關係…」）——主按鈕本身就寫著「略過直接送出」，
+     這句話是重複的；籤號／方向的摘要與送出按鈕都保留。 */
+  .panel:has(.ask) .note { display: none; }
   .choice-icon { width: 30px; height: 30px; }
   .lede { font-size: calc(12.5px * var(--fs, 1)); line-height: 1.62; margin-bottom: 8px; }
   .ask-tools { margin-top: 6px; }

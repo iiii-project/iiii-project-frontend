@@ -446,7 +446,7 @@ export function createFlowController({
       els.bwaThreeContainer.classList.toggle("tossable", isClickBwaMode);
       els.bwaHint.textContent = isClickBwaMode
         ? "點擊筊杯，向神明請示此籤"
-        : "請伸出雙手，掌心合起捧住筊杯";
+        : "請握拳抓住筊杯，往下一丟即可擲出";
       if (!isClickBwaMode) {
         resetBwaVisual();
         gestureEngine.resetBwaTracking();
@@ -582,7 +582,7 @@ export function createFlowController({
       );
     } catch (error) {
       state.bwaTossing = false;
-      els.bwaHint.textContent = "請伸出雙手，掌心合起捧住筊杯";
+      els.bwaHint.textContent = "請握拳抓住筊杯，往下一丟即可擲出";
       emit("toast", { message: error.message || "無法完成擲筊，請再試一次" });
     }
   }
@@ -703,7 +703,7 @@ export function createFlowController({
         els.bwaResultPanel.classList.add("hidden");
         resetBwaVisual();
         gestureEngine.resetBwaTracking();
-        els.bwaHint.textContent = "請伸出雙手，掌心合起捧住筊杯";
+        els.bwaHint.textContent = "請握拳抓住筊杯，往下一丟即可擲出";
         state.bwaTossing = false;
       }, 2200);
     } else {
