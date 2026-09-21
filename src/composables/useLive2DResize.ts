@@ -2,6 +2,7 @@ import { onBeforeUnmount, onMounted, type Ref, ref, watch } from 'vue'
 import type { ModelInfo } from '@/live2d/websocketService'
 import { LAppDelegate } from '@/live2d/webSDK/engine/lappdelegate'
 import { LAppLive2DManager } from '@/live2d/webSDK/engine/lapplive2dmanager'
+import { getCappedDevicePixelRatio } from '@/utils/device'
 
 // 這裡只服務單一使用場景（角色蓋滿全螢幕），所以拿掉了原本 React 版
 // window 模式/側邊欄相關的尺寸判斷分支，一律以容器實際尺寸（containerRef）為準——
@@ -9,6 +10,9 @@ import { LAppLive2DManager } from '@/live2d/webSDK/engine/lapplive2dmanager'
 const MIN_SCALE = 0.1
 const MAX_SCALE = 5.0
 const EASING_FACTOR = 0.3
+// diff 小於這個值就視為已收斂，停止 rAF 迴圈——否則使用者只要縮放過一次角色，
+// 這個迴圈就會跟 Live2D 主渲染迴圈一起永久疊加，每幀多算一次 easing，直到重整頁面。
+const EASE_STOP_THRESHOLD = 0.001
 const WHEEL_SCALE_STEP = 0.03
 const DEFAULT_SCALE = 1.0
 
@@ -101,6 +105,15 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
   function animateEase() {
     const clampedTarget = Math.max(MIN_SCALE, Math.min(MAX_SCALE, targetScale))
     const diff = clampedTarget - lastScale
+
+    if (Math.abs(diff) < EASE_STOP_THRESHOLD) {
+      lastScale = clampedTarget
+      applyScale(lastScale)
+      easeAnimationFrame = undefined
+      isAnimating = false
+      return
+    }
+
     lastScale += diff * EASING_FACTOR
     applyScale(lastScale)
     easeAnimationFrame = requestAnimationFrame(animateEase)
@@ -146,7 +159,7 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
         return
       }
 
-      const dpr = window.devicePixelRatio || 1
+      const dpr = getCappedDevicePixelRatio()
       canvas.width = Math.round(width * dpr)
       canvas.height = Math.round(height * dpr)
       canvas.style.width = `${width}px`

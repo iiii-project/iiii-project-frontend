@@ -228,8 +228,10 @@ class TempleArOracle extends HTMLElement {
   // 這裡包成一個 Promise 回傳的函式，供 flow-controller.start() 呼叫）
   _startCamera(){
     return new Promise((resolve, reject) => {
+      // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑，maxNumHands/modelComplexity
+      // 降到最低夠用的設定，避免每幀疊加兩個重模型直接把 CPU 榨乾。
       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-      hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+      hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
       hands.onResults(this._gestureEngine.onResults);
       this._hands = hands;
 
@@ -243,13 +245,22 @@ class TempleArOracle extends HTMLElement {
       selfieSegmentation.onResults((results) => { this._state.segmentationMask = results.segmentationMask; });
       this._selfieSegmentation = selfieSegmentation;
 
+      // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
+      // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把實際送進
+      // MediaPipe 的頻率夾到約 12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
+      const INFERENCE_INTERVAL_MS = 1000 / 12;
+      let lastInferenceTime = 0;
+
       const camera = new Camera(this._els.video, {
         onFrame: async () => {
+          const now = performance.now();
+          if (now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
+          lastInferenceTime = now;
           await hands.send({ image: this._els.video });
           await selfieSegmentation.send({ image: this._els.video });
         },
-        width: 1280,
-        height: 720,
+        width: 640,
+        height: 480,
       });
       this._camera = camera;
 
