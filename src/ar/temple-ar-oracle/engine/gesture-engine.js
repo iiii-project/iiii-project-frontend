@@ -28,6 +28,8 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   // pausedAt：合十判定短暫失敗時的暫停起點（見 handleIncenseGesture 的寬限期機制），
   // 不是 0 就代表目前正處於「暫停中，還沒真的歸零」的狀態。
   const incense = { active:false, startTime:0, pausedAt:0, visualX:0.5, visualY:0.62, visualTilt:0 };
+  // 手部示意圖目前顯示的是不是「雙手合十」，以及「判定跟目前顯示不一致」是從何時開始的（防抖用）
+  const pray = { shown:false, pendingSince:0 };
 
   // ---- 捧筊 / 拋擲 狀態 ----
   const cup = {
@@ -179,6 +181,27 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     return q.question ? `請雙手合十，默念：「${q.question}」` : `請雙手合十，默念關於「${q.category||'所求之事'}」的問題`;
   }
 
+  /* 手部示意圖切換（雙手在兩側 <-> 雙手合十）：只讀取下面既有的 isClose 判定結果，
+     不參與也不改動合十偵測與進入下一階段的邏輯。
+     防抖：判定跟目前顯示的圖不一致時，要連續維持 INCENSE_PRAY_DEBOUNCE_MS 才真的切換，
+     不論是切成合十還是切回兩側，避免偵測一兩格閃動造成圖片閃爍。 */
+  function setPrayImage(on){
+    els.incenseHandsOpen.classList.toggle('on', !on);
+    els.incenseHandsPray.classList.toggle('on', on);
+  }
+  function updatePrayImage(isClose, now){
+    if (isClose === pray.shown){ pray.pendingSince = 0; return; }
+    if (!pray.pendingSince){ pray.pendingSince = now; return; }
+    if (now - pray.pendingSince >= CONFIG.INCENSE_PRAY_DEBOUNCE_MS){
+      pray.shown = isClose; pray.pendingSince = 0;
+      setPrayImage(isClose);
+    }
+  }
+  function resetPrayImage(){
+    pray.shown = false; pray.pendingSince = 0;
+    setPrayImage(false);
+  }
+
   function handleIncenseGesture(handsLm){
     const now = performance.now();
     let isClose = false;
@@ -214,6 +237,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     }
 
     const visualCenter = centerPt ? updateIncenseFollow(centerPt) : null;
+    updatePrayImage(isClose, now);
 
     if (isClose){
       // 只要重新判定為合十，就取消任何還在倒數的寬限期，視為進度沒中斷過。
@@ -252,6 +276,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   function resetIncenseProgress(){
     incense.active = false; incense.pausedAt = 0;
     resetIncenseFollow();
+    resetPrayImage();
     els.incenseRing.classList.remove('on'); els.incenseRing.style.setProperty('--p',0);
     els.incenseHint.classList.remove('sensing'); els.incenseStick.classList.remove('sensing');
   }

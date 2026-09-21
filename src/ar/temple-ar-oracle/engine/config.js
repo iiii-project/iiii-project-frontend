@@ -43,6 +43,8 @@ export const CONFIG = {
   INCENSE_FOLLOW_EASE: 0.18,       // 香跟隨手部時的低通濾波，越小越柔和
   INCENSE_FOLLOW_Y_OFFSET: 0.1,   // 香位於合十雙手稍下方，避免遮住掌心
   INCENSE_TILT_MAX: 8,             // 跟隨手部左右移動時的最大傾角
+  INCENSE_PRAY_DEBOUNCE_MS: 300,   // 手部圖切換防抖：合十判定連續維持這麼久才切成「雙手合十」，
+                                   // 判定消失後也要再等這麼久才切回「雙手在兩側」，避免閃爍
 
   // ---- 環境光連動 / 粒子互動 ----
   AMBIENT_SAMPLE_MS: 300,      // 環境亮度取樣間隔

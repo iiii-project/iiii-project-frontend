@@ -90,6 +90,8 @@ class TempleArOracle extends HTMLElement {
       incenseAnchor: $('incense-anchor'),
       incenseRing: $('incense-progress-ring'),
       incenseStick: $('incense-stick'),
+      incenseHandsOpen: $('incense-hands-open'),
+      incenseHandsPray: $('incense-hands-pray'),
       drawHint: $('draw-hint'),
       qianTongZone: root.querySelector('#qian-tong-zone'),
       sticksGroup: root.querySelector('#sticks'),
@@ -106,6 +108,9 @@ class TempleArOracle extends HTMLElement {
       bwaResultDesc: $('bwa-result-desc'),
     };
     // 前面已經直接取得模板產生的 <video id="input_video"> 節點，不需要額外處理。
+
+    // 手部圖先解碼好，第一次淡入切換時才不會因為現場解碼一張大 PNG 而卡一下
+    [this._els.incenseHandsOpen, this._els.incenseHandsPray].forEach((img) => img.decode?.().catch(() => {}));
 
     this._state = createArState();
     this._particleSystem = createParticleSystem(this._els.particleCanvas);

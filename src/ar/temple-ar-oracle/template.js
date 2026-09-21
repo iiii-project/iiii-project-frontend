@@ -13,6 +13,9 @@
    （神像照本身已去背，直接疊在背景照上方置中即可，不需要另外合成一張圖）。 */
 const ritualOverlayBgUrl = new URL('../../assets/images/temple_background.webp', import.meta.url).href
 const ritualOverlayEmperorUrl = new URL('../../assets/images/jade.webp', import.meta.url).href
+/* 誠心默念的手部圖：兩張各自都是「左右兩隻手」在同一張圖裡，尺寸相同（1448x1086） */
+const handsOpenUrl = new URL('../../assets/images/hands-open.png', import.meta.url).href
+const handsPrayUrl = new URL('../../assets/images/hands-pray.png', import.meta.url).href
 
 export function renderTemplate() {
   return `
@@ -70,6 +73,12 @@ export function renderTemplate() {
       <h1 class="ritual-title">誠　心　默　念</h1>
       <div class="hairline mt-4"></div>
       <p id="incense-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請雙手合十，於心中默念所求之事</p>
+    </div>
+    <!-- 手部示意圖：預設「雙手在兩側」，偵測到合十時淡入「雙手合十」。兩張同時放在 DOM 裡預先載入，
+         只切 opacity（見 gesture-engine.js 的 updatePrayImage）。 -->
+    <div id="incense-hands" aria-hidden="true">
+      <img id="incense-hands-open" class="incense-hands-img on" src="${handsOpenUrl}" alt="" decoding="async" />
+      <img id="incense-hands-pray" class="incense-hands-img" src="${handsPrayUrl}" alt="" decoding="async" />
     </div>
     <div id="incense-anchor">
       <div id="incense-progress-ring"></div>
