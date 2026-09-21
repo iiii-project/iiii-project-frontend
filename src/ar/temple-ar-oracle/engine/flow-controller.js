@@ -415,7 +415,7 @@ export function createFlowController({
             ? "拿起手機，上下搖動三次即可抽籤"
             : useMobileShake
               ? "未開啟動作感測，可直接抽籤。"
-              : "請對著籤筒握拳，上下搖晃";
+              : "請握拳握住籤筒，或雙手上下搖晃";
       // 手機正常流程只透過搖動抽籤；僅在感測器不可用時才顯示直接抽籤備援。
       els.btnManualDraw.classList.toggle(
         "hidden",

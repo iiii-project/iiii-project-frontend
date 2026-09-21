@@ -13,9 +13,12 @@
    （神像照本身已去背，直接疊在背景照上方置中即可，不需要另外合成一張圖）。 */
 const ritualOverlayBgUrl = new URL('../../assets/images/temple_background.webp', import.meta.url).href
 const ritualOverlayEmperorUrl = new URL('../../assets/images/jade.webp', import.meta.url).href
-/* 誠心默念的手部圖：兩張各自都是「左右兩隻手」在同一張圖裡，尺寸相同（1448x1086） */
-const handsOpenUrl = new URL('../../assets/images/hands-open.png', import.meta.url).href
-const handsPrayUrl = new URL('../../assets/images/hands-pray.png', import.meta.url).href
+/* 誠心默念的手部圖：兩張各自都是「左右兩隻手」在同一張圖裡，尺寸相同（已轉 WebP 縮到 900x675，顯示寬度上限 860px） */
+const handsOpenUrl = new URL('../../assets/images/hands-open.webp', import.meta.url).href
+const handsPrayUrl = new URL('../../assets/images/hands-pray.webp', import.meta.url).href
+/* 搖籤：兩手中間留有空隙的雙手圖（籤筒放進空隙）。捏取：單手、手臂從上方進入、指尖朝下。已轉 WebP：shake 1000x750（顯示上限 1000px）、pinch 760x570（顯示上限 720px）*/
+const handsShakeUrl = new URL('../../assets/images/hands-shake.webp', import.meta.url).href
+const handsPinchUrl = new URL('../../assets/images/hands-pinch.webp', import.meta.url).href
 
 export function renderTemplate() {
   return `
@@ -91,10 +94,13 @@ export function renderTemplate() {
     <div class="glass-card ritual-card text-center fade-in">
       <h1 class="ritual-title">祈　願　抽　籤</h1>
       <div class="hairline mt-4"></div>
-      <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請對著籤筒握拳，上下搖晃</p>
+      <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請握拳握住籤筒，或雙手上下搖晃</p>
       <button id="btn-manual-draw" class="btn-line mt-4 hidden" type="button">點 擊 抽 籤</button>
     </div>
 
+    <!-- 搖籤舞台：手部圖 + 籤筒放在同一個容器裡，搖晃時整個容器一起做 transform 上下抖動。
+         籤筒在下層、手部圖在上層，手指才會蓋在筒身邊緣，看起來像手握著籤筒。 -->
+    <div id="draw-stage">
     <div id="qian-tong-zone">
       <div id="shake-progress-ring"></div>
       <div id="qian-tong">
@@ -133,6 +139,16 @@ export function renderTemplate() {
           <circle cx="8" cy="6" r="7" fill="#c94b40" stroke="var(--gold)" stroke-width="1.5"/>
         </svg>
         <div class="stick-tip"></div>
+      </div>
+    </div>
+    <img id="draw-hands-shake" class="draw-hands-img" src="${handsShakeUrl}" alt="" decoding="async" />
+    </div>
+
+    <!-- 捏取的手：搖出命中籤後從上方滑入，指尖對準命中籤枝頂端（位置由 gesture-engine.js 量測後寫入
+         --target-x / --target-y）。手往上滑動觸發後，這隻手與籤枝一起上移再淡出。 -->
+    <div id="draw-pinch-clip" aria-hidden="true">
+      <div id="draw-pinch">
+        <img id="draw-pinch-img" src="${handsPinchUrl}" alt="" decoding="async" />
       </div>
     </div>
   </div>

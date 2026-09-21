@@ -93,6 +93,11 @@ class TempleArOracle extends HTMLElement {
       incenseHandsOpen: $('incense-hands-open'),
       incenseHandsPray: $('incense-hands-pray'),
       drawHint: $('draw-hint'),
+      drawStage: $('draw-stage'),
+      drawHandsShake: $('draw-hands-shake'),
+      drawPinchClip: $('draw-pinch-clip'),
+      drawPinch: $('draw-pinch'),
+      drawPinchImg: $('draw-pinch-img'),
       qianTongZone: root.querySelector('#qian-tong-zone'),
       sticksGroup: root.querySelector('#sticks'),
       shakeRing: $('shake-progress-ring'),
@@ -110,7 +115,10 @@ class TempleArOracle extends HTMLElement {
     // 前面已經直接取得模板產生的 <video id="input_video"> 節點，不需要額外處理。
 
     // 手部圖先解碼好，第一次淡入切換時才不會因為現場解碼一張大 PNG 而卡一下
-    [this._els.incenseHandsOpen, this._els.incenseHandsPray].forEach((img) => img.decode?.().catch(() => {}));
+    [
+      this._els.incenseHandsOpen, this._els.incenseHandsPray,
+      this._els.drawHandsShake, this._els.drawPinchImg,
+    ].forEach((img) => img.decode?.().catch(() => {}));
 
     this._state = createArState();
     this._particleSystem = createParticleSystem(this._els.particleCanvas);
@@ -224,10 +232,11 @@ class TempleArOracle extends HTMLElement {
   // 這裡包成一個 Promise 回傳的函式，供 flow-controller.start() 呼叫）
   _startCamera(){
     return new Promise((resolve, reject) => {
-      // 中低階 Android 上手勢推論多半落在 wasm/CPU 路徑，maxNumHands/modelComplexity
-      // 降到最低夠用的設定，避免把 CPU 榨乾。
+      // 中低階 Android 上手勢推論多半落在 wasm/CPU 路徑，modelComplexity 降到最低夠用的設定，
+      // 避免把 CPU 榨乾。maxNumHands 要 > 2 才有辦法在多人入鏡時挑出「主要使用者」的手
+      // （見 engine/primary-user.js），數字越大越吃效能。
       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-      hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+      hands.setOptions({ maxNumHands: CONFIG.MAX_TRACKED_HANDS, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
       hands.onResults(this._gestureEngine.onResults);
       this._hands = hands;
 

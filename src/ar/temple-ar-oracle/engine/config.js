@@ -6,16 +6,35 @@
    已移除，改由外部（新前端）透過 attribute 傳入 question/category。
    ========================================================================= */
 export const CONFIG = {
-  FIST_CURL_RATIO: 1.15,
-  FIST_MIN_CURLED: 3,
-  SHAKE_VELOCITY_DEADZONE: 0.0035,
-  SHAKE_REQUIRED_OSCILLATIONS: 3,
-  SHAKE_MIN_DURATION_MS: 1400,
-  SHAKE_TARGET_DURATION_MS: 2400,
-  SHAKE_RESET_GRACE_MS: 500,
+  // ---- 搖籤：門檻已放寬（JJ5 效能較差、推論約 12 FPS，原本的門檻太難觸發）----
+  // 「握拳/握籤」或「雙手上下搖晃」任一種都算進入搖籤狀態；累積搖晃量與命中籤的隨機決定邏輯不變。
+  FIST_CURL_RATIO: 1.3,           // 原 1.15：手指沒彎到底也算握住
+  FIST_MIN_CURLED: 2,             // 原 3：四指中有兩指彎曲即算握拳
+  SHAKE_VELOCITY_DEADZONE: 0.0025, // 原 0.0035：每格位移超過此值才算「有在動」
+  SHAKE_REQUIRED_OSCILLATIONS: 2, // 原 3：上下折返次數
+  SHAKE_MIN_DURATION_MS: 1000,    // 原 1400
+  SHAKE_TARGET_DURATION_MS: 1800, // 原 2400（進度環走完的時間）
+  SHAKE_RESET_GRACE_MS: 800,      // 原 500：低 FPS 下手勢偶爾掉幾格，給寬一點才不會歸零
 
-  PINCH_THRESHOLD_RATIO: 0.35,
-  DRAW_UP_DELTA_RATIO: 0.09,
+  // ---- 捏取階段：改成「往上滑動」觸發（不再要求真正的捏合手勢）----
+  // 任一隻手的手腕或食指指尖，在 SWIPE_UP_WINDOW_MS 內往上移動超過畫面高度的 SWIPE_UP_DELTA_RATIO 即成功。
+  SWIPE_UP_DELTA_RATIO: 0.15,
+  SWIPE_UP_WINDOW_MS: 500,
+  SWIPE_UP_CONFIRM_FRAMES: 2,     // 防抖：連續幾格都成立才觸發，避免單格雜訊誤觸
+  PINCH_ARM_DELAY_MS: 700,        // 手滑入（400ms）後再等一下才開始偵測，避免搖籤最後那一下的動作被當成上滑
+  PINCH_LIFT_MS: 600,             // 捏取的手與籤枝一起上移的時間
+  PINCH_LIFT_VH: 0.2,             // 上移距離（螢幕高度的比例）
+  PINCH_FADE_MS: 250,             // 上移完成後淡出的時間
+
+  // ---- 主要使用者判定：畫面可能同時有多人，只認「占畫面比例最大、且最靠近畫面中央」的那一位 ----
+  // MediaPipe Hands 只給手、不給人，這裡用手的大小（越近/越大）代表人占畫面的比例，
+  // 再把彼此夠近、大小相近的兩隻手歸成同一個人。
+  MAX_TRACKED_HANDS: 4,           // 同時追蹤的手數上限（兩個人）。調高會更吃效能
+  USER_PAIR_MAX_DIST: 8,          // 兩手中心距離 ÷ 手的平均大小 小於此值才視為同一人的雙手
+  USER_PAIR_SIZE_RATIO: 1.6,      // 兩手大小比在 1/此值 ~ 此值 之間才視為同一人
+  USER_CENTER_WEIGHT: 0.8,        // 越大越偏好靠近畫面中央的人（0 = 只看大小）
+  USER_STICKY_DIST: 0.18,         // 這格的人與上一格選定的人距離小於此值，視為同一位
+  USER_STICKY_BONUS: 1.3,         // 同一位使用者的分數加成，避免兩人差不多大時來回切換
 
   // ---- 捧筊與拋擲（單手握拳抓杯／往下丟手勢）----
   // 判定基準是「四指平均彎曲量」curlAmount（指尖到手腕距離 ÷ 指根到手腕距離）：
