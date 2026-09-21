@@ -266,6 +266,23 @@
 }
 
 /* ===================== 畫面二：抓杯與拋擲（Three.js 3D 渲染）===================== */
+/* 擲筊手部圖（方形圖，貼畫面下緣置中）。給你微調用的 CSS 變數：
+   --bwa-hands-w   手部圖寬度（高度＝寬度；上限 60vh 才不會頂到上面的文字卡）
+   --cup-x/--cup-y 「手心凹處」在手部圖上的位置（百分比，相對手部圖左上角）＝ 3D 筊杯閒置時放的地方
+   筊杯畫布（#bwa-three-container，z-index 11）在手部圖上層，所以筊杯看起來是放在手上。 */
+#bwa-hands{
+  --bwa-hands-w: min(94vw, 900px, 60vh);
+  --cup-x: 50%; --cup-y: 46%;
+  position:absolute; left:0; right:0; bottom:0; margin-inline:auto; z-index:1; pointer-events:none;
+  width:var(--bwa-hands-w); aspect-ratio:1 / 1;
+}
+.bwa-hands-img{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+  opacity:0; transition: opacity 0.25s ease;
+}
+.bwa-hands-img.on{ opacity:1; }
+#bwa-cup-anchor{ position:absolute; left:var(--cup-x); top:var(--cup-y); width:0; height:0; }
+
 #bwa-three-container{ position:fixed; inset:0; z-index:11; pointer-events:none; }
 /* 手動模式：改成直接點筊杯擲出，這時容器才需要收事件 */
 #bwa-three-container.tossable{ pointer-events:auto; cursor:pointer; }

@@ -44,6 +44,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   // ---- 捧筊 / 拋擲 狀態 ----
   const cup = {
     holding: false,      // 是否正處於「握拳抓杯跟隨」狀態
+    grabFrames: 0,       // 連續偵測到「握拳」的影格數（抓杯防抖）
     openFrames: 0,       // 連續偵測到「手掌張開」的影格數（用於防抖動誤判）
     posHistory: [],       // {t,x,y} 手腕螢幕座標歷史，用於估計拋擲瞬間的移動速度/方向
   };
@@ -473,10 +474,20 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     const c = curlAmount(lm);
     const sx = wrist.x * window.innerWidth, sy = wrist.y * window.innerHeight;
 
+    // 已擲出一次後（筊杯動畫、結果判定進行中）不再偵測：不重複抓杯、不重複觸發擲出。
+    // 只有結果不是聖筊、流程放行重擲時（flow-controller 會把 bwaTossing 解鎖）才會重新開始偵測。
+    if (state.bwaTossing){
+      hideCupIndicator(); cup.grabFrames = 0; cup.openFrames = 0;
+      return;
+    }
+
     updateCupIndicator(sx, sy, cup.holding);
 
     if (!cup.holding){
-      if (c < CONFIG.CUP_CURL_MAX){
+      // 防抖：握拳要連續 CUP_GRAB_CONFIRM_FRAMES 格才算抓住
+      cup.grabFrames = c < CONFIG.CUP_CURL_MAX ? cup.grabFrames + 1 : 0;
+      if (cup.grabFrames >= CONFIG.CUP_GRAB_CONFIRM_FRAMES){
+        cup.grabFrames = 0;
         cup.holding = true; cup.openFrames = 0; cup.posHistory = [];
         els.bwaHint.textContent = '已抓住筊杯，往下一丟即可擲出';
         // 動態景深：抓住筊杯時背景失焦模糊，讓視覺焦點鎖定在筊杯上
@@ -517,7 +528,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
 
     if (openByCurl || openByVelocity || openByAccel){
       cup.openFrames++;
-      const framesNeeded = openByVelocity || openByAccel ? 1 : CONFIG.OPEN_CONFIRM_FRAMES;
+      const framesNeeded = openByVelocity || openByAccel ? CONFIG.THROW_CONFIRM_FRAMES : CONFIG.OPEN_CONFIRM_FRAMES;
       if (cup.openFrames >= framesNeeded && !state.bwaTossing){
         els.outputCanvas.classList.remove('dof-blur');
         els.arDecoration.classList.remove('dof-blur');
@@ -593,7 +604,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
 
   return {
     onResults, resetPinch, resetShakeProgress, resetIncenseProgress,
-    resetBwaTracking(){ cup.holding=false; cup.openFrames=0; cup.posHistory=[]; },
+    resetBwaTracking(){ cup.holding=false; cup.grabFrames=0; cup.openFrames=0; cup.posHistory=[]; },
     destroy
   };
 }

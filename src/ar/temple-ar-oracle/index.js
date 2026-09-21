@@ -105,6 +105,9 @@ class TempleArOracle extends HTMLElement {
       qianTong: $('qian-tong'),
       btnManualDraw: $('btn-manual-draw'),
       bwaHint: $('bwa-hint'),
+      bwaHandsCup: $('bwa-hands-cup'),
+      bwaHandsToss: $('bwa-hands-toss'),
+      bwaCupAnchor: $('bwa-cup-anchor'),
       bwaThreeContainer: $('bwa-three-container'),
       btnClickBwa: $('btn-click-bwa'),
       bwaThreeContainer: $('bwa-three-container'),
@@ -118,6 +121,7 @@ class TempleArOracle extends HTMLElement {
     [
       this._els.incenseHandsOpen, this._els.incenseHandsPray,
       this._els.drawHandsShake, this._els.drawPinchImg,
+      this._els.bwaHandsCup, this._els.bwaHandsToss,
     ].forEach((img) => img.decode?.().catch(() => {}));
 
     this._state = createArState();
@@ -188,6 +192,8 @@ class TempleArOracle extends HTMLElement {
     });
 
     this._bwaScene.init(this._els.bwaThreeContainer);
+    // 3D 筊杯閒置時放在「手心凹處」：位置由手部圖上的 #bwa-cup-anchor 決定（CSS 變數 --cup-x/--cup-y）
+    this._bwaScene.setPalmAnchor(this._els.bwaCupAnchor);
 
     this._els.btnManualDraw.addEventListener('click', () => this._flow.completeDraw());
     this._els.btnClickBwa.addEventListener('click', () => this._flow.castClickBwa());

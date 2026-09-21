@@ -434,6 +434,7 @@ export function createFlowController({
       /* 筊杯容器在隱藏狀態下 clientWidth/Height 都是 0，three.js 會以 0×0 建立
          renderer。這裡等它顯示出來後觸發一次 resize，讓畫布重新取得正確尺寸。 */
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+      setBwaHands("cup"); // 進場顯示「捧著」的手，筊杯放在手心凹處（位置由 bwa-scene 的 setPalmAnchor 決定）
       els.bwaResultPanel.classList.add("hidden");
       /* 手動模式改成「直接點筊杯」：不再另外給一顆擲筊按鈕，
          筊杯容器打開 pointer-events，由 index.js 的 pointerdown 做命中判定。 */
@@ -501,6 +502,13 @@ export function createFlowController({
     }
   }
 
+  /* 擲筊手部圖切換：'cup' 捧著（進場、可以再擲時）／'toss' 拋擲（擲出到筊杯動畫結束）／'none' 都不顯示。
+     兩張都預先載入在 DOM 裡，這裡只切 .on（CSS 是 opacity 淡入淡出約 250ms）。 */
+  function setBwaHands(mode) {
+    els.bwaHandsCup.classList.toggle("on", mode === "cup");
+    els.bwaHandsToss.classList.toggle("on", mode === "toss");
+  }
+
   function resetBwaVisual() {
     els.outputCanvas.classList.remove("dof-blur");
     els.arDecoration.classList.remove("dof-blur");
@@ -548,6 +556,7 @@ export function createFlowController({
   async function tossBwa(_sx, _sy, _vx, _vy) {
     if (state.bwaTossing) return;
     state.bwaTossing = true;
+    setBwaHands("toss"); // 擲出：手部圖切成「拋擲」，同時開始既有的筊杯拋擲動畫
     els.bwaHint.textContent = "筊杯擲出中…";
     try {
       // 進場時就預取好的結果，這裡通常立刻拿到，不會卡在網路上
@@ -575,6 +584,8 @@ export function createFlowController({
           if (navigator.vibrate) navigator.vibrate(20);
         },
         () => {
+          // 筊杯動畫結束：拋擲的手淡出（250ms），淡出完再接續原本的結果判定
+          setBwaHands("none");
           setTimeout(() => {
             resolveBwaResult();
           }, 250);
@@ -582,6 +593,7 @@ export function createFlowController({
       );
     } catch (error) {
       state.bwaTossing = false;
+      setBwaHands("cup");
       els.bwaHint.textContent = "請握拳抓住筊杯，往下一丟即可擲出";
       emit("toast", { message: error.message || "無法完成擲筊，請再試一次" });
     }
@@ -591,6 +603,7 @@ export function createFlowController({
     if (state.bwaTossing || !state.sessionId || state.current !== "bwa") return;
     let keepLockedForTransition = false;
     state.bwaTossing = true;
+    setBwaHands("toss");
     els.btnClickBwa.disabled = true;
     // 結果通常已經預取好了，所以這裡直接說「擲出中」，不再出現「正在請示…」的等待字樣
     els.bwaHint.textContent = "筊杯擲出中…";
@@ -602,6 +615,7 @@ export function createFlowController({
          這裡只是取回同一個 Promise，讓過場去等它。 */
       const pending = result.confirmed ? startInterpretOnce() : null;
       await playClickBwaAnimation(result);
+      setBwaHands("none");
       els.bwaResultPanel.classList.remove("hidden");
 
       if (result.confirmed) {
@@ -652,6 +666,7 @@ export function createFlowController({
         prefetchCast();
       }
     } catch (error) {
+      setBwaHands("cup"); // 出錯沒擲成：手部圖回到「捧著」
       emit("toast", { message: error.message || "無法完成擲筊，請再試一次" });
     } finally {
       if (!keepLockedForTransition) {
@@ -703,6 +718,7 @@ export function createFlowController({
         els.bwaResultPanel.classList.add("hidden");
         resetBwaVisual();
         gestureEngine.resetBwaTracking();
+        setBwaHands("cup"); // 還沒連續聖筊、可以再擲：手部圖回到「捧著」，筊杯回到手心
         els.bwaHint.textContent = "請握拳抓住筊杯，往下一丟即可擲出";
         state.bwaTossing = false;
       }, 2200);

@@ -19,6 +19,9 @@ const handsPrayUrl = new URL('../../assets/images/hands-pray.webp', import.meta.
 /* 搖籤：兩手中間留有空隙的雙手圖（籤筒放進空隙）。捏取：單手、手臂從上方進入、指尖朝下。已轉 WebP：shake 1000x750（顯示上限 1000px）、pinch 760x570（顯示上限 720px）*/
 const handsShakeUrl = new URL('../../assets/images/hands-shake.webp', import.meta.url).href
 const handsPinchUrl = new URL('../../assets/images/hands-pinch.webp', import.meta.url).href
+/* 擲筊：雙手捧著（筊杯放在手心凹處）與雙手拋擲。方形圖，已轉 WebP 900x900（顯示寬度上限 900px） */
+const handsCupUrl = new URL('../../assets/images/hands-cup.webp', import.meta.url).href
+const handsTossUrl = new URL('../../assets/images/hands-toss.webp', import.meta.url).href
 
 export function renderTemplate() {
   return `
@@ -160,6 +163,14 @@ export function renderTemplate() {
       <div class="hairline mt-4"></div>
       <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請握拳抓住筊杯，往下一丟即可擲出</p>
       <button id="btn-click-bwa" class="btn-line mt-4 hidden" type="button">擲　筊</button>
+    </div>
+
+    <!-- 手部圖：進場顯示「捧著」，擲出時切成「拋擲」，筊杯動畫結束後淡出。兩張預先載入、只切 opacity。
+         #bwa-cup-anchor 標出「手心凹處」的位置（--cup-x/--cup-y），3D 筊杯閒置時就放在這裡（見 bwa-scene.js 的 setPalmAnchor）。 -->
+    <div id="bwa-hands" aria-hidden="true">
+      <img id="bwa-hands-cup" class="bwa-hands-img on" src="${handsCupUrl}" alt="" decoding="async" />
+      <img id="bwa-hands-toss" class="bwa-hands-img" src="${handsTossUrl}" alt="" decoding="async" />
+      <div id="bwa-cup-anchor"></div>
     </div>
 
     <!-- 筊杯以 Three.js 即時 3D 渲染（真實光照 + 陰影 + PBR 材質），取代先前的 2D 卡片翻轉 -->
