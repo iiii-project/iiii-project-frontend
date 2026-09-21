@@ -18,7 +18,6 @@
            sequence-complete, toast
    ========================================================================= */
 import { Hands } from '@mediapipe/hands';
-import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
 
 import { CONFIG } from './engine/config.js';
@@ -161,14 +160,6 @@ class TempleArOracle extends HTMLElement {
     // 過場影片先預載，播放時才不會頓一下
     preloadOracleTransition(this._els, { src: transitionSrc });
 
-    /* 攝影機畫布的後備緩衝區要在這裡就校正好。
-       原本只在 MediaPipe 送影格時才校正，但搖籤模式不開鏡頭、
-       永遠等不到影格，畫布就會一直停在 HTML 預設的 300x150。 */
-    this._gestureEngine.syncCanvasSize();
-    this._onViewportResize = () => this._gestureEngine.syncCanvasSize();
-    window.addEventListener('resize', this._onViewportResize);
-    window.addEventListener('orientationchange', this._onViewportResize);
-
     this._flow = createFlowController({
       els: this._els,
       state: this._state,
@@ -228,24 +219,14 @@ class TempleArOracle extends HTMLElement {
   // 這裡包成一個 Promise 回傳的函式，供 flow-controller.start() 呼叫）
   _startCamera(){
     return new Promise((resolve, reject) => {
-      // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑，maxNumHands/modelComplexity
-      // 降到最低夠用的設定，避免每幀疊加兩個重模型直接把 CPU 榨乾。
+      // 中低階 Android 上手勢推論多半落在 wasm/CPU 路徑，maxNumHands/modelComplexity
+      // 降到最低夠用的設定，避免把 CPU 榨乾。
       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
       hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
       hands.onResults(this._gestureEngine.onResults);
       this._hands = hands;
 
-      /* 人像去背：把最新的分割遮罩存進共用的 state，讓 gesture-engine 畫
-         #output_canvas 時可以只畫出人像、其餘鏤空，讓底下的神明實景疊加層透出來。
-         跟 Hands 各自獨立送同一格畫面，彼此不互相依賴、也不用等對方。 */
-      const selfieSegmentation = new SelfieSegmentation({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
-      });
-      selfieSegmentation.setOptions({ modelSelection: 1 });
-      selfieSegmentation.onResults((results) => { this._state.segmentationMask = results.segmentationMask; });
-      this._selfieSegmentation = selfieSegmentation;
-
-      // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
+      // 手勢判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
       // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把實際送進
       // MediaPipe 的頻率夾到約 12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
       const INFERENCE_INTERVAL_MS = 1000 / 12;
@@ -257,7 +238,6 @@ class TempleArOracle extends HTMLElement {
           if (now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
           lastInferenceTime = now;
           await hands.send({ image: this._els.video });
-          await selfieSegmentation.send({ image: this._els.video });
         },
         width: 640,
         height: 480,
@@ -297,14 +277,8 @@ class TempleArOracle extends HTMLElement {
   destroy(){
     if (this._destroyed) return;
     this._destroyed = true;
-    if (this._onViewportResize){
-      window.removeEventListener('resize', this._onViewportResize);
-      window.removeEventListener('orientationchange', this._onViewportResize);
-      this._onViewportResize = null;
-    }
     try { this._camera?.stop?.(); } catch (e) {}
     try { this._hands?.close?.(); } catch (e) {}
-    try { this._selfieSegmentation?.close?.(); } catch (e) {}
     try {
       const stream = this._els?.video?.srcObject;
       if (stream && stream.getTracks) stream.getTracks().forEach(t => t.stop());
