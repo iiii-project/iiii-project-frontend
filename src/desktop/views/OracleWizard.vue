@@ -348,13 +348,11 @@ async function submit() {
     bindAr(el)
     setBodyLock(true)
     try {
-      /* 手機（含把視窗縮窄的桌機）一律用搖的；桌機維持 auto，
-         會先試鏡頭手勢，失敗才降級成點擊。 */
-      const useShake = window.matchMedia('(max-width: 640px)').matches
+      /* 只有電腦版：一律 auto，先試鏡頭手勢，失敗才降級成點擊。 */
       await el.start({
         question: askedQuestion.value,
         category: chosen.value?.arLabel ?? '綜合運勢',
-        inputMode: useShake ? 'motion' : 'auto'
+        inputMode: 'auto'
       })
     } catch (error) {
       // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況

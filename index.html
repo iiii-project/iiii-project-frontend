@@ -2,7 +2,10 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 目標裝置 Warpple JJ5（27 吋 Full HD，直立擺放 = 1080×1920）：版面寬度固定 1080px，
+         不受裝置回報的 devicePixelRatio 影響，也不會落入 @media (max-width: 640px) 的窄版樣式。
+         桌機瀏覽器會忽略這行。 -->
+    <meta name="viewport" content="width=1080, initial-scale=1" />
     <title>AI 求籤互動系統</title>
   </head>
   <body>
