@@ -459,7 +459,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
           :class="{ recording: isRecording }"
           rows="5"
           :maxlength="QUESTION_MAX"
-          placeholder="例：該不該換工作？"
+          placeholder="例：今年運勢是否順利，能否心想事成？"
         ></textarea>
         <div class="ask-tools">
           <button
