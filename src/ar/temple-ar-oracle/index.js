@@ -250,14 +250,25 @@ class TempleArOracle extends HTMLElement {
       // MediaPipe 的頻率夾到約 12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
       const INFERENCE_INTERVAL_MS = 1000 / 12;
       let lastInferenceTime = 0;
+      // 低階 Android 上一輪 hands+selfieSegmentation 推論可能就超過 83ms（interval），
+      // 只用時間節流沒辦法防止「上一輪還沒跑完、下一輪又送進去」疊加成 backlog，
+      // 一定要用這個旗標擋掉重疊呼叫，寧可掉幀也不要讓推論工作愈堆愈多。
+      let inferenceRunning = false;
 
       const camera = new Camera(this._els.video, {
         onFrame: async () => {
+          if (inferenceRunning) return;
           const now = performance.now();
           if (now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
+
+          inferenceRunning = true;
           lastInferenceTime = now;
-          await hands.send({ image: this._els.video });
-          await selfieSegmentation.send({ image: this._els.video });
+          try {
+            await hands.send({ image: this._els.video });
+            await selfieSegmentation.send({ image: this._els.video });
+          } finally {
+            inferenceRunning = false;
+          }
         },
         width: 640,
         height: 480,
