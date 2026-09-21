@@ -59,6 +59,22 @@ const FOLLOW_EASE_A = 0.3;    // 跟手的阻尼係數；兩杯稍微不同，�
 const FOLLOW_EASE_B = 0.24;
 const HOLD_TILT_MAX = 0.35;   // 慣性傾斜上限（弧度）
 
+/* ---- 渲染負擔（JJ5 效能較差；筊杯畫布是全螢幕，1080x1920 直式 = 200 萬像素）----
+   模型本身很輕（兩杯合計約 1,800 個三角面、貼圖各 225x225），瓶頸在「填色的像素量」，所以降解析度最有效：
+   畫布的實際像素 = CSS 尺寸 × min(devicePixelRatio, BWA_MAX_PIXEL_RATIO) × BWA_RENDER_SCALE，
+   再由瀏覽器拉伸回滿版。筊杯邊緣會稍微變柔，覺得太糊就把 BWA_RENDER_SCALE 往 1 調。 */
+const BWA_MAX_PIXEL_RATIO = 1;    // 不管螢幕 DPR 多高，最多當成 1 倍（原本上限是 2）
+const BWA_RENDER_SCALE = 0.75;    // 再縮到 75%（像素量 ≈ 56%）
+const BWA_SHADOW_MAP_SIZE = 512;  // 陰影貼圖邊長（原本 1024；筊杯只有兩顆，512 夠用）
+/* 閒置時（筊杯只是在原地輕輕懸浮，沒有被手抓住、也沒有在擲出）只需要 30 FPS 就看不出差別，
+   顯示器 60Hz 時等於隔一格才畫一次，這段時間 GPU 負擔直接減半。
+   抓杯跟手（阻尼是逐格計算，降格數會改變手感）與擲出落下的過程仍維持全速。 */
+const BWA_IDLE_FPS = 30;
+const BWA_IDLE_FRAME_MS = 1000 / BWA_IDLE_FPS;
+function bwaPixelRatio() {
+  return Math.min(window.devicePixelRatio || 1, BWA_MAX_PIXEL_RATIO) * BWA_RENDER_SCALE;
+}
+
 // 筊杯落地後的最終高度：跟鏡頭視線焦點（camera.lookAt 的 y）對齊，
 // 這樣擲出的結果會停在畫面正中間，而不是偏向畫面下方。
 // 地板（陰影承接面）跟著往上移，維持跟原本一樣「杯底貼地」的相對距離（0.1）。
@@ -71,6 +87,7 @@ export function createBwaScene(state) {
   let container = null;
   let lastScreenPos = { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
   let loopRafId = null;
+  let lastRenderTime = 0;
 
   /* 抓杯狀態：target 是手的世界座標（由 setHoldPosition 更新），
      curA/curB 是兩顆筊杯目前實際所在的位置（由 render loop 逐格逼近 target）。
@@ -130,10 +147,10 @@ export function createBwaScene(state) {
     const h = container.clientHeight || window.innerHeight;
 
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(bwaPixelRatio());
     renderer.setSize(w, h);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // 比 PCFSoftShadowMap 便宜（原本用 Soft）
     container.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
@@ -148,8 +165,13 @@ export function createBwaScene(state) {
     light = new THREE.DirectionalLight(0xfff5ea, 1.5);
     light.position.set(3, 6, 3);
     light.castShadow = true;
-    light.shadow.mapSize.set(1024, 1024);
+    light.shadow.mapSize.set(BWA_SHADOW_MAP_SIZE, BWA_SHADOW_MAP_SIZE);
     light.shadow.radius = 4;
+    // 把陰影相機的涵蓋範圍縮到只框住筊杯的活動範圍（預設 ±5），同樣的貼圖尺寸下陰影反而更細
+    const shadowCam = light.shadow.camera;
+    shadowCam.left = -4; shadowCam.right = 4; shadowCam.top = 4; shadowCam.bottom = -4;
+    shadowCam.near = 1; shadowCam.far = 16;
+    shadowCam.updateProjectionMatrix();
     scene.add(light);
 
     // 補光
@@ -182,6 +204,12 @@ export function createBwaScene(state) {
 
   function loop(now) {
     if (!renderer) return;
+    // 閒置時跳過中間的影格（-1ms 是給 60Hz 下 16.67ms 一格的計時誤差留餘裕，確保剛好隔一格畫一次）
+    if (!holding && !state.bwaTossing && now - lastRenderTime < BWA_IDLE_FRAME_MS - 1) {
+      loopRafId = requestAnimationFrame(loop);
+      return;
+    }
+    lastRenderTime = now;
     if (cupA && cupB && !state.bwaTossing) {
       if (holding) {
         updateHold(now);
@@ -203,6 +231,7 @@ export function createBwaScene(state) {
     if (!renderer || !container) return;
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
+    renderer.setPixelRatio(bwaPixelRatio());
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
