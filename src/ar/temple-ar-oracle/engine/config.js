@@ -18,8 +18,8 @@ export const CONFIG = {
 
   // ---- 捏取階段：改成「往上滑動」觸發（不再要求真正的捏合手勢）----
   // 任一隻手的手腕或食指指尖，在 SWIPE_UP_WINDOW_MS 內往上移動超過畫面高度的 SWIPE_UP_DELTA_RATIO 即成功。
-  SWIPE_UP_DELTA_RATIO: 0.15,
-  SWIPE_UP_WINDOW_MS: 500,
+  SWIPE_UP_DELTA_RATIO: 0.05,     // 原 0.15：手稍微往上（畫面高度的 5%）就算，門檻放得很低
+  SWIPE_UP_WINDOW_MS: 700,        // 原 500：時間窗放寬，慢慢往上移也算
   SWIPE_UP_CONFIRM_FRAMES: 2,     // 防抖：連續幾格都成立才觸發，避免單格雜訊誤觸
   PINCH_ARM_DELAY_MS: 700,        // 手滑入（400ms）後再等一下才開始偵測，避免搖籤最後那一下的動作被當成上滑
   PINCH_LIFT_MS: 600,             // 捏取的手與籤枝一起上移的時間
