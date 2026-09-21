@@ -101,9 +101,10 @@ export function createMobileShake({ els, state, callbacks }) {
   return { requestAccess, start, stop };
 }
 
-// 裝置偵測：原始碼裡的判斷式（User-Agent + 觸控點數 + pointer:coarse媒體查詢 + 視窗寬度），
-// 完全原封不動搬遷，用來決定要走「攝影機手勢」還是「手機搖晃」路徑。
+// 裝置偵測：本案唯一目標裝置 Warpple JJ5 是 27 吋固定式 Android 機台，
+// 原本的 User-Agent 判斷（/Android|iPhone|.../）會把它誤判成手機、改走「拿起手機搖晃」，
+// 但機台沒辦法搖，所以一律視為非手機，走「攝影機手勢 → 失敗降級為點擊」的桌機流程。
+// 仍保留 requestedMode === "motion" 這條由宿主明確指定的搖晃路徑（見 flow-controller.js）。
 export function isMobileDevice(){
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-    || (navigator.maxTouchPoints > 1 && window.matchMedia('(pointer:coarse)').matches && window.innerWidth < 900);
+  return false;
 }

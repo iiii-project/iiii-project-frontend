@@ -54,10 +54,35 @@ const GRAB_LIFT = 0.45;       // 抓起過程中額外抬高的弧線高度（�
 const GRAB_SCALE_PUNCH = 0.14; // 抓起瞬間的放大回饋比例
 const GRAB_ROLL = 0.55;       // 抓起過程中兩杯向內握緊的旋轉量（弧度）
 const HOLD_SPREAD = 0.4;      // 手持時兩杯的中心間距（半距）
-const IDLE_SPREAD = 0.5;      // 閒置時兩杯的中心間距（半距）
+/* 閒置時兩杯的中心間距（半距）。原本 0.5；要跟 CUP_WIDTH 等比例調整，兩杯才會各落在手部圖的兩個手心
+   （約各在手部圖寬度的 38%、62%）。CUP_WIDTH 改多少，這個就跟著乘多少（目前 = CUP_WIDTH × 0.575）。 */
+const IDLE_SPREAD = 0.39;
+/* 筊杯寬度（世界單位）。原本 0.75；手部圖出現後為了放進手心凹處縮到 0.45，畫面上太小，現在調成 0.68
+   （1080x1920 直式約 345px 寬，每個手心約 300px，杯子會略為超出手心邊緣）。
+   落下、落地的位置沿用原本的數值。 */
+const CUP_WIDTH = 0.68;
+/* 擲筊場景的手部圖是固定在畫面下方的圖片，筊杯要留在手心裡，不能再跟著使用者真實的手位置跑，
+   所以關掉「筊杯跟手」。要恢復舊行為（抓起動畫＋阻尼跟隨）就改成 true。 */
+const BWA_FOLLOW_HAND = false;
 const FOLLOW_EASE_A = 0.3;    // 跟手的阻尼係數；兩杯稍微不同，跟隨時會有自然的錯位晃動
 const FOLLOW_EASE_B = 0.24;
 const HOLD_TILT_MAX = 0.35;   // 慣性傾斜上限（弧度）
+
+/* ---- 渲染負擔（JJ5 效能較差；筊杯畫布是全螢幕，1080x1920 直式 = 200 萬像素）----
+   模型本身很輕（兩杯合計約 1,800 個三角面、貼圖各 225x225），瓶頸在「填色的像素量」，所以降解析度最有效：
+   畫布的實際像素 = CSS 尺寸 × min(devicePixelRatio, BWA_MAX_PIXEL_RATIO) × BWA_RENDER_SCALE，
+   再由瀏覽器拉伸回滿版。筊杯邊緣會稍微變柔，覺得太糊就把 BWA_RENDER_SCALE 往 1 調。 */
+const BWA_MAX_PIXEL_RATIO = 1;    // 不管螢幕 DPR 多高，最多當成 1 倍（原本上限是 2）
+const BWA_RENDER_SCALE = 0.75;    // 再縮到 75%（像素量 ≈ 56%）
+const BWA_SHADOW_MAP_SIZE = 512;  // 陰影貼圖邊長（原本 1024；筊杯只有兩顆，512 夠用）
+/* 閒置時（筊杯只是在原地輕輕懸浮，沒有被手抓住、也沒有在擲出）只需要 30 FPS 就看不出差別，
+   顯示器 60Hz 時等於隔一格才畫一次，這段時間 GPU 負擔直接減半。
+   抓杯跟手（阻尼是逐格計算，降格數會改變手感）與擲出落下的過程仍維持全速。 */
+const BWA_IDLE_FPS = 30;
+const BWA_IDLE_FRAME_MS = 1000 / BWA_IDLE_FPS;
+function bwaPixelRatio() {
+  return Math.min(window.devicePixelRatio || 1, BWA_MAX_PIXEL_RATIO) * BWA_RENDER_SCALE;
+}
 
 // 筊杯落地後的最終高度：跟鏡頭視線焦點（camera.lookAt 的 y）對齊，
 // 這樣擲出的結果會停在畫面正中間，而不是偏向畫面下方。
@@ -71,6 +96,11 @@ export function createBwaScene(state) {
   let container = null;
   let lastScreenPos = { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
   let loopRafId = null;
+  let lastRenderTime = 0;
+  // 手心凹處：閒置時兩顆筊杯的中心（世界座標，z=0 平面）。由 setPalmAnchor() 指定的元素位置換算而來
+  const idle = { x: 0, y: 0 };
+  let anchorEl = null;
+  const anchorVec = new THREE.Vector3();
 
   /* 抓杯狀態：target 是手的世界座標（由 setHoldPosition 更新），
      curA/curB 是兩顆筊杯目前實際所在的位置（由 render loop 逐格逼近 target）。
@@ -116,9 +146,8 @@ export function createBwaScene(state) {
 
     const cup = new THREE.Group();
     cup.add(inner);
-    // 用寬度（X 軸）決定筊杯大小：hold 手持狀態下兩顆筊杯中心距最窄只有 0.8，
-    // 寬度抓 0.75 還留一點間隙，不會互相穿插。
-    cup.scale.setScalar(0.75 / size.x);
+    // 用寬度（X 軸）決定筊杯大小（見上方 CUP_WIDTH）
+    cup.scale.setScalar(CUP_WIDTH / size.x);
     // 抓起動畫要對筊杯做放大回饋，先把「原始尺寸」記下來當基準，動畫結束再還原
     cup.userData.baseScale = cup.scale.x;
     return cup;
@@ -130,10 +159,10 @@ export function createBwaScene(state) {
     const h = container.clientHeight || window.innerHeight;
 
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(bwaPixelRatio());
     renderer.setSize(w, h);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // 比 PCFSoftShadowMap 便宜（原本用 Soft）
     container.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
@@ -148,8 +177,13 @@ export function createBwaScene(state) {
     light = new THREE.DirectionalLight(0xfff5ea, 1.5);
     light.position.set(3, 6, 3);
     light.castShadow = true;
-    light.shadow.mapSize.set(1024, 1024);
+    light.shadow.mapSize.set(BWA_SHADOW_MAP_SIZE, BWA_SHADOW_MAP_SIZE);
     light.shadow.radius = 4;
+    // 把陰影相機的涵蓋範圍縮到只框住筊杯的活動範圍（預設 ±5），同樣的貼圖尺寸下陰影反而更細
+    const shadowCam = light.shadow.camera;
+    shadowCam.left = -4; shadowCam.right = 4; shadowCam.top = 4; shadowCam.bottom = -4;
+    shadowCam.near = 1; shadowCam.far = 16;
+    shadowCam.updateProjectionMatrix();
     scene.add(light);
 
     // 補光
@@ -182,6 +216,12 @@ export function createBwaScene(state) {
 
   function loop(now) {
     if (!renderer) return;
+    // 閒置時跳過中間的影格（-1ms 是給 60Hz 下 16.67ms 一格的計時誤差留餘裕，確保剛好隔一格畫一次）
+    if (!holding && !state.bwaTossing && now - lastRenderTime < BWA_IDLE_FRAME_MS - 1) {
+      loopRafId = requestAnimationFrame(loop);
+      return;
+    }
+    lastRenderTime = now;
     if (cupA && cupB && !state.bwaTossing) {
       if (holding) {
         updateHold(now);
@@ -189,8 +229,8 @@ export function createBwaScene(state) {
         const time = now * 0.001;
         // 微弱優雅的懸浮，幅度調小
         const bob = Math.sin(time * 1.2) * 0.05;
-        cupA.position.y = bob;
-        cupB.position.y = bob;
+        cupA.position.y = idle.y + bob;
+        cupB.position.y = idle.y + bob;
         cupA.rotation.z = Math.sin(time) * 0.03 - Math.PI / 8;
         cupB.rotation.z = Math.cos(time) * 0.03 + Math.PI / 8;
       }
@@ -203,17 +243,48 @@ export function createBwaScene(state) {
     if (!renderer || !container) return;
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
+    renderer.setPixelRatio(bwaPixelRatio());
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    applyAnchor();
   }
   window.addEventListener('resize', resize);
+
+  /* 把「手心凹處」元素的畫面位置換算成 z=0 平面上的世界座標，當作筊杯閒置的位置。
+     用相機的反投影（unproject）沿視線射線打到 z=0 平面，所以不論畫面比例、相機角度都對得準。
+     場景隱藏中（元素沒有版面）就先不動，等場景顯示後 flow-controller 會觸發一次 resize 再算。 */
+  function setPalmAnchor(el) {
+    anchorEl = el;
+    applyAnchor();
+  }
+  function applyAnchor() {
+    if (!anchorEl || !renderer || !camera) return;
+    if (!anchorEl.getClientRects().length) return;
+    const canvasRect = renderer.domElement.getBoundingClientRect();
+    if (!canvasRect.width || !canvasRect.height) return;
+    const a = anchorEl.getBoundingClientRect();
+    camera.updateMatrixWorld();
+    anchorVec.set(
+      ((a.left - canvasRect.left) / canvasRect.width) * 2 - 1,
+      -((a.top - canvasRect.top) / canvasRect.height) * 2 + 1,
+      0.5,
+    ).unproject(camera);
+    const dir = anchorVec.sub(camera.position).normalize();
+    if (Math.abs(dir.z) < 1e-6) return;
+    const t = -camera.position.z / dir.z;
+    idle.x = camera.position.x + dir.x * t;
+    idle.y = camera.position.y + dir.y * t;
+    // 閒置中才把筊杯移過去；抓起或擲出過程中不去動它
+    if (cupA && cupB && !holding && !state.bwaTossing) resetIdle();
+  }
 
   /* 只負責把「手現在在哪」換算成世界座標記下來；真正的位移與旋轉都交給
      render loop 的 updateHold() 逐格插值，這樣筊杯是「被抓起來並跟著手」，
      而不是每次收到手勢座標就瞬移過去（也順便濾掉 MediaPipe 的座標抖動）。 */
   function setHoldPosition(nx01, ny01) {
     lastScreenPos = { x: nx01 * window.innerWidth, y: ny01 * window.innerHeight };
+    if (!BWA_FOLLOW_HAND) return; // 筊杯留在手心凹處，不跟著使用者的手跑
     if (!cupA || !cupB) return;
     const vFOV = camera.fov * Math.PI / 180;
     const dist = camera.position.z;
@@ -297,8 +368,8 @@ export function createBwaScene(state) {
     // 抓起動畫可能停在放大狀態，回到閒置一律還原成基準尺寸
     cupA.scale.setScalar(cupA.userData.baseScale);
     cupB.scale.setScalar(cupB.userData.baseScale);
-    cupA.position.set(-IDLE_SPREAD, 0, 0);
-    cupB.position.set(IDLE_SPREAD, 0, 0);
+    cupA.position.set(idle.x - IDLE_SPREAD, idle.y, 0);
+    cupB.position.set(idle.x + IDLE_SPREAD, idle.y, 0);
     // 預設閒置時：凸面朝上 (0,0,0)
     cupA.rotation.set(0, 0, -Math.PI / 8);
     cupB.rotation.set(0, 0, Math.PI / 8);
@@ -419,7 +490,7 @@ export function createBwaScene(state) {
   }
 
   return {
-    init, setHoldPosition, resetIdle, getScreenPos: () => lastScreenPos, toss, destroy, hitTest,
+    init, setHoldPosition, setPalmAnchor, resetIdle, getScreenPos: () => lastScreenPos, toss, destroy, hitTest,
     // 過場影片播放期間暫停 three.js 迴圈
     pause(){ if (loopRafId) { cancelAnimationFrame(loopRafId); loopRafId = 0; } },
     resume(){ if (!loopRafId && renderer) loopRafId = requestAnimationFrame(loop); },

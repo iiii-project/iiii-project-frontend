@@ -17,23 +17,34 @@
       改為 append 到注入進來的 `rootEl`（元件自己的容器），避免手勢標記點
       跑到 Shadow DOM 外面、脫離元件管理範圍。
    ========================================================================= */
+import { createPrimaryUserSelector } from './primary-user.js';
+
 export function createGestureEngine({ els, state, config: CONFIG, particleSystem, bwaScene, rootEl, callbacks }) {
-  const outCtx = els.outputCanvas.getContext('2d');
-
   let smoothed = null;
-  let pinchActive = false;
-  let pinchStartWristY = null;
 
-  const shake = { active:false, startTime:0, lastY:0, lastVelocitySign:0, oscillations:0, lastFistTime:0 };
+  // 畫面多人入鏡時，只留「主要使用者」的手（見 primary-user.js），其餘人的手一律忽略
+  const userSelector = createPrimaryUserSelector(CONFIG);
+
+  // prevY / src：每格都更新，用來判斷「雙手這一格有沒有在上下動」；src 是目前追蹤訊號來自幾隻手
+  const shake = { active:false, startTime:0, lastY:0, lastVelocitySign:0, oscillations:0, lastFistTime:0, prevY:null, src:0 };
+
+  // ---- 捏取階段（往上滑動抽籤）狀態 ----
+  // armedAt：這個時間點之後才開始偵測上滑；hist：兩個手位（依畫面 x 排序）各自最近 500ms 的
+  // 手腕/食指指尖 y 座標；hits：連續幾格達標（防抖）；done：已經觸發過一次，不重複觸發
+  const swipe = { armedAt:0, hist:[[], []], handCount:0, hits:0, done:false };
+  let liftTimer = 0;
 
   // ---- 合十默念狀態 ----
   // pausedAt：合十判定短暫失敗時的暫停起點（見 handleIncenseGesture 的寬限期機制），
   // 不是 0 就代表目前正處於「暫停中，還沒真的歸零」的狀態。
   const incense = { active:false, startTime:0, pausedAt:0, visualX:0.5, visualY:0.62, visualTilt:0 };
+  // 手部示意圖目前顯示的是不是「雙手合十」，以及「判定跟目前顯示不一致」是從何時開始的（防抖用）
+  const pray = { shown:false, pendingSince:0 };
 
   // ---- 捧筊 / 拋擲 狀態 ----
   const cup = {
     holding: false,      // 是否正處於「握拳抓杯跟隨」狀態
+    grabFrames: 0,       // 連續偵測到「握拳」的影格數（抓杯防抖）
     openFrames: 0,       // 連續偵測到「手掌張開」的影格數（用於防抖動誤判）
     posHistory: [],       // {t,x,y} 手腕螢幕座標歷史，用於估計拋擲瞬間的移動速度/方向
   };
@@ -66,54 +77,24 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     return curled >= CONFIG.FIST_MIN_CURLED;
   }
 
-  /* 畫布的 width/height 屬性從來沒被設定過，一直是 HTML 預設的 300x150，
-     再被 CSS 拉到滿螢幕（還要乘上 devicePixelRatio），畫面自然糊掉。
-     這裡讓後備緩衝區跟著實際顯示尺寸走；只在尺寸真的變了才重設，
-     因為指定 width/height 會清空畫布內容。 */
-  function syncCanvasSize(){
-    const canvas = els.outputCanvas;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); // 超過 2 只吃效能，看不出差別
-    const w = Math.round((canvas.clientWidth || window.innerWidth) * dpr);
-    const h = Math.round((canvas.clientHeight || window.innerHeight) * dpr);
-    if (!w || !h) return;
-    if (canvas.width !== w || canvas.height !== h){
-      canvas.width = w;
-      canvas.height = h;
-    }
-  }
-
   function onResults(results){
-    // 過場影片播放中：整格跳過，MediaPipe 的繪製與判斷都是重負載
+    // 過場影片播放中：整格跳過，MediaPipe 的判斷是重負載
     if (state.transitionActive) return;
-    syncCanvasSize();
-    const cw = els.outputCanvas.width, ch = els.outputCanvas.height;
-    outCtx.save();
-    outCtx.clearRect(0,0,cw,ch);
-    outCtx.scale(-1,1);
-    if (state.segmentationMask){
-      /* 人像去背：先把分割遮罩畫上去（人像=不透明、其餘=透明），source-in 疊圖模式
-         會讓下一筆 drawImage 只保留跟遮罩重疊、不透明的範圍，其餘鏤空——鏤空的地方
-         會露出下方 z-index 比 #output_canvas 低的 #ritual-overlay（神明實景疊加層），
-         人像本身則維持鏡頭原始畫質，不受神明實景疊加層淡化影響。 */
-      outCtx.drawImage(state.segmentationMask, -cw, 0, cw, ch);
-      outCtx.globalCompositeOperation = 'source-in';
-      outCtx.drawImage(results.image, -cw, 0, cw, ch);
-      outCtx.globalCompositeOperation = 'source-over';
-    } else {
-      // 分割模型還沒回傳第一格結果前，先照舊整格畫出來，避免畫面完全空白
-      outCtx.drawImage(results.image, -cw, 0, cw, ch);
-    }
-    outCtx.restore();
+    // 求籤過程中不顯示人物（不畫鏡頭畫面、也不做人像去背），#output_canvas 保持空白，
+    // 這裡只拿 MediaPipe Hands 的結果做手勢判斷。
 
-    const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
+    // 只取「主要使用者」的手：畫面裡其他人的手在這裡就被濾掉，後面所有階段都看不到
+    const hands = userSelector.select(results.multiHandLandmarks || []);
+    const hasHand = hands.length > 0;
 
     if (state.current === 'incense'){
-      handleIncenseGesture(results.multiHandLandmarks || []);
+      handleIncenseGesture(hands);
       return;
     }
 
     if (!hasHand){
-      smoothed = null; pinchActive = false; pinchStartWristY = null;
+      smoothed = null;
+      swipe.hist = [[], []]; swipe.handCount = 0; swipe.hits = 0; shake.prevY = null;
       hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
       // 快速向下拋擲時，手部常因動作模糊或離開鏡頭範圍而瞬間追蹤失敗；
       // 若當下正捧著筊杯，就用「消失前」的最後一段位移推算拋擲方向與力道，
@@ -135,7 +116,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
       return;
     }
 
-    let rawLm = results.multiHandLandmarks[0];
+    let rawLm = hands[0];
     rawLm = rawLm.map(p => ({ x: 1-p.x, y: p.y, z: p.z }));
 
     // 金色香灰粒子會被移動中的手輕輕撥開，增加畫面互動感
@@ -149,17 +130,15 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     }
 
     const lm = smoothLandmarks(rawLm);
-    const wrist = lm[0], middleMcp = lm[9], thumbTip = lm[4], indexTip = lm[8];
-    const handScaleVal = dist(wrist, middleMcp) || 0.0001;
-    const pinchDist = dist(thumbTip, indexTip) / handScaleVal;
+    const wrist = lm[0];
 
     if (state.current === 'draw'){
       if (state.drawSubState === 'shake'){
-        updateFistIndicator(wrist, isFist(lm)); hideFingertipUI();
-        handleShakeGesture(wrist, isFist(lm));
+        updateFistIndicator(wrist, hands.some(isFist)); hideFingertipUI();
+        handleShakeGesture(hands, lm);
       } else {
-        hideFistIndicator(); updateFingertipUI(thumbTip, indexTip);
-        handlePinchGesture(wrist, pinchDist);
+        hideFistIndicator(); hideFingertipUI();
+        handleSwipeUpGesture(hands);
       }
     } else {
       hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
@@ -214,6 +193,27 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     return q.question ? `請雙手合十，默念：「${q.question}」` : `請雙手合十，默念關於「${q.category||'所求之事'}」的問題`;
   }
 
+  /* 手部示意圖切換（雙手在兩側 <-> 雙手合十）：只讀取下面既有的 isClose 判定結果，
+     不參與也不改動合十偵測與進入下一階段的邏輯。
+     防抖：判定跟目前顯示的圖不一致時，要連續維持 INCENSE_PRAY_DEBOUNCE_MS 才真的切換，
+     不論是切成合十還是切回兩側，避免偵測一兩格閃動造成圖片閃爍。 */
+  function setPrayImage(on){
+    els.incenseHandsOpen.classList.toggle('on', !on);
+    els.incenseHandsPray.classList.toggle('on', on);
+  }
+  function updatePrayImage(isClose, now){
+    if (isClose === pray.shown){ pray.pendingSince = 0; return; }
+    if (!pray.pendingSince){ pray.pendingSince = now; return; }
+    if (now - pray.pendingSince >= CONFIG.INCENSE_PRAY_DEBOUNCE_MS){
+      pray.shown = isClose; pray.pendingSince = 0;
+      setPrayImage(isClose);
+    }
+  }
+  function resetPrayImage(){
+    pray.shown = false; pray.pendingSince = 0;
+    setPrayImage(false);
+  }
+
   function handleIncenseGesture(handsLm){
     const now = performance.now();
     let isClose = false;
@@ -249,6 +249,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     }
 
     const visualCenter = centerPt ? updateIncenseFollow(centerPt) : null;
+    updatePrayImage(isClose, now);
 
     if (isClose){
       // 只要重新判定為合十，就取消任何還在倒數的寬限期，視為進度沒中斷過。
@@ -287,30 +288,43 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   function resetIncenseProgress(){
     incense.active = false; incense.pausedAt = 0;
     resetIncenseFollow();
+    resetPrayImage();
     els.incenseRing.classList.remove('on'); els.incenseRing.style.setProperty('--p',0);
     els.incenseHint.classList.remove('sensing'); els.incenseStick.classList.remove('sensing');
   }
 
-  function handleShakeGesture(wrist, fistNow){
+  /* 搖籤觸發條件放寬成「任一種」：
+       (1) 握拳/握籤：任一隻手握拳；
+       (2) 雙手上下搖晃：看得到兩隻手，且兩手手腕的平均高度這一格有明顯上下移動。
+     追蹤的 y 訊號：雙手時取兩手手腕的平均、單手時取該手手腕；來源（幾隻手）換了就只重設基準點，
+     不把「換來源造成的跳動」算成一次搖晃。之後的累積搖晃量（折返次數／時間）與命中籤的隨機決定不變。 */
+  function handleShakeGesture(handsLm, lm0){
     const now = performance.now();
-    if (!fistNow){
+    const two = handsLm.length >= 2;
+    const trackY = two ? (lm0[0].y + handsLm[1][0].y) / 2 : lm0[0].y;
+    const src = two ? 2 : 1;
+    if (shake.src !== src){ shake.src = src; shake.prevY = null; if (shake.active) shake.lastY = trackY; }
+    const movedNow = shake.prevY !== null && Math.abs(trackY - shake.prevY) > CONFIG.SHAKE_VELOCITY_DEADZONE;
+    shake.prevY = trackY;
+    const engaged = handsLm.some(isFist) || (two && movedNow);
+    if (!engaged){
       if (shake.active && now - shake.lastFistTime > CONFIG.SHAKE_RESET_GRACE_MS){
-        resetShakeProgress(); els.drawHint.textContent = '請對著籤筒握拳，上下搖晃';
+        resetShakeProgress(); els.drawHint.textContent = '請握拳握住籤筒，或雙手上下搖晃';
       }
       return;
     }
     shake.lastFistTime = now;
     if (!shake.active){
-      shake.active = true; shake.startTime = now; shake.lastY = wrist.y;
+      shake.active = true; shake.startTime = now; shake.lastY = trackY;
       shake.lastVelocitySign = 0; shake.oscillations = 0;
-      els.qianTongZone.classList.add('shaking'); els.sticksGroup.classList.add('is-shaking'); els.shakeRing.classList.add('on');
+      els.drawStage.classList.add('shaking'); els.sticksGroup.classList.add('is-shaking'); els.shakeRing.classList.add('on');
       return;
     }
-    const velocity = wrist.y - shake.lastY;
+    const velocity = trackY - shake.lastY;
     let sign = 0;
     if (velocity > CONFIG.SHAKE_VELOCITY_DEADZONE) sign = 1; else if (velocity < -CONFIG.SHAKE_VELOCITY_DEADZONE) sign = -1;
     if (sign !== 0){ if (shake.lastVelocitySign !== 0 && sign !== shake.lastVelocitySign) shake.oscillations++; shake.lastVelocitySign = sign; }
-    shake.lastY = wrist.y;
+    shake.lastY = trackY;
     const elapsed = now - shake.startTime;
     const progress = Math.min(1, Math.max(elapsed/CONFIG.SHAKE_TARGET_DURATION_MS, shake.oscillations/CONFIG.SHAKE_REQUIRED_OSCILLATIONS));
     els.shakeRing.style.setProperty('--p', Math.round(progress*100));
@@ -318,12 +332,12 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     if (shake.oscillations >= CONFIG.SHAKE_REQUIRED_OSCILLATIONS && elapsed >= CONFIG.SHAKE_MIN_DURATION_MS){ completeShakeStage(); }
   }
   function resetShakeProgress(){
-    shake.active = false; shake.oscillations = 0;
-    els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
+    shake.active = false; shake.oscillations = 0; shake.prevY = null;
+    els.drawStage.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
     els.shakeRing.style.setProperty('--p', 0);
   }
   function completeShakeStage(){
-    els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
+    els.drawStage.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
     const stickEls = Array.from(els.sticksGroup.querySelectorAll('.stick'));
     const idx = Math.floor(Math.random()*stickEls.length);
     stickEls.forEach(s => s.classList.remove('selected'));
@@ -333,34 +347,122 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     els.qianStick.style.left = `${xRatio*100}%`;
     els.qianStick.style.transform = 'translate(-50%, 0)';
     state.drawSubState = 'pinch';
-    els.drawHint.textContent = '神明已選定！請捏住發光籤條，向上抽出';
+    els.drawHint.textContent = '神明已選定！請將手向上滑動，抽出籤條';
+    enterPinchStage();
   }
 
-  function handlePinchGesture(wrist, pinchDist){
-    const zoneRect = els.qianTong.getBoundingClientRect();
-    const zoneCenterX = (zoneRect.left+zoneRect.width/2)/window.innerWidth;
-    const zoneCenterY = (zoneRect.top+zoneRect.height/2)/window.innerHeight;
-    const aligned = Math.hypot(wrist.x-zoneCenterX, wrist.y-zoneCenterY) < 0.16;
-    els.qianTong.classList.toggle('aligned', aligned);
-    const isPinchingNow = pinchDist < CONFIG.PINCH_THRESHOLD_RATIO;
-    if (aligned && isPinchingNow && !pinchActive){
-      pinchActive = true; pinchStartWristY = wrist.y;
-      els.qianStick.classList.remove('hidden'); els.qianStick.classList.add('pinched');
-      els.drawHint.textContent = '已捏住籤條，請維持捏合並向上提起';
+  // ============================================================
+  // 捏取階段：搖出命中籤後自動出現「捏取的手」，往上滑動即抽出。
+  // ============================================================
+  // 命中籤枝頭部（圓點）的畫面座標：依 state.selectedStickCx 找到籤枝元素再用 getBoundingClientRect 換算，不寫死
+  function chosenStickHead(){
+    const chosen = Array.from(els.sticksGroup.querySelectorAll('.stick'))
+      .find(s => parseFloat(s.dataset.cx) === state.selectedStickCx);
+    const head = chosen && (chosen.querySelector('circle') || chosen);
+    if (!head) return null;
+    const r = head.getBoundingClientRect();
+    return { chosen, x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  function enterPinchStage(){
+    swipe.hist = [[], []]; swipe.handCount = 0; swipe.hits = 0; swipe.done = false;
+    swipe.armedAt = performance.now() + CONFIG.PINCH_ARM_DELAY_MS;
+    els.drawHandsShake.classList.add('off'); // 搖籤的手淡出
+    const target = chosenStickHead();
+    // 指尖（圖上的捏取點）對準命中籤枝頂端；量不到就維持 CSS 預設位置
+    if (target){
+      els.drawPinch.style.setProperty('--target-x', `${target.x}px`);
+      els.drawPinch.style.setProperty('--target-y', `${target.y}px`);
     }
-    if (pinchActive){
-      if (!isPinchingNow){ resetPinch(); return; }
-      const deltaY = pinchStartWristY - wrist.y;
-      const followPx = Math.max(0, deltaY) * window.innerHeight;
-      els.qianStick.style.transform = `translate(-50%, ${-followPx}px) rotate(${(wrist.x-0.5)*8}deg)`;
-      if (deltaY > CONFIG.DRAW_UP_DELTA_RATIO){ callbacks.completeDraw(); }
+    els.drawPinch.style.setProperty('--lift-y', `${-Math.round(window.innerHeight * CONFIG.PINCH_LIFT_VH)}px`);
+    // 手只准出現在「祈願抽籤」文字卡的下方：以卡片下緣（再留一點縫）當裁切線
+    const card = els.sceneDraw.querySelector('.ritual-card');
+    if (card) els.drawPinchClip.style.setProperty('--clip-top', `${Math.ceil(card.getBoundingClientRect().bottom) + 8}px`);
+    // 先讓元素以「滑入起點」的狀態渲染一格，再加 is-in 才會有 400ms 的滑入動畫
+    void els.drawPinch.offsetWidth;
+    els.drawPinch.classList.add('is-in');
+  }
+
+  /* 上滑判定：任一隻手的「手腕」或「食指指尖」，在 SWIPE_UP_WINDOW_MS 內往上移動超過畫面高度的
+     SWIPE_UP_DELTA_RATIO。手依畫面 x 排成固定兩個位置各自記錄；手的數量一變就清掉歷史，
+     避免把左右手的座標接在一起。防抖：連續 SWIPE_UP_CONFIRM_FRAMES 格達標才觸發，觸發過一次就不再觸發。 */
+  function handleSwipeUpGesture(handsLm){
+    if (swipe.done) return;
+    const now = performance.now();
+    if (now < swipe.armedAt) return; // 手還在滑入，且搖籤最後那一下的動作不算
+
+    const ordered = handsLm.slice().sort((a, b) => a[0].x - b[0].x).slice(0, 2);
+    if (ordered.length !== swipe.handCount){ swipe.hist = [[], []]; swipe.hits = 0; swipe.handCount = ordered.length; }
+
+    let reached = false;
+    ordered.forEach((lm, i) => {
+      const hist = swipe.hist[i];
+      hist.push({ t: now, wrist: lm[0].y, tip: lm[8].y });
+      while (hist.length && now - hist[0].t > CONFIG.SWIPE_UP_WINDOW_MS) hist.shift();
+      // y 越小越靠上：視窗內「最低點」到現在的位移，就是往上移動了多少（畫面高度的比例）
+      const riseWrist = Math.max(...hist.map(s => s.wrist)) - lm[0].y;
+      const riseTip = Math.max(...hist.map(s => s.tip)) - lm[8].y;
+      if (riseWrist > CONFIG.SWIPE_UP_DELTA_RATIO || riseTip > CONFIG.SWIPE_UP_DELTA_RATIO) reached = true;
+    });
+
+    swipe.hits = reached ? swipe.hits + 1 : 0;
+    if (swipe.hits >= CONFIG.SWIPE_UP_CONFIRM_FRAMES){
+      swipe.done = true;
+      playLiftAndComplete();
     }
   }
+
+  // 「下一步」按鈕用：把抽籤階段往前推一步（搖籤 → 選出命中籤並出現捏取的手 → 上滑抽出），
+  // 走的就是手勢成功時會走的同一組函式，畫面與後續流程完全一樣。
+  function advanceDraw(){
+    if (state.current !== 'draw') return;
+    if (state.drawSubState === 'shake'){ completeShakeStage(); return; }
+    if (!swipe.done){ swipe.done = true; playLiftAndComplete(); }
+  }
+
+  // 觸發後：捏取的手與命中籤枝一起上移（ease-out），上移完成後淡出並接續原本的 completeDraw 流程
+  function playLiftAndComplete(){
+    const target = chosenStickHead();
+    if (target) target.chosen.classList.add('lifted');
+    // #qian-stick（發光籤條）接手，先把它的籤頭對到命中籤枝的位置，再一起往上移
+    const stick = els.qianStick;
+    stick.style.transition = 'none';
+    stick.style.transform = 'translate(-50%, 0)';
+    stick.classList.remove('hidden');
+    let dx = 0, dy = 0;
+    if (target){
+      const h = stick.querySelector('circle').getBoundingClientRect();
+      dx = target.x - (h.left + h.width / 2);
+      dy = target.y - (h.top + h.height / 2);
+    }
+    const lift = Math.round(window.innerHeight * CONFIG.PINCH_LIFT_VH);
+    stick.style.transform = `translate(calc(-50% + ${dx}px), ${dy}px)`;
+    void stick.offsetWidth;
+    stick.style.transition = `transform ${CONFIG.PINCH_LIFT_MS}ms cubic-bezier(0.22,0.61,0.36,1), opacity ${CONFIG.PINCH_FADE_MS}ms ease`;
+    stick.style.transform = `translate(calc(-50% + ${dx}px), ${dy - lift}px)`;
+    els.drawPinch.classList.add('is-lift');
+    els.drawHint.textContent = '籤條抽出中…';
+
+    window.clearTimeout(liftTimer);
+    liftTimer = window.setTimeout(() => {
+      // 上移完成 → 手與籤枝淡出，同時進入原本的完成抽籤流程（爆光、過場、進入擲筊）
+      els.drawPinch.classList.add('is-out');
+      stick.style.opacity = '0';
+      callbacks.completeDraw();
+    }, CONFIG.PINCH_LIFT_MS);
+  }
+
+  // 回到搖籤初始狀態：進入抽籤場景（含非聖筊重抽）或整個儀式重置時呼叫
   function resetPinch(){
-    pinchActive = false; pinchStartWristY = null;
-    els.qianStick.classList.add('hidden'); els.qianStick.classList.remove('pinched');
+    window.clearTimeout(liftTimer);
+    swipe.hist = [[], []]; swipe.handCount = 0; swipe.hits = 0; swipe.done = false; swipe.armedAt = 0;
+    els.drawPinch.classList.remove('is-in', 'is-lift', 'is-out');
+    els.drawPinch.style.removeProperty('--lift-y');
+    els.drawHandsShake.classList.remove('off');
+    els.sticksGroup.querySelectorAll('.stick.lifted').forEach(s => s.classList.remove('lifted'));
+    els.qianStick.classList.add('hidden'); els.qianStick.classList.remove('pinched', 'punch');
+    els.qianStick.style.transition = ''; els.qianStick.style.opacity = '';
     els.qianStick.style.transform = 'translate(-50%, 0)';
-    els.drawHint.textContent = '請捏住發光籤條，向上抽出';
   }
 
   // ============================================================
@@ -380,10 +482,20 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     const c = curlAmount(lm);
     const sx = wrist.x * window.innerWidth, sy = wrist.y * window.innerHeight;
 
+    // 已擲出一次後（筊杯動畫、結果判定進行中）不再偵測：不重複抓杯、不重複觸發擲出。
+    // 只有結果不是聖筊、流程放行重擲時（flow-controller 會把 bwaTossing 解鎖）才會重新開始偵測。
+    if (state.bwaTossing){
+      hideCupIndicator(); cup.grabFrames = 0; cup.openFrames = 0;
+      return;
+    }
+
     updateCupIndicator(sx, sy, cup.holding);
 
     if (!cup.holding){
-      if (c < CONFIG.CUP_CURL_MAX){
+      // 防抖：握拳要連續 CUP_GRAB_CONFIRM_FRAMES 格才算抓住
+      cup.grabFrames = c < CONFIG.CUP_CURL_MAX ? cup.grabFrames + 1 : 0;
+      if (cup.grabFrames >= CONFIG.CUP_GRAB_CONFIRM_FRAMES){
+        cup.grabFrames = 0;
         cup.holding = true; cup.openFrames = 0; cup.posHistory = [];
         els.bwaHint.textContent = '已抓住筊杯，往下一丟即可擲出';
         // 動態景深：抓住筊杯時背景失焦模糊，讓視覺焦點鎖定在筊杯上
@@ -424,7 +536,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
 
     if (openByCurl || openByVelocity || openByAccel){
       cup.openFrames++;
-      const framesNeeded = openByVelocity || openByAccel ? 1 : CONFIG.OPEN_CONFIRM_FRAMES;
+      const framesNeeded = openByVelocity || openByAccel ? CONFIG.THROW_CONFIRM_FRAMES : CONFIG.OPEN_CONFIRM_FRAMES;
       if (cup.openFrames >= framesNeeded && !state.bwaTossing){
         els.outputCanvas.classList.remove('dof-blur');
         els.arDecoration.classList.remove('dof-blur');
@@ -494,12 +606,13 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   // 新增：釋放資源用（原始版本沒有這支函式，因為活在單頁iframe裡卸載時瀏覽器整包回收；
   // 元件化之後需要能清掉手動建立的marker DOM節點，避免殘留在畫面上）
   function destroy(){
+    window.clearTimeout(liftTimer);
     [markerA, markerB, line, fistDot, cupDot].forEach(elm => elm && elm.remove());
   }
 
   return {
-    onResults, syncCanvasSize, resetPinch, resetShakeProgress, resetIncenseProgress,
-    resetBwaTracking(){ cup.holding=false; cup.openFrames=0; cup.posHistory=[]; },
+    onResults, resetPinch, resetShakeProgress, resetIncenseProgress, advanceDraw,
+    resetBwaTracking(){ cup.holding=false; cup.grabFrames=0; cup.openFrames=0; cup.posHistory=[]; },
     destroy
   };
 }
