@@ -59,6 +59,7 @@ interface ArInterpretation {
 }
 interface TempleArOracleEl extends HTMLElement {
   start(options: { question?: string; category?: string; inputMode?: string }): Promise<void>
+  next(): void
   destroy(): void
 }
 
@@ -363,6 +364,13 @@ async function submit() {
   }
 }
 
+/* 「下一步」：手勢做不出來（或懶得做）時，把儀式往前推一步。
+   引擎會依目前階段走跟手勢成功時一樣的流程（見 flow-controller.js 的 advance），
+   正在過場或擲筊動畫進行中按了沒有作用。 */
+function nextRitualStep() {
+  arEl.value?.next()
+}
+
 function quitRitual() {
   setBodyLock(false)
   unbindAr()
@@ -665,7 +673,10 @@ function restart() {
       <div v-if="step === 4" class="ar-fullscreen">
         <temple-ar-oracle ref="arEl" api-base="/api/v1" transition-src="/videos/dragon.mp4"></temple-ar-oracle>
         <p v-if="arNotice" class="ar-toast">{{ arNotice }}</p>
-        <button class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
+        <div class="ar-actions">
+          <button class="ar-btn ar-next" type="button" @click="nextRitualStep">下一步</button>
+          <button class="ar-btn ar-exit" type="button" @click="quitRitual">離開儀式</button>
+        </div>
       </div>
     </Teleport>
   </div>
@@ -690,11 +701,16 @@ body.ar-ritual-open { overflow: hidden; }
   --jiang-hong: #a63a3a;
   --ink: #3a2c22;
 }
-.ar-exit {
+/* 右上角按鈕列：「下一步」在左、「離開儀式」在右（離開鈕位置不變） */
+.ar-actions {
   position: fixed;
   top: calc(14px + env(safe-area-inset-top));
   right: 14px;
   z-index: 80;
+  display: flex;
+  gap: 10px;
+}
+.ar-btn {
   padding: 9px 18px;
   border: 1px solid rgba(212, 175, 55, 0.5);
   border-radius: 999px;
@@ -705,6 +721,11 @@ body.ar-ritual-open { overflow: hidden; }
   letter-spacing: 0.16em;
   cursor: pointer;
   backdrop-filter: blur(6px);
+}
+/* 「下一步」用朱紅底色跟旁邊的「離開儀式」區分，避免手忙腳亂時按錯 */
+.ar-next {
+  background: rgba(166, 58, 58, 0.85);
+  border-color: rgba(212, 175, 55, 0.8);
 }
 .ar-toast {
   position: fixed;

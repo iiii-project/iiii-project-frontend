@@ -412,6 +412,14 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     }
   }
 
+  // 「下一步」按鈕用：把抽籤階段往前推一步（搖籤 → 選出命中籤並出現捏取的手 → 上滑抽出），
+  // 走的就是手勢成功時會走的同一組函式，畫面與後續流程完全一樣。
+  function advanceDraw(){
+    if (state.current !== 'draw') return;
+    if (state.drawSubState === 'shake'){ completeShakeStage(); return; }
+    if (!swipe.done){ swipe.done = true; playLiftAndComplete(); }
+  }
+
   // 觸發後：捏取的手與命中籤枝一起上移（ease-out），上移完成後淡出並接續原本的 completeDraw 流程
   function playLiftAndComplete(){
     const target = chosenStickHead();
@@ -603,7 +611,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   }
 
   return {
-    onResults, resetPinch, resetShakeProgress, resetIncenseProgress,
+    onResults, resetPinch, resetShakeProgress, resetIncenseProgress, advanceDraw,
     resetBwaTracking(){ cup.holding=false; cup.grabFrames=0; cup.openFrames=0; cup.posHistory=[]; },
     destroy
   };

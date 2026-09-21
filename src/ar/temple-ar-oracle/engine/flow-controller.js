@@ -874,8 +874,30 @@ export function createFlowController({
     }
   }
 
+  /* 「下一步」按鈕：不靠手勢，把儀式往前推一步。每個階段都走手勢成功時會走的同一組函式，
+     所以畫面（手部圖、動畫、過場）與後續流程都跟手勢觸發完全一樣：
+       誠心默念 → 完成合十／搖籤 → 選出命中籤並出現捏取的手／捏取 → 抽出籤條／擲筊 → 擲出筊杯。
+     擲筊結果由原本的判定決定（聖筊才會結束，否則照舊要重擲或重抽）。
+     正在過場、擲筊動畫進行中、儀式尚未開始或已結束時，按了沒有作用。 */
+  function advance() {
+    if (state.bwaTossing) return;
+    switch (state.current) {
+      case "incense":
+        completeIncense();
+        break;
+      case "draw":
+        gestureEngine.advanceDraw();
+        break;
+      case "bwa":
+        if (state.clickBwaMode) castClickBwa();
+        else tossBwa();
+        break;
+    }
+  }
+
   return {
     start,
+    advance,
     reset,
     showScene,
     completeIncense,

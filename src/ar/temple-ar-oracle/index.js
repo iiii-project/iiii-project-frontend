@@ -293,6 +293,12 @@ class TempleArOracle extends HTMLElement {
     }
   }
 
+  /** 「下一步」：不靠手勢，把目前這個階段往前推一步（宿主頁面的「下一步」按鈕呼叫）。 */
+  next(){
+    if (this._destroyed || !this._flow) return;
+    this._flow.advance();
+  }
+
   /** 釋放所有資源（camera stream、three.js WebGL context、動畫迴圈、DOM marker）。 */
   destroy(){
     if (this._destroyed) return;
