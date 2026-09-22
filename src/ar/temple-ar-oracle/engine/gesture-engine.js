@@ -343,6 +343,13 @@
   //    三條件符合任一即觸發，取最近位置歷史估算方向與力道，交給物理動畫落下。
   // ============================================================
   function handleBwaGesture(lm){
+    // 擲出後直到 flow-controller 完成結果處理前，筊杯狀態必須鎖死；
+    // 否則落地後的手部影像可能又被誤判成「握拳抓杯」。
+    if (state.bwaTossing) {
+      hideCupIndicator();
+      return;
+    }
+
     const wrist = lm[0];
     const c = curlAmount(lm);
     const sx = wrist.x * window.innerWidth, sy = wrist.y * window.innerHeight;
