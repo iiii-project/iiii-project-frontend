@@ -13,7 +13,7 @@
 
    影片（/videos）也不進快取：檔案大、又常以 206 range 回應，存不進 Cache API，
    交給瀏覽器自己的 HTTP 快取即可。 */
-const VERSION = 'v3'
+ const VERSION = 'v4'
 const SHELL_CACHE = `temple-shell-${VERSION}`
 const ASSET_CACHE = `temple-assets-${VERSION}`
 const SHELL_URL = '/index.html'
