@@ -342,6 +342,7 @@ class TempleArOracle extends HTMLElement {
         category,
         requestedMode,
         startCamera: () => this._startCamera(),
+        motionAccessGranted: options.motionAccessGranted,
       });
     } catch (error) {
       this._started = false;

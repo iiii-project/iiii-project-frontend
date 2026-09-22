@@ -58,7 +58,7 @@ interface ArInterpretation {
   offline?: boolean
 }
 interface TempleArOracleEl extends HTMLElement {
-  start(options: { question?: string; category?: string; inputMode?: string }): Promise<void>
+  start(options: { question?: string; category?: string; inputMode?: string; motionAccessGranted?: boolean }): Promise<void>
   prepareCamera(): Promise<void>
   destroy(): void
 }
@@ -137,6 +137,20 @@ const askedQuestion = computed(() => {
   return `想請示關於${chosen.value?.label ?? '心中'}的事`
 })
 const hasTypedQuestion = computed(() => question.value.trim().length > 0)
+
+async function requestMotionAccess(): Promise<boolean> {
+  if (!('DeviceMotionEvent' in window)) return false
+  const MotionEvent = window.DeviceMotionEvent as typeof DeviceMotionEvent & {
+    requestPermission?: () => Promise<'granted' | 'denied'>
+  }
+  try {
+    return typeof MotionEvent.requestPermission === 'function'
+      ? await MotionEvent.requestPermission() === 'granted'
+      : true
+  } catch {
+    return false
+  }
+}
 
 function confirmQuestion() {
   if (isRecording.value) stopRecording()
@@ -248,9 +262,10 @@ function onArComplete(event: Event) {
    <temple-ar-oracle> 其實會發 8 種事件，這裡另外接的 3 個（input-mode-resolved／
    incense-complete／draw-complete）原本沒人在聽，正好是「進燒香」「進抽籤」
    「進擲筊」這三個階段轉換點。文案依 input-mode-resolved 給的模式分桌面／手機：
-   camera（桌面鏡頭手勢）才會經過燒香，motion（手機搖動）跟 manual（桌面鏡頭
-   失敗退成點擊）都直接跳過燒香、從抽籤開始。 */
+   camera 會經過燒香，motion（使用者手動選擇）與 manual（鏡頭失敗備援）
+   都直接跳過燒香、從抽籤開始。 */
 type ArInputMode = 'camera' | 'motion' | 'manual'
+type RequestedInputMode = 'camera' | 'motion'
 let resolvedInputMode: ArInputMode | null = null
 let ritualDismissed = false
 
@@ -325,7 +340,7 @@ function unbindAr() {
 // 收集完成 → 進入 AR 儀式
 let isSubmitting = false
 
-async function submit() {
+async function submit(requestedMode: RequestedInputMode = 'camera') {
   /* isBusy 目前恆為 false（loadingLabel 從未被賦值，見上面 99 行），單靠它擋不住
      連點——button 從 DOM 移除是等 Vue 下一輪渲染，兩次 click 事件仍可能在那之前
      都進到這裡，各自呼叫一次 api.create()。isSubmitting 是同步旗標，在事件迴圈
@@ -333,6 +348,11 @@ async function submit() {
   if (isSubmitting || isBusy.value) return
   isSubmitting = true
   try {
+    // motion 模式需要在這個按鈕事件裡先取得 iOS 動作感測權限；結果會
+    // 傳給 AR 引擎，避免切換畫面或等待 API 後失去使用者手勢資格。
+    const motionAccessGranted = requestedMode === 'motion'
+      ? await requestMotionAccess()
+      : undefined
     errorMessage.value = ''
     arNotice.value = ''
     resolvedInputMode = null
@@ -349,19 +369,17 @@ async function submit() {
     bindAr(el)
     setBodyLock(true)
     try {
-      /* 手機（含把視窗縮窄的桌機）一律用搖的；桌機維持 auto，
-         會先試鏡頭手勢，失敗才降級成點擊。 */
-       const useShake = window.matchMedia('(max-width: 640px)').matches
-       if (!useShake) {
+       if (requestedMode === 'camera') {
          // 使用者按下開始求籤的手勢中先預熱鏡頭與 MediaPipe；API 建立和畫面
          // 轉換期間模型可以在背景準備好，進入誠心場景時不必再等初始化。
          void el.prepareCamera().catch(() => undefined)
        }
        await el.start({
-        question: askedQuestion.value,
-        category: chosen.value?.arLabel ?? '綜合運勢',
-        inputMode: useShake ? 'motion' : 'auto'
-      })
+         question: askedQuestion.value,
+         category: chosen.value?.arLabel ?? '綜合運勢',
+         inputMode: requestedMode,
+         motionAccessGranted
+       })
     } catch (error) {
       // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況
       errorMessage.value = error instanceof Error ? error.message : '無法開始求籤，請稍後再試。'
@@ -571,7 +589,10 @@ function restart() {
         </dl>
         <div class="row">
           <button class="btn ghost" type="button" @click="goStep(2)">回去修改</button>
-          <button class="btn primary" type="button" @click="submit">誠 心 送 出</button>
+          <button class="btn ghost motion-choice" type="button" @click="submit('motion')">
+            啟 用 搖 手 機 模 式
+          </button>
+          <button class="btn primary" type="button" @click="submit('camera')">誠 心 送 出</button>
         </div>
       </section>
 

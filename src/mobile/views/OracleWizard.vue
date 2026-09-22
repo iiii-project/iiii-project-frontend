@@ -282,9 +282,9 @@ function drawInstruction(mode: ArInputMode | null): string {
 }
 
 function bwaInstruction(mode: ArInputMode | null): string {
-  return mode === 'motion'
-    ? '接下來點擊螢幕，就可以擲筊囉。'
-    : '把雙手捧著筊杯，然後向上拋出去。'
+  if (mode === 'motion') return '接下來點擊螢幕，就可以擲筊囉。'
+  if (mode === 'camera') return '進入擲筊時，讓雙手同時出現在鏡頭裡即可。'
+  return '準備好後，點擊筊杯就可以擲筊囉。'
 }
 
 function onArInputModeResolved(event: Event) {
@@ -357,14 +357,13 @@ async function submit() {
     bindAr(el)
     setBodyLock(true)
     try {
-      /* 手機（含把視窗縮窄的桌機）一律用搖的；桌機維持 auto，
-         會先試鏡頭手勢，失敗才降級成點擊。 */
-      const useShake = window.matchMedia('(max-width: 640px)').matches
-      await el.start({
-        question: askedQuestion.value,
-        category: chosen.value?.arLabel ?? '綜合運勢',
-        inputMode: useShake ? 'motion' : 'auto'
-      })
+       // 手機也優先使用鏡頭手勢；鏡頭權限失敗時由引擎自動降級為搖手機／點擊。
+       void el.prepareCamera().catch(() => undefined)
+       await el.start({
+         question: askedQuestion.value,
+         category: chosen.value?.arLabel ?? '綜合運勢',
+         inputMode: 'camera'
+       })
     } catch (error) {
       // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況
       errorMessage.value = error instanceof Error ? error.message : '無法開始求籤，請稍後再試。'

@@ -22,18 +22,7 @@ export function createMobileShake({ els, state, callbacks }) {
 
   function supportsMotion(){ return 'DeviceMotionEvent' in window; }
 
-  async function requestAccess(){
-    if (!supportsMotion()) return false;
-    try {
-      if (typeof DeviceMotionEvent.requestPermission === 'function'){
-        const permission = await DeviceMotionEvent.requestPermission();
-        return permission === 'granted';
-      }
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
+  async function requestAccess(){ return requestMotionAccess(); }
 
   function stop(){
     active = false;
@@ -101,6 +90,21 @@ export function createMobileShake({ els, state, callbacks }) {
   }
 
   return { requestAccess, start, stop };
+}
+
+/* 可由頁面上的「搖動手機開始」按鈕直接呼叫，確保 iOS 的權限請求仍在
+   使用者手勢期間發生；真正建立 AR 元件後會把結果傳回同一個流程。 */
+export async function requestMotionAccess(){
+  if (typeof window === 'undefined' || !('DeviceMotionEvent' in window)) return false;
+  try {
+    if (typeof DeviceMotionEvent.requestPermission === 'function'){
+      const permission = await DeviceMotionEvent.requestPermission();
+      return permission === 'granted';
+    }
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 // 裝置偵測：原始碼裡的判斷式（User-Agent + 觸控點數 + pointer:coarse媒體查詢 + 視窗寬度），
