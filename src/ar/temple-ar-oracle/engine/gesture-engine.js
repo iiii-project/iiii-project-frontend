@@ -1,8 +1,8 @@
 /* =========================================================================
    GestureEngine — MediaPipe 手部座標處理與狀態判定
    來源：temple_oracle_v17.html 2118–2543行。所有手勢判定的數學/邏輯
-   （curlAmount、isFist、合十雙路徑判定、搖籤震盪計數、捏取上抽判定、
-   捧筊拋擲的速度/加速度輔助判定……）逐行原封不動搬遷，完全沒有調整。
+   （isFist、合十雙路徑判定、搖籤震盪計數、捏取上抽判定、
+    雙手擲筊判定……）逐行原封不動搬遷，完全沒有調整。
 
    【封裝調整說明（只有下面4處「取得外部資源的方式」不同，其餘皆逐行相同）】
    1. 原本直接讀取全域 `els.xxx`、`AppState.xxx`、`CONFIG`，改為 createGestureEngine()
@@ -11,15 +11,15 @@
       `UIActions.tossBwa()`，改為呼叫注入進來的 `callbacks.completeIncense()` /
       `callbacks.completeDraw()` / `callbacks.tossBwa()`——這三個callback由
       flow-controller.js提供，呼叫時機與傳入參數完全相同。
-   3. 原本直接呼叫全域 `ParticleSystem.repel/converge`、`BwaScene.setHoldPosition`，
-      改為呼叫注入進來的 `particleSystem`、`bwaScene` 實例，方法簽名不變。
+   3. 原本直接呼叫全域 `ParticleSystem.repel/converge`，改為呼叫注入進來的
+      `particleSystem` 實例。
    4. `ensureMarkers()` 原本把手指標記點 `document.body.appendChild(...)`，
       改為 append 到注入進來的 `rootEl`（元件自己的容器），避免手勢標記點
       跑到 Shadow DOM 外面、脫離元件管理範圍。
    ========================================================================= */
  import { getPerformanceProfile } from '@/utils/performance';
 
- export function createGestureEngine({ els, state, config: CONFIG, particleSystem, bwaScene, rootEl, callbacks }) {
+  export function createGestureEngine({ els, state, config: CONFIG, particleSystem, rootEl, callbacks }) {
    const outCtx = els.outputCanvas.getContext('2d');
    const profile = getPerformanceProfile();
 
@@ -33,9 +33,7 @@
 
   // ---- 捧筊 / 拋擲 狀態 ----
   const cup = {
-    holding: false,      // 是否正處於「握拳抓杯跟隨」狀態
-    openFrames: 0,       // 連續偵測到「手掌張開」的影格數（用於防抖動誤判）
-    posHistory: [],       // {t,x,y} 手腕螢幕座標歷史，用於估計拋擲瞬間的移動速度/方向
+    twoHandsSeen: false, // 本輪是否已偵測到兩隻手，避免同一輪重複觸發
   };
 
   function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
@@ -47,17 +45,6 @@
     return smoothed;
   }
 
-  // ============================================================
-  // 手指彎曲量計算：對食指/中指/無名指/小指，分別計算「指尖到手腕距離」
-  // 除以「指根(MCP)到手腕距離」。此比值越小代表手指越彎曲收攏（握拳抓杯），
-  // 越大代表手指越伸直張開。回傳四指平均值，作為「抓住」與「放手」判定基準。
-  // ============================================================
-  function curlAmount(lm){
-    const wrist = lm[0];
-    const fingers = [ {tip:lm[8],mcp:lm[5]}, {tip:lm[12],mcp:lm[9]}, {tip:lm[16],mcp:lm[13]}, {tip:lm[20],mcp:lm[17]} ];
-    const ratios = fingers.map(f => dist(f.tip,wrist) / (dist(f.mcp,wrist) || 0.0001));
-    return ratios.reduce((a,b)=>a+b,0) / ratios.length;
-  }
   function isFist(lm){
     const wrist = lm[0];
     const fingers = [ {tip:lm[8],mcp:lm[5]}, {tip:lm[12],mcp:lm[9]}, {tip:lm[16],mcp:lm[13]}, {tip:lm[20],mcp:lm[17]} ];
@@ -117,29 +104,15 @@
 
     if (!hasHand){
        smoothed = null;
-      hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
-      // 快速向下拋擲時，手部常因動作模糊或離開鏡頭範圍而瞬間追蹤失敗；
-      // 若當下正捧著筊杯，就用「消失前」的最後一段位移推算拋擲方向與力道，
-      // 直接視為已擲出，避免筊杯因為追蹤中斷而卡在手上。
-      if (state.current === 'bwa' && cup.holding && !state.bwaTossing){
-        const last = cup.posHistory[cup.posHistory.length - 1];
-        const first = cup.posHistory[0];
-        els.outputCanvas.classList.remove('dof-blur');
-        els.arDecoration.classList.remove('dof-blur');
-        if (last && first && last.t !== first.t){
-          const dt = Math.max(last.t - first.t, 16);
-          const vx = (last.x - first.x) / dt, vy = (last.y - first.y) / dt;
-          callbacks.tossBwa(last.x, last.y, vx, vy);
-        } else {
-          callbacks.tossBwa(window.innerWidth/2, window.innerHeight/2, 0, CONFIG.THROW_VELOCITY_AUX);
-        }
-        cup.holding = false; cup.openFrames = 0; cup.posHistory = [];
-      }
+      hideFingertipUI(); hideFistIndicator();
+      if (state.current === 'bwa') cup.twoHandsSeen = false;
       return;
     }
 
-    let rawLm = results.multiHandLandmarks[0];
-    rawLm = rawLm.map(p => ({ x: 1-p.x, y: p.y, z: p.z }));
+    const handLandmarks = results.multiHandLandmarks.map((landmarks) =>
+      landmarks.map(p => ({ x: 1-p.x, y: p.y, z: p.z }))
+    );
+    const rawLm = handLandmarks[0];
 
     // 金色香灰粒子會被移動中的手輕輕撥開，增加畫面互動感
     particleSystem.repel(rawLm[0].x * window.innerWidth, rawLm[0].y * window.innerHeight, CONFIG.PARTICLE_REPEL_RADIUS);
@@ -147,7 +120,7 @@
     if (state.current === 'bwa'){
       // 捧筊／拋擲階段使用未經重度平滑的座標，確保「張手瞬間」判定即時
       hideFingertipUI(); hideFistIndicator();
-      handleBwaGesture(rawLm);
+       handleBwaGesture(handLandmarks);
       return;
     }
 
@@ -161,7 +134,7 @@
        // 搖籤完成後由程式自動演出抽籤，不再等待捏取／上抽手勢。
        return;
      } else {
-       hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
+       hideFingertipUI(); hideFistIndicator();
      }
   }
 
@@ -334,95 +307,38 @@
   }
 
   // ============================================================
-  // 捧筊與拋擲判定（單手握拳抓杯／往下丟）：
-  // 1. 「抓」：curlAmount 低於 CUP_CURL_MAX（手指收攏成握拳狀）即視為抓住筊杯，
-  //    筊杯即時跟隨手腕螢幕座標移動，並記錄位置歷史供後續估算拋擲速度。
-  // 2. 「丟」：抓住狀態下，符合以下任一條件即判定為「拋擲」：
-  //    (a) curlAmount 超過 OPEN_CURL_MIN（手掌張開放手）；
-  //    (b) 手腕瞬時速度超過 THROW_VELOCITY_AUX（就算手指沒完全張開，
-  //        只要往下甩的力道夠大也視為拋擲，避免因光線或動作模糊誤判手指狀態）；
-  //    (c) 短時間內速度變化量（加速度）超過 THROW_ACCEL_AUX，代表使用者
-  //        做了一個明顯的「往下一丟」動作。
-  //    三條件符合任一即觸發，取最近位置歷史估算方向與力道，交給物理動畫落下。
   // ============================================================
-  function handleBwaGesture(lm){
+  // 擲筊判定：攝影機模式只要求同一個結果影格偵測到兩隻手，
+  // 不再等待單手握拳、抓杯、跟手移動或放手投擲。
+  // ============================================================
+  function handleBwaGesture(hands){
     // 擲出後直到 flow-controller 完成結果處理前，筊杯狀態必須鎖死；
     // 否則落地後的手部影像可能又被誤判成「握拳抓杯」。
     if (state.bwaTossing) {
-      hideCupIndicator();
       return;
     }
 
-    const wrist = lm[0];
-    const c = curlAmount(lm);
-    const sx = wrist.x * window.innerWidth, sy = wrist.y * window.innerHeight;
-
-    updateCupIndicator(sx, sy, cup.holding);
-
-    if (!cup.holding){
-      if (c < CONFIG.CUP_CURL_MAX){
-        cup.holding = true; cup.openFrames = 0; cup.posHistory = [];
-        els.bwaHint.textContent = '已抓住筊杯，往下一丟即可擲出';
-        // 動態景深：抓住筊杯時背景失焦模糊，讓視覺焦點鎖定在筊杯上
-        els.outputCanvas.classList.add('dof-blur');
-        els.arDecoration.classList.add('dof-blur');
-      } else {
-        els.bwaHint.textContent = '請握拳抓住筊杯';
-      }
+    if (hands.length < 2){
+      cup.twoHandsSeen = false;
+      els.bwaHint.textContent = '請讓雙手同時進入畫面即可擲筊';
       return;
     }
 
-    // 更新位置歷史（約 200ms 窗口），並讓筊杯跟隨手腕移動
-    const now = performance.now();
-    cup.posHistory.push({t:now, x:sx, y:sy});
-    while (cup.posHistory.length && now - cup.posHistory[0].t > 200) cup.posHistory.shift();
-
-    bwaScene.setHoldPosition(wrist.x, wrist.y);
-
-    const first = cup.posHistory[0] || {x:sx,y:sy,t:now};
-    const dt = Math.max(now - first.t, 16);
-    const vx = (sx-first.x)/dt, vy = (sy-first.y)/dt; // px/ms
-    const speed = Math.hypot(vx, vy);
-
-    // 加速度：比較本次視窗前後半段的平均速度差，抓出「突然甩動」的瞬間
-    let accel = 0;
-    if (cup.posHistory.length >= 4){
-      const mid = cup.posHistory[Math.floor(cup.posHistory.length/2)];
-      const dtEarly = Math.max(mid.t - first.t, 8);
-      const dtLate = Math.max(now - mid.t, 8);
-      const speedEarly = Math.hypot((mid.x-first.x)/dtEarly, (mid.y-first.y)/dtEarly);
-      const speedLate = Math.hypot((sx-mid.x)/dtLate, (sy-mid.y)/dtLate);
-      accel = (speedLate - speedEarly) / dtLate;
-    }
-
-    const openByCurl = c > CONFIG.OPEN_CURL_MIN;
-    const openByVelocity = speed > CONFIG.THROW_VELOCITY_AUX;
-    const openByAccel = accel > CONFIG.THROW_ACCEL_AUX;
-
-    if (openByCurl || openByVelocity || openByAccel){
-      cup.openFrames++;
-      const framesNeeded = openByVelocity || openByAccel ? 1 : CONFIG.OPEN_CONFIRM_FRAMES;
-      if (cup.openFrames >= framesNeeded && !state.bwaTossing){
-        els.outputCanvas.classList.remove('dof-blur');
-        els.arDecoration.classList.remove('dof-blur');
-        callbacks.tossBwa(sx, sy, vx, vy);
-        cup.holding = false;
-      }
-    } else {
-      cup.openFrames = 0;
-    }
+    if (cup.twoHandsSeen) return;
+    cup.twoHandsSeen = true;
+    els.bwaHint.textContent = '已偵測到雙手，擲筊中…';
+    callbacks.tossBwa(window.innerWidth / 2, window.innerHeight / 2, 0, 0);
   }
 
-  let markerA, markerB, line, fistDot, cupDot;
+  let markerA, markerB, line, fistDot;
   function ensureMarkers(){
     if (!markerA){
       markerA = document.createElement('div'); markerA.className='fingertip-marker';
       markerB = document.createElement('div'); markerB.className='fingertip-marker';
       line = document.createElement('div'); line.className='pinch-line';
       fistDot = document.createElement('div'); fistDot.className='fist-indicator';
-      cupDot = document.createElement('div'); cupDot.className='cup-indicator';
       rootEl.appendChild(markerA); rootEl.appendChild(markerB);
-      rootEl.appendChild(line); rootEl.appendChild(fistDot); rootEl.appendChild(cupDot);
+      rootEl.appendChild(line); rootEl.appendChild(fistDot);
     }
   }
   function hideFingertipUI(){ if (markerA){ markerA.style.opacity=0; markerB.style.opacity=0; line.style.opacity=0; } }
@@ -432,12 +348,6 @@
     fistDot.style.opacity = fistNow?1:0.35; fistDot.style.borderColor = fistNow ? 'var(--gold-soft)' : 'rgba(255,255,255,0.4)';
   }
   function hideFistIndicator(){ if (fistDot) fistDot.style.opacity=0; }
-  function updateCupIndicator(sx, sy, holding){
-    ensureMarkers();
-    cupDot.style.left = sx+'px'; cupDot.style.top = sy+'px'; cupDot.style.opacity = 0.9;
-    cupDot.style.borderColor = holding ? 'var(--gold-soft)' : 'rgba(255,255,255,0.45)';
-  }
-  function hideCupIndicator(){ if (cupDot) cupDot.style.opacity = 0; }
 
   // 合十階段視覺回饋：雙手可見時顯示兩個掌心點+連線；只偵測到單手時顯示單一穩定指示點
   function updateDualHandUI(cA, cB, isClose){
@@ -461,12 +371,13 @@
   // 新增：釋放資源用（原始版本沒有這支函式，因為活在單頁iframe裡卸載時瀏覽器整包回收；
   // 元件化之後需要能清掉手動建立的marker DOM節點，避免殘留在畫面上）
   function destroy(){
-    [markerA, markerB, line, fistDot, cupDot].forEach(elm => elm && elm.remove());
+    [markerA, markerB, line, fistDot].forEach(elm => elm && elm.remove());
   }
 
   return {
     onResults, syncCanvasSize, resetDrawReveal, resetShakeProgress, resetIncenseProgress,
-    resetBwaTracking(){ cup.holding=false; cup.openFrames=0; cup.posHistory=[]; },
+    resetBwaTracking(){ cup.twoHandsSeen=false; },
+    lockBwaUntilHandsLeave(){ cup.twoHandsSeen=true; },
     destroy
   };
 }

@@ -126,7 +126,6 @@ class TempleArOracle extends HTMLElement {
       state: this._state,
       config: CONFIG,
       particleSystem: this._particleSystem,
-      bwaScene: this._bwaScene,
       rootEl: root,
       callbacks: {
         completeIncense: () => this._flow.completeIncense(),
@@ -230,10 +229,10 @@ class TempleArOracle extends HTMLElement {
   _startCamera(){
     return new Promise((resolve, reject) => {
       const profile = getPerformanceProfile();
-      // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑，maxNumHands/modelComplexity
-      // 降到最低夠用的設定，避免每幀疊加兩個重模型直接把 CPU 榨乾。
+      // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑；保持最低模型複雜度，
+      // 但擲筊必須保留兩隻手的輸出，才能以雙手同時入鏡觸發。
       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-      hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+      hands.setOptions({ maxNumHands: 2, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
       hands.onResults(this._gestureEngine.onResults);
       this._hands = hands;
 
