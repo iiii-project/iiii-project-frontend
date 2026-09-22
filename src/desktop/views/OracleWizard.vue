@@ -629,7 +629,6 @@ function restart() {
                 :data="{
                   number: fortune.no,
                   ganzhi: fortune.ganzhi,
-                  level: fortune.grade,
                   poem: fortune.poem,
                   note: fortune.modern || fortune.explain,
                   shareUrl: canShare ? shareUrl : null

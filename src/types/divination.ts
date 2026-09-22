@@ -34,7 +34,6 @@ export interface Fortune {
   number: number
   title: string
   ganzhi?: string
-  fortune_level?: string
   poem: string
   translation?: string
   story?: string

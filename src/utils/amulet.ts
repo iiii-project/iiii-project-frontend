@@ -16,8 +16,6 @@ export interface AmuletData {
   /** 籤號 */
   number: number | string
   ganzhi?: string | null
-  /** 吉凶（上籤／中平／下下…） */
-  level?: string | null
   poem?: string | null
   /** 符面下半的白話小語（白話翻譯或現代解說皆可） */
   note?: string | null
@@ -35,14 +33,6 @@ const HEIGHT = 900
 const OUTPUT_SCALE = 2
 
 type Tier = 'auspicious' | 'neutral' | 'caution'
-
-/* 吉凶分級與 AR 引擎的 gradeTier 同一套判斷（上→吉、下→警、其餘→平） */
-function tierOf(level?: string | null): Tier {
-  const text = level ?? ''
-  if (text.includes('上')) return 'auspicious'
-  if (text.includes('下')) return 'caution'
-  return 'neutral'
-}
 
 interface Theme {
   top: string
@@ -337,7 +327,7 @@ async function drawShareQr(
 }
 
 export async function renderAmulet(data: AmuletData): Promise<string> {
-  const tier = tierOf(data.level)
+  const tier: Tier = 'neutral'
   const theme = THEMES[tier]
   const rand = seedFrom(data.number)
 
@@ -417,7 +407,7 @@ export async function renderAmulet(data: AmuletData): Promise<string> {
   ctx.stroke()
   ctx.font = 'bold 32px "Noto Serif TC", serif'
   ctx.fillStyle = '#f2e2b3'
-  const subtitle = [data.ganzhi, data.level].filter(Boolean).join(' · ')
+  const subtitle = data.ganzhi || ''
   ctx.fillText(`第 ${data.number} 籤`, WIDTH / 2, circleY + (subtitle ? -4 : 11))
   if (subtitle) {
     ctx.font = '18px "Noto Serif TC", serif'

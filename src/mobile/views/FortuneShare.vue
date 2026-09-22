@@ -97,7 +97,6 @@ onBeforeUnmount(() => {
         <button class="paper-toggle" type="button" :aria-expanded="!paperCollapsed" @click="togglePaper">
           <template v-if="paperCollapsed">
             <span class="mini-no">第 {{ fortune.number }} 籤</span>
-            <span v-if="fortune.fortune_level" class="mini-level">{{ fortune.fortune_level }}</span>
             <span class="toggle-hint">展 開 籤 紙 ▼</span>
           </template>
           <span v-else class="toggle-hint">收 起 籤 紙 ▲</span>
@@ -133,7 +132,6 @@ onBeforeUnmount(() => {
           :data="{
             number: fortune.number,
             ganzhi: fortune.ganzhi,
-            level: fortune.fortune_level,
             poem: fortune.poem,
             note: fortune.translation,
             shareUrl: fortuneShareUrl(sessionId)
@@ -260,14 +258,6 @@ body.fortune-share-open {
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--jiang-hong-deep);
-}
-.mini-level {
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: calc(12.5px * var(--fs, 1));
-  letter-spacing: 0.12em;
-  color: #fdf5e2;
-  background: linear-gradient(150deg, var(--jiang-hong), var(--jiang-hong-deep));
 }
 .toggle-hint {
   margin-left: auto;

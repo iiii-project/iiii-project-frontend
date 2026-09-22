@@ -24,7 +24,6 @@ declare module '@/ar/temple-ar-oracle/engine/offline-fortunes.js' {
   export const OFFLINE_FORTUNES: Array<{
     no: number
     ganzhi: string
-    grade: string
     poem: string
     explain: string
     modern: string

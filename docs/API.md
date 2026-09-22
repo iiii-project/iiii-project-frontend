@@ -145,7 +145,7 @@ Authorization: Bearer <access_token>
 
 不需認證。`number` 是正整數；只可查詢啟用、公開籤系中的啟用籤詩。
 
-`data` 包含：`number`、`title`、`ganzhi`、`fortune_level`、`poem`、`translation`、`story`、`general_meaning`、`love_meaning`、`career_meaning`、`study_meaning`、`wealth_meaning`、`health_meaning`、`family_meaning`、`relationship_meaning`、`travel_meaning`。
+`data` 包含：`number`、`title`、`ganzhi`、`poem`、`translation`、`story`、`general_meaning`、`love_meaning`、`career_meaning`、`study_meaning`、`wealth_meaning`、`health_meaning`、`family_meaning`、`relationship_meaning`、`travel_meaning`。
 
 ## 求籤
 

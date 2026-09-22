@@ -490,7 +490,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
         <dl class="summary">
           <div>
             <dt>籤號</dt>
-            <dd>第 {{ fortune?.number }} 籤<span v-if="fortune?.fortune_level"> · {{ fortune.fortune_level }}</span></dd>
+             <dd>第 {{ fortune?.number }} 籤</dd>
           </div>
           <div>
             <dt>所問方向</dt>
@@ -550,8 +550,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
                 :data="{
                   number: fortune.number,
                   ganzhi: fortune.ganzhi,
-                  level: fortune.fortune_level,
-                  poem: fortune.poem,
+                   poem: fortune.poem,
                   note: fortune.translation || fortune.general_meaning,
                   shareUrl: shareUrl || null
                 }"
