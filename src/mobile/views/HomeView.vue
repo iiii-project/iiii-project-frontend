@@ -1,49 +1,15 @@
 <script setup lang="ts">
-/* 手機版首頁：獨立於桌機版（index.vue）的一支頁面。
-   共用同一套配色、字體、音效與玉皇大帝入殿轉場，但進場改成「推廟門」——
-   logo 嵌在門縫正中央，門一開就從中線裂成兩半向兩側敞開。 */
+/* 手機版首頁：獨立於桌機版的一支頁面，進場只保留推廟門效果。 */
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import TempleGate from '../components/TempleGate.vue'
 
 const router = useRouter()
 
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-/* ── 音效：與桌機版同一支音檔。音檔前 1.5 秒是空白，
-   從撞擊點往回抓，聲音才會正好落在門敞開的那一刻。 ── */
 const logoUrl = new URL('../../assets/images/logo.webp', import.meta.url).href
 /* 神明與背景都跟桌機首頁同一組（見 desktop/views/HomeView.vue），
    兩邊的第一印象要一致，不再用內嵌 SVG 與純 CSS 漸層天空。 */
 const jadeUrl = new URL('../../assets/images/jade-emperor.webp', import.meta.url).href
-const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
-const AUDIO_IMPACT = 1.5
-const AUDIO_PREROLL = 0.04
-let ascendSound: HTMLAudioElement | null = null
-
-function primeSound() {
-  if (ascendSound) return
-  ascendSound = new Audio(ascendSoundUrl)
-  ascendSound.preload = 'auto'
-  ascendSound.volume = 0.9
-  ascendSound.load()
-}
-
-function playSound(visualImpact: number) {
-  try {
-    primeSound()
-    if (!ascendSound) return
-    ascendSound.currentTime = Math.max(0, AUDIO_IMPACT - AUDIO_PREROLL - visualImpact)
-    void ascendSound.play().catch(() => undefined)
-  } catch {
-    // 音效失敗不影響動畫
-  }
-}
-
-const TITLE_CHARS = ['籤', '好', '運']
-const IMPACT_AT = 0.32 // 玉皇大帝撞上標題、字被震碎的時間（秒）
-
 // ── 推門：門扇本體與開門聲都在 TempleGate 元件裡，這裡只接它的事件 ──
 const isOpening = ref(false)
 const isOpen = ref(false)
@@ -51,19 +17,8 @@ const isOpen = ref(false)
 function onGateOpening() { isOpening.value = true }
 function onGateOpened() { isOpen.value = true }
 
-// ── 入殿：玉皇大帝迎面而來，門在身後闔上 ──
-const isAscending = ref(false)
-let ascendTimer = 0
-
 function enterHall() {
-  if (isAscending.value) return
-  isAscending.value = true
-  playSound(IMPACT_AT)
-  if (prefersReducedMotion()) {
-    router.push('/oracle')
-    return
-  }
-  ascendTimer = window.setTimeout(() => router.push('/oracle'), 2050)
+  router.push('/oracle')
 }
 
 function go(path: string) {
@@ -105,43 +60,19 @@ const motes = Array.from({ length: 14 }, (_, index) => ({
   peak: `${0.4 + (index % 4) * 0.16}`
 }))
 
-/* 撞擊迸出的火星：角度、距離、大小、時間都錯開，
-   碎塊負責「塊」、火星負責「屑」，兩層疊起來才有細節。 */
-const sparks = Array.from({ length: 22 }, (_, index) => ({
-  id: index,
-  angle: `${index * 16.4 + (index % 5) * 7}deg`,
-  dist: `${11 + (index % 6) * 6}vmin`,
-  size: `${2 + (index % 4) * 1.6}px`,
-  delay: `${0.32 + (index % 7) * 0.022}s`,
-  dur: `${0.5 + (index % 5) * 0.13}s`
-}))
-
-// 轉場用的霧絮：自中心往外捲
-const puffs = Array.from({ length: 10 }, (_, index) => ({
-  id: index,
-  angle: `${index * 36 + (index % 3) * 11}deg`,
-  dist: `${30 + (index % 4) * 10}vmax`,
-  size: `${220 + (index % 4) * 90}px`,
-  delay: `${1.02 + (index % 5) * 0.05}s`,
-  dur: `${0.95 + (index % 4) * 0.12}s`,
-  churn: `${2.2 + (index % 5) * 0.4}s`
-}))
-
 onMounted(() => {
   document.body.classList.add('mobile-home-open')
-  primeSound()
   window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
   document.body.classList.remove('mobile-home-open')
   window.removeEventListener('keydown', onKeydown)
-  if (ascendTimer) clearTimeout(ascendTimer)
 })
 </script>
 
 <template>
-  <div class="mobile-home" :class="{ opening: isOpening, opened: isOpen, ascending: isAscending }">
+  <div class="mobile-home" :class="{ opening: isOpening, opened: isOpen }">
     <!-- ============ SVG 素材 ============ -->
     <svg width="0" height="0" class="defs" aria-hidden="true">
       <defs>
@@ -313,33 +244,11 @@ onBeforeUnmount(() => {
     <!-- ============ 門後的內容 ============ -->
     <main class="content">
       <div class="title-block">
-      <h1 class="title"><span
-          v-for="char in TITLE_CHARS"
-          :key="char"
-          class="glyph"
-        ><span class="glyph-face">{{ char }}</span
-        ><span
-          v-for="band in 6"
-          :key="band"
-          class="shard"
-          :class="`s${band}`"
-          aria-hidden="true"
-        >{{ char }}</span
-        ></span><span class="sparks" aria-hidden="true"><i
-          v-for="spark in sparks"
-          :key="spark.id"
-          :style="{
-            '--sa': spark.angle,
-            '--sd': spark.dist,
-            '--ss': spark.size,
-            '--sdelay': spark.delay,
-            '--sdur': spark.dur
-          }"
-        ></i></span><span class="impact-flash" aria-hidden="true"></span></h1>
+      <h1 class="title">籤好運</h1>
       <p class="subtitle">誠心一問 · 天意自來</p>
       </div>
       <div class="actions">
-        <button class="btn primary" type="button" :disabled="isAscending" @click="enterHall">入 殿 求 籤</button>
+        <button class="btn primary" type="button" @click="enterHall">入 殿 求 籤</button>
         <button class="btn ghost" type="button" @click="go('/lookup')">線 上 查 籤</button>
       </div>
       <button class="tutorial-link" type="button" @click="openTutorial">
@@ -351,26 +260,6 @@ onBeforeUnmount(() => {
     <!-- 廟門：抽成共用元件，掃碼取籤頁用的是同一扇 -->
     <TempleGate @opening="onGateOpening" @opened="onGateOpened" />
 
-
-    <!-- ============ 入殿轉場 ============ -->
-    <div v-if="isAscending" class="ascend" aria-hidden="true">
-      <span class="break-flash"></span>
-      <span class="break-wave"></span>
-      <span
-        v-for="puff in puffs"
-        :key="puff.id"
-        class="puff"
-        :style="{
-          '--angle': puff.angle,
-          '--dist': puff.dist,
-          '--size': puff.size,
-          '--delay': puff.delay,
-          '--dur': puff.dur,
-          '--churn': puff.churn
-        }"
-      ><i></i></span>
-      <span class="veil"></span>
-    </div>
 
     <!-- ============ 教學影片 ============ -->
     <div
@@ -597,68 +486,7 @@ body.mobile-home-open {
 }
 .opening .content,
 .opened .content { opacity: 1; transform: none; pointer-events: auto; }
-.ascending .content {
-  /* 標題要留著被撞碎，所以整層不淡出，只把層級提到玉皇大帝之前 */
-  z-index: 7;
-  justify-content: center;
-}
-.ascending .subtitle,
-.ascending .actions,
-.ascending .tutorial-link {
-  animation: hero-out 0.4s ease-in forwards;
-}
-/* 先愈抖愈兇，0.32 秒被撞上時炸成六塊 */
-.ascending .title .glyph {
-  animation: glyph-shudder 0.32s linear forwards;
-}
-.ascending .title .glyph:nth-child(2) { animation-delay: 0.02s; }
-.ascending .title .glyph:nth-child(3) { animation-delay: 0.04s; }
-.ascending .glyph-face { animation: face-out 0.05s linear 0.32s forwards; }
-.ascending .shard {
-  opacity: 1;
-  animation: shard-fly 0.8s cubic-bezier(0.1, 0.72, 0.3, 1) 0.32s forwards;
-}
-/* 每塊各自的去向：左半往左、右半往右，上下再分開，
-   時間錯開 8ms 一階，碎裂才有先後而不是整排齊飛。 */
-.ascending .glyph .s1 { --sx: -0.9; --fy: -1; --fr: -34deg; --fs: 1.28; }
-.ascending .glyph .s2 { --sx: 0.9; --fy: -1.06; --fr: 30deg; --fs: 1.32; animation-delay: 0.328s; }
-.ascending .glyph .s3 { --sx: -1.12; --fy: 0.04; --fr: -18deg; --fs: 1.44; animation-delay: 0.336s; }
-.ascending .glyph .s4 { --sx: 1.12; --fy: 0.1; --fr: 20deg; --fs: 1.4; animation-delay: 0.344s; }
-.ascending .glyph .s5 { --sx: -0.86; --fy: 1.02; --fr: -26deg; --fs: 1.26; animation-delay: 0.352s; }
-.ascending .glyph .s6 { --sx: 0.86; --fy: 1.06; --fr: 24deg; --fs: 1.3; animation-delay: 0.36s; }
-.ascending .glyph:nth-child(1) .shard { --dx: -1.15; }
-.ascending .glyph:nth-child(2) .shard { --dx: 0.1; }
-.ascending .glyph:nth-child(3) .shard { --dx: 1.15; }
-/* 撞擊的瞬間整個畫面震一下 */
-.ascending .scene,
-.ascending .content {
-  animation: screen-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.32s;
-}
-
-/* 撞擊白光與衝擊環 */
-.break-flash {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(30% 18% at 50% 50%, rgba(255, 255, 255, 0.9), rgba(255, 246, 214, 0.4) 46%, rgba(255, 244, 208, 0) 74%);
-  opacity: 0;
-  animation: flash 0.36s ease-out 0.32s forwards;
-}
-.break-wave {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 60vmin;
-  height: 60vmin;
-  margin: -30vmin 0 0 -30vmin;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 244, 208, 0.9);
-  box-shadow: 0 0 50px rgba(255, 236, 180, 0.7), inset 0 0 40px rgba(255, 240, 195, 0.55);
-  opacity: 0;
-  animation: break-wave 0.8s cubic-bezier(0.15, 0.7, 0.3, 1) 0.32s forwards;
-}
-
 .title {
-  position: relative; /* 火星與閃光以標題中心為原點 */
   margin: 0;
   font-size: clamp(52px, 17vw, 80px);
   font-weight: 700;
@@ -668,60 +496,6 @@ body.mobile-home-open {
   color: var(--jiang-hong-deep);
   text-shadow: 0 2px 0 rgba(255, 255, 255, 0.55), 0 16px 38px rgba(122, 38, 38, 0.2);
 }
-/* 標題三個字各自疊三截碎片，平時隱形，被撞破時才飛出去 */
-.title .glyph {
-  position: relative;
-  display: inline-block;
-}
-.title .shard {
-  position: absolute;
-  left: 0;
-  top: 0;
-  opacity: 0;
-  pointer-events: none;
-  text-shadow: 0 2px 10px rgba(90, 26, 26, 0.45), 0 0 2px rgba(90, 26, 26, 0.5);
-  will-change: transform, opacity;
-}
-/* 六片不規則碎塊（2 欄 × 3 列，交界刻意歪斜），
-   拼起來剛好蓋滿整個字，比原本三條橫帶碎得細也碎得像。 */
-.title .s1 { clip-path: polygon(-14% -6%, 54% -6%, 46% 30%, -14% 36%); }
-.title .s2 { clip-path: polygon(54% -6%, 114% -6%, 114% 32%, 46% 30%); }
-.title .s3 { clip-path: polygon(-14% 36%, 46% 30%, 52% 68%, -14% 72%); }
-.title .s4 { clip-path: polygon(46% 30%, 114% 32%, 114% 70%, 52% 68%); }
-.title .s5 { clip-path: polygon(-14% 72%, 52% 68%, 44% 114%, -14% 114%); }
-.title .s6 { clip-path: polygon(52% 68%, 114% 70%, 114% 114%, 44% 114%); }
-
-/* 撞擊的兩層附加細節：放射狀火星 + 一瞬的白金閃光 */
-.sparks,
-.impact-flash {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  pointer-events: none;
-}
-.sparks i {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--ss, 3px);
-  height: var(--ss, 3px);
-  margin: calc(var(--ss, 3px) / -2) 0 0 calc(var(--ss, 3px) / -2);
-  border-radius: 50%;
-  background: radial-gradient(circle, #fffdf2 0%, #ffe9ad 42%, rgba(212, 175, 55, 0) 72%);
-  opacity: 0;
-  will-change: transform, opacity;
-}
-.ascending .sparks i { animation: spark-fly var(--sdur, 0.6s) cubic-bezier(0.12, 0.7, 0.2, 1) var(--sdelay, 0.32s) forwards; }
-.impact-flash {
-  width: 46vmin;
-  height: 46vmin;
-  margin: -23vmin 0 0 -23vmin;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(255, 232, 170, 0.6) 34%, rgba(255, 226, 150, 0) 70%);
-  opacity: 0;
-}
-.ascending .impact-flash { animation: flash-pop 0.42s ease-out 0.3s forwards; }
-
 /* 標題與副標同一組：容器寬度由標題（三個大字）決定，
    副標再撐滿這個寬度，兩行的左右邊緣就會對齊。 */
 .title-block {
@@ -806,49 +580,6 @@ body.mobile-home-open {
   border-style: solid;
   border-width: 4.5px 0 4.5px 7px;
   border-color: transparent transparent transparent var(--jiang-hong);
-}
-
-/* ===================== 入殿轉場 ===================== */
-.ascend {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  pointer-events: none;
-  overflow: hidden;
-}
-.ascending .emperor {
-  opacity: 1;
-  filter: blur(0);
-  -webkit-mask-image: none;
-  mask-image: none;
-  animation: surge 1.5s cubic-bezier(0.42, 0, 0.3, 1) forwards;
-  z-index: 4;
-}
-.puff {
-  position: absolute;
-  left: 50%;
-  top: 48%;
-  width: var(--size, 260px);
-  height: calc(var(--size, 260px) * 0.66);
-  margin-left: calc(var(--size, 260px) / -2);
-  margin-top: calc(var(--size, 260px) * -0.33);
-  opacity: 0;
-  animation: puff-out var(--dur, 1.2s) cubic-bezier(0.22, 0.6, 0.3, 1) var(--delay, 1s) forwards;
-}
-.puff i {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95), rgba(255, 252, 240, 0.55) 48%, rgba(255, 248, 228, 0) 78%);
-  animation: churn var(--churn, 3s) ease-in-out infinite;
-}
-.veil {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(70% 50% at 50% 44%, rgba(255, 250, 232, 1), rgba(255, 240, 202, 0.9) 45%, rgba(246, 222, 178, 0.7) 100%);
-  opacity: 0;
-  animation: veil-in 0.72s ease-in 1.4s forwards;
 }
 
 /* ===================== 教學影片 ===================== */
@@ -957,113 +688,6 @@ body.mobile-home-open {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1.08); }
   50% { transform: translate3d(-7vw, 2vh, 0) scale(0.94); }
 }
-/* 手機上玉皇大帝的底圖本來就接近整個螢幕寬，
-   放大倍率要比桌機小得多，否則撞擊當下整片白掉、碎片全被吃掉。 */
-@keyframes surge {
-  0% { transform: translate3d(-50%, -56%, 0) scale(1); opacity: 0.34; }
-  16% { opacity: 0.9; }
-  /* 撞上標題：與字同高，還看得見背景 */
-  21% { transform: translate3d(-50%, -58%, 0) scale(1.14); opacity: 1; }
-  /* 撞破後停一拍，讓碎片在還看得清的背景上飛出去 */
-  44% { transform: translate3d(-50%, -57%, 0) scale(1.7); opacity: 1; }
-  74% { transform: translate3d(-50%, -55%, 0) scale(3.6); opacity: 1; }
-  100% { transform: translate3d(-50%, -52%, 0) scale(6); opacity: 0; filter: blur(10px); }
-}
-@keyframes hero-out {
-  0% { opacity: 1; transform: translate3d(0, 0, 0); }
-  100% { opacity: 0; transform: translate3d(0, 20px, 0) scale(0.96); }
-}
-@keyframes glyph-shudder {
-  0% { transform: translate3d(0, 0, 0); }
-  20% { transform: translate3d(4px, -2px, 0) rotate(1.2deg); }
-  40% { transform: translate3d(-7px, 4px, 0) rotate(-2.4deg) scale(1.03); }
-  60% { transform: translate3d(10px, -5px, 0) rotate(3.4deg) scale(1.05); }
-  80% { transform: translate3d(-12px, 6px, 0) rotate(-4.2deg) scale(1.08); }
-  100% { transform: translate3d(0, 0, 0) scale(1.12); }
-}
-@keyframes face-out {
-  to { opacity: 0; }
-}
-@keyframes shard-fly {
-  0% {
-    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
-    opacity: 1;
-    filter: blur(0);
-  }
-  /* --dx 是這個字整體的去向、--sx 是這一塊在字裡的位置，
-     兩者相加，碎塊才會既跟著字往外飛、又各自散開 */
-  /* 距離刻意收在畫面內：原本 62% 時已經飛到 32vw 外、卻還有 0.92 不透明度，
-     碎塊會以「被截平的半塊」撞出畫面邊緣。現在提早開始淡出、
-     末段位置也拉回來，出界前就已經散掉。 */
-  14% {
-    transform: translate3d(calc((var(--dx, 0) + var(--sx, 0)) * 2.5vw), calc(var(--fy, 0) * 2.6vh), 0)
-      rotate(calc(var(--fr, 0deg) * 0.22)) scale(1.06);
-    opacity: 1;
-  }
-  62% {
-    transform: translate3d(calc((var(--dx, 0) + var(--sx, 0)) * 8.5vw), calc(var(--fy, 0) * 11vh), 0)
-      rotate(calc(var(--fr, 0deg) * 0.62)) scale(calc(1 + (var(--fs, 1.3) - 1) * 0.55));
-    opacity: 0.5;
-    filter: blur(1.4px);
-  }
-  100% {
-    transform: translate3d(calc((var(--dx, 0) + var(--sx, 0)) * 17vw), calc(var(--fy, 0) * 26vh), 0)
-      rotate(var(--fr, 0deg)) scale(var(--fs, 1.3));
-    opacity: 0;
-    filter: blur(7px);
-  }
-}
-/* 火星：沿各自的角度直線甩出去，末段縮小並淡掉 */
-@keyframes spark-fly {
-  0% { transform: rotate(var(--sa, 0deg)) translateX(0) scale(0.6); opacity: 0; }
-  12% { opacity: 1; transform: rotate(var(--sa, 0deg)) translateX(calc(var(--sd, 20vmin) * 0.16)) scale(1.15); }
-  100% { transform: rotate(var(--sa, 0deg)) translateX(var(--sd, 20vmin)) scale(0.35); opacity: 0; }
-}
-/* 撞擊瞬間的閃光：亮得快、收得更快，不要蓋住後面的碎塊 */
-@keyframes flash-pop {
-  0% { opacity: 0; transform: scale(0.35); }
-  16% { opacity: 0.9; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.5); }
-}
-@keyframes flash {
-  0% { opacity: 0; }
-  18% { opacity: 0.8; }
-  100% { opacity: 0; }
-}
-@keyframes break-wave {
-  0% { transform: scale(0.12); opacity: 0; border-width: 6px; }
-  22% { opacity: 0.95; }
-  100% { transform: scale(3.4); opacity: 0; border-width: 1px; }
-}
-@keyframes screen-shake {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  15% { transform: translate3d(-8px, 4px, 0); }
-  30% { transform: translate3d(7px, -5px, 0); }
-  45% { transform: translate3d(-5px, -3px, 0); }
-  60% { transform: translate3d(4px, 3px, 0); }
-  80% { transform: translate3d(-2px, 2px, 0); }
-}
-@keyframes puff-out {
-  0% {
-    transform: rotate(var(--angle, 0deg)) translateX(0) rotate(calc(var(--angle, 0deg) * -1)) scale(0.3);
-    opacity: 0;
-  }
-  18% { opacity: 0.95; }
-  100% {
-    transform: rotate(var(--angle, 0deg)) translateX(var(--dist, 34vmax)) rotate(calc(var(--angle, 0deg) * -1)) scale(2.4);
-    opacity: 0.92;
-  }
-}
-@keyframes churn {
-  0%, 100% { transform: rotate(0deg) scale(1, 1); }
-  33% { transform: rotate(13deg) scale(1.16, 0.87); }
-  66% { transform: rotate(-10deg) scale(0.89, 1.15); }
-}
-@keyframes veil-in {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
-}
-
 /* 螢幕偏矮（橫放）時把內容壓縮 */
 @media (max-height: 560px) {
   .title { font-size: clamp(40px, 13vh, 62px); }
@@ -1079,10 +703,8 @@ body.mobile-home-open {
 @media (prefers-reduced-motion: reduce) {
   .gate.go .leaf.left, .gate.go .leaf.right,
   .gate.go .seam-light, .gate-hint, .godlight, .haze, .cloudbelt,
-  .emperor, .puff, .puff i, .veil, .flyer, .flyer .bob, .band, .mote,
-  .censer .smoke path, .title .glyph, .glyph-face, .title .shard,
-  .sparks i, .impact-flash,
-  .break-flash, .break-wave {
+  .emperor, .flyer, .flyer .bob, .band, .mote,
+  .censer .smoke path {
     animation: none !important;
     transition: none !important;
   }
