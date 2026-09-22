@@ -24,6 +24,7 @@
    ========================================================================= */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { getPerformanceProfile } from '@/utils/performance';
 
 // 筊杯 3D 模型來源：Digital-Jiaobei 專案的 models/jiaobeii.glb（原封不動複製到
 // public/models/jiaobei.glb）。模型內含 JiaoOne / JiaoTwo 兩個節點，各自的原始
@@ -66,11 +67,14 @@ const REST_Y = -0.2;
 
 export function createBwaScene(state) {
   let renderer, scene, camera, cupA, cupB, ground, light;
+  const profile = getPerformanceProfile();
+  const renderInterval = 1000 / profile.threeFps;
   let holding = false;
   let destroyed = false;
   let container = null;
   let lastScreenPos = { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
   let loopRafId = null;
+  let lastRenderTime = 0;
 
   /* 抓杯狀態：target 是手的世界座標（由 setHoldPosition 更新），
      curA/curB 是兩顆筊杯目前實際所在的位置（由 render loop 逐格逼近 target）。
@@ -129,11 +133,11 @@ export function createBwaScene(state) {
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
 
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: !profile.isLowEnd, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, profile.threePixelRatio));
     renderer.setSize(w, h);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = profile.isLowEnd ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
@@ -148,7 +152,7 @@ export function createBwaScene(state) {
     light = new THREE.DirectionalLight(0xfff5ea, 1.5);
     light.position.set(3, 6, 3);
     light.castShadow = true;
-    light.shadow.mapSize.set(1024, 1024);
+    light.shadow.mapSize.set(profile.isLowEnd ? 512 : 1024, profile.isLowEnd ? 512 : 1024);
     light.shadow.radius = 4;
     scene.add(light);
 
@@ -182,6 +186,15 @@ export function createBwaScene(state) {
 
   function loop(now) {
     if (!renderer) return;
+    if (document.visibilityState === 'hidden') {
+      loopRafId = requestAnimationFrame(loop);
+      return;
+    }
+    if (now - lastRenderTime < renderInterval) {
+      loopRafId = requestAnimationFrame(loop);
+      return;
+    }
+    lastRenderTime = now;
     if (cupA && cupB && !state.bwaTossing) {
       if (holding) {
         updateHold(now);

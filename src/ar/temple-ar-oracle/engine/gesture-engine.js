@@ -17,14 +17,14 @@
       改為 append 到注入進來的 `rootEl`（元件自己的容器），避免手勢標記點
       跑到 Shadow DOM 外面、脫離元件管理範圍。
    ========================================================================= */
-export function createGestureEngine({ els, state, config: CONFIG, particleSystem, bwaScene, rootEl, callbacks }) {
-  const outCtx = els.outputCanvas.getContext('2d');
+ import { getPerformanceProfile } from '@/utils/performance';
+
+ export function createGestureEngine({ els, state, config: CONFIG, particleSystem, bwaScene, rootEl, callbacks }) {
+   const outCtx = els.outputCanvas.getContext('2d');
+   const profile = getPerformanceProfile();
 
   let smoothed = null;
-  let pinchActive = false;
-  let pinchStartWristY = null;
-
-  const shake = { active:false, startTime:0, lastY:0, lastVelocitySign:0, oscillations:0, lastFistTime:0 };
+  const shake = { active:false, completed:false, startTime:0, lastY:0, lastVelocitySign:0, oscillations:0, lastFistTime:0 };
 
   // ---- 合十默念狀態 ----
   // pausedAt：合十判定短暫失敗時的暫停起點（見 handleIncenseGesture 的寬限期機制），
@@ -72,7 +72,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
      因為指定 width/height 會清空畫布內容。 */
   function syncCanvasSize(){
     const canvas = els.outputCanvas;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); // 超過 2 只吃效能，看不出差別
+     const dpr = profile.canvasPixelRatio;
     const w = Math.round((canvas.clientWidth || window.innerWidth) * dpr);
     const h = Math.round((canvas.clientHeight || window.innerHeight) * dpr);
     if (!w || !h) return;
@@ -113,7 +113,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     }
 
     if (!hasHand){
-      smoothed = null; pinchActive = false; pinchStartWristY = null;
+       smoothed = null;
       hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
       // 快速向下拋擲時，手部常因動作模糊或離開鏡頭範圍而瞬間追蹤失敗；
       // 若當下正捧著筊杯，就用「消失前」的最後一段位移推算拋擲方向與力道，
@@ -148,35 +148,25 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
       return;
     }
 
-    const lm = smoothLandmarks(rawLm);
-    const wrist = lm[0], middleMcp = lm[9], thumbTip = lm[4], indexTip = lm[8];
-    const handScaleVal = dist(wrist, middleMcp) || 0.0001;
-    const pinchDist = dist(thumbTip, indexTip) / handScaleVal;
-
-    if (state.current === 'draw'){
-      if (state.drawSubState === 'shake'){
-        updateFistIndicator(wrist, isFist(lm)); hideFingertipUI();
-        handleShakeGesture(wrist, isFist(lm));
-      } else {
-        hideFistIndicator(); updateFingertipUI(thumbTip, indexTip);
-        handlePinchGesture(wrist, pinchDist);
-      }
-    } else {
-      hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
-    }
+     if (state.current === 'draw'){
+       if (state.drawSubState === 'shake'){
+         const lm = smoothLandmarks(rawLm);
+         const wrist = lm[0];
+         updateFistIndicator(wrist, isFist(lm)); hideFingertipUI();
+         handleShakeGesture(wrist, isFist(lm));
+       }
+       // 搖籤完成後由程式自動演出抽籤，不再等待捏取／上抽手勢。
+       return;
+     } else {
+       hideFingertipUI(); hideFistIndicator(); hideCupIndicator();
+     }
   }
 
   // ============================================================
   // 合十偵測（雙路徑，提升遮擋情況下的辨識穩定度）：
   //
-  // 路徑 A（雙手可見）：分別取兩手的「掌心中心」（手腕 + 四指指根 MCP 的平均座標，
-  // 比單純手腕點更能代表手掌實際位置），計算兩掌心距離，並除以手掌尺度做正規化，
-  // 避免使用者離鏡頭遠近不同造成誤判。
-  //
-  // 路徑 B（單手備援）：真正合十時兩手影像會高度重疊，MediaPipe 常常只能辨識出
-  // 其中一隻手。此時改為檢查：該手是否停留在畫面水平/垂直置中範圍內，且移動量
-  // 低於穩定閾值（沒有明顯晃動）。只要滿足其一即可持續累積「誠心進度」，
-  // 大幅降低因單純遮擋而完全無法完成的機率。
+  // 合十階段只使用手部「有被偵測到」作為寬鬆觸發條件，不檢查距離、置中或姿勢；
+  // 這樣雙手重疊時 MediaPipe 只回傳一隻手也不會卡住，持續 10 秒即可完成。
   // ============================================================
   function palmCenter(lm){
     const idxs = [0,5,9,13,17];
@@ -184,8 +174,6 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     idxs.forEach(i => { x += lm[i].x; y += lm[i].y; });
     return { x: x/idxs.length, y: y/idxs.length };
   }
-  function handScale(lm){ return dist(lm[0], lm[9]) || 0.0001; }
-
   function updateIncenseFollow(point){
     // MediaPipe coordinates are unmirrored; match the mirrored camera canvas for the AR object.
     const targetX = 1 - point.x;
@@ -220,30 +208,21 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     let statusText = defaultIncenseText();
     let centerPt = null; // 正規化座標 {x,y}，用於粒子匯聚中心
 
-    if (handsLm && handsLm.length >= 2){
-      const lmA = handsLm[0], lmB = handsLm[1];
-      const cA = palmCenter(lmA), cB = palmCenter(lmB);
-      const avgScale = (handScale(lmA) + handScale(lmB)) / 2;
-      const normDist = dist(cA, cB) / avgScale;
-      updateDualHandUI(cA, cB, normDist < CONFIG.INCENSE_PALM_DIST_MAX);
-      centerPt = { x: (cA.x+cB.x)/2, y: (cA.y+cB.y)/2 };
-      if (normDist < CONFIG.INCENSE_PALM_DIST_MAX){
-        isClose = true; statusText = '誠心感應中…';
+    if (handsLm && handsLm.length >= 1){
+      // 不再要求掌心距離、畫面置中或特定手勢。雙手合十時兩手常重疊，
+      // MediaPipe 只回傳一隻手也視為有效，持續偵測 10 秒即可完成。
+      const cA = palmCenter(handsLm[0]);
+      if (handsLm[1]){
+        const cB = palmCenter(handsLm[1]);
+        updateDualHandUI(cA, cB, true);
+        centerPt = { x: (cA.x+cB.x)/2, y: (cA.y+cB.y)/2 };
       } else {
-        statusText = '偵測到雙手，請再靠攏一些';
+        hideDualHandUI();
+        updateFistIndicatorRaw(cA);
+        centerPt = cA;
       }
-    } else if (handsLm && handsLm.length === 1){
-      const c = palmCenter(handsLm[0]);
-      centerPt = c;
-      hideDualHandUI(); updateFistIndicatorRaw(c);
-      /* 雙手合十時兩手影像高度重疊，MediaPipe 常常只認得到其中一隻手：
-         這裡只要求這隻手落在畫面中央，不再額外要求「完全靜止不動」——
-         手部座標偵測本身就有雜訊，就算手沒動也常被誤判成有在動，
-         反而讓進度動不動就被重置，體感就是「太靈敏、一動就重來」。 */
-      const inCenter = c.x > CONFIG.INCENSE_CENTER_X[0] && c.x < CONFIG.INCENSE_CENTER_X[1]
-                     && c.y > CONFIG.INCENSE_CENTER_Y[0] && c.y < CONFIG.INCENSE_CENTER_Y[1];
-      if (inCenter){ isClose = true; statusText = '誠心感應中…'; }
-      else { statusText = '請將合十的雙手移到畫面正中央'; }
+      isClose = true;
+      statusText = '誠心感應中…';
     } else {
       hideDualHandUI(); hideFistIndicator();
     }
@@ -295,7 +274,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     const now = performance.now();
     if (!fistNow){
       if (shake.active && now - shake.lastFistTime > CONFIG.SHAKE_RESET_GRACE_MS){
-        resetShakeProgress(); els.drawHint.textContent = '請對著籤筒握拳，上下搖晃';
+        resetShakeProgress(); els.drawHint.textContent = '請搖晃籤筒，籤條會自動抽出';
       }
       return;
     }
@@ -315,14 +294,16 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     const progress = Math.min(1, Math.max(elapsed/CONFIG.SHAKE_TARGET_DURATION_MS, shake.oscillations/CONFIG.SHAKE_REQUIRED_OSCILLATIONS));
     els.shakeRing.style.setProperty('--p', Math.round(progress*100));
     els.drawHint.textContent = `神明降臨中… ${Math.round(progress*100)}%`;
-    if (shake.oscillations >= CONFIG.SHAKE_REQUIRED_OSCILLATIONS && elapsed >= CONFIG.SHAKE_MIN_DURATION_MS){ completeShakeStage(); }
+    if (!shake.completed && shake.oscillations >= CONFIG.SHAKE_REQUIRED_OSCILLATIONS && elapsed >= CONFIG.SHAKE_MIN_DURATION_MS){ completeShakeStage(); }
   }
   function resetShakeProgress(){
-    shake.active = false; shake.oscillations = 0;
+    shake.active = false; shake.completed = false; shake.oscillations = 0;
     els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
     els.shakeRing.style.setProperty('--p', 0);
   }
   function completeShakeStage(){
+    shake.completed = true;
+    shake.active = false;
     els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
     const stickEls = Array.from(els.sticksGroup.querySelectorAll('.stick'));
     const idx = Math.floor(Math.random()*stickEls.length);
@@ -332,35 +313,21 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
     const xRatio = state.selectedStickCx / 200;
     els.qianStick.style.left = `${xRatio*100}%`;
     els.qianStick.style.transform = 'translate(-50%, 0)';
-    state.drawSubState = 'pinch';
-    els.drawHint.textContent = '神明已選定！請捏住發光籤條，向上抽出';
+    state.drawSubState = 'revealing';
+    els.qianStick.classList.remove('hidden', 'punch');
+    els.qianStick.classList.add('auto-draw');
+    els.drawHint.textContent = '神明已選定，籤條正在自動抽出…';
+    if (navigator.vibrate) navigator.vibrate([20, 45, 20]);
+    window.setTimeout(() => {
+      if (state.current === 'draw') callbacks.completeDraw();
+    }, 420);
   }
 
-  function handlePinchGesture(wrist, pinchDist){
-    const zoneRect = els.qianTong.getBoundingClientRect();
-    const zoneCenterX = (zoneRect.left+zoneRect.width/2)/window.innerWidth;
-    const zoneCenterY = (zoneRect.top+zoneRect.height/2)/window.innerHeight;
-    const aligned = Math.hypot(wrist.x-zoneCenterX, wrist.y-zoneCenterY) < 0.16;
-    els.qianTong.classList.toggle('aligned', aligned);
-    const isPinchingNow = pinchDist < CONFIG.PINCH_THRESHOLD_RATIO;
-    if (aligned && isPinchingNow && !pinchActive){
-      pinchActive = true; pinchStartWristY = wrist.y;
-      els.qianStick.classList.remove('hidden'); els.qianStick.classList.add('pinched');
-      els.drawHint.textContent = '已捏住籤條，請維持捏合並向上提起';
-    }
-    if (pinchActive){
-      if (!isPinchingNow){ resetPinch(); return; }
-      const deltaY = pinchStartWristY - wrist.y;
-      const followPx = Math.max(0, deltaY) * window.innerHeight;
-      els.qianStick.style.transform = `translate(-50%, ${-followPx}px) rotate(${(wrist.x-0.5)*8}deg)`;
-      if (deltaY > CONFIG.DRAW_UP_DELTA_RATIO){ callbacks.completeDraw(); }
-    }
-  }
-  function resetPinch(){
-    pinchActive = false; pinchStartWristY = null;
-    els.qianStick.classList.add('hidden'); els.qianStick.classList.remove('pinched');
+  function resetDrawReveal(){
+    els.qianStick.classList.add('hidden');
+    els.qianStick.classList.remove('auto-draw', 'punch');
     els.qianStick.style.transform = 'translate(-50%, 0)';
-    els.drawHint.textContent = '請捏住發光籤條，向上抽出';
+    els.drawHint.textContent = '請搖晃籤筒，籤條會自動抽出';
   }
 
   // ============================================================
@@ -448,16 +415,6 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
       rootEl.appendChild(line); rootEl.appendChild(fistDot); rootEl.appendChild(cupDot);
     }
   }
-  function updateFingertipUI(thumbTip, indexTip){
-    ensureMarkers();
-    const ax=thumbTip.x*window.innerWidth, ay=thumbTip.y*window.innerHeight;
-    const bx=indexTip.x*window.innerWidth, by=indexTip.y*window.innerHeight;
-    markerA.style.left=ax+'px'; markerA.style.top=ay+'px'; markerA.style.opacity=1;
-    markerB.style.left=bx+'px'; markerB.style.top=by+'px'; markerB.style.opacity=1;
-    const len=Math.hypot(bx-ax,by-ay), angle=Math.atan2(by-ay,bx-ax)*180/Math.PI;
-    line.style.width=len+'px'; line.style.left=ax+'px'; line.style.top=ay+'px';
-    line.style.transform=`rotate(${angle}deg)`; line.style.opacity=0.8;
-  }
   function hideFingertipUI(){ if (markerA){ markerA.style.opacity=0; markerB.style.opacity=0; line.style.opacity=0; } }
   function updateFistIndicator(wrist, fistNow){
     ensureMarkers();
@@ -498,7 +455,7 @@ export function createGestureEngine({ els, state, config: CONFIG, particleSystem
   }
 
   return {
-    onResults, syncCanvasSize, resetPinch, resetShakeProgress, resetIncenseProgress,
+    onResults, syncCanvasSize, resetDrawReveal, resetShakeProgress, resetIncenseProgress,
     resetBwaTracking(){ cup.holding=false; cup.openFrames=0; cup.posHistory=[]; },
     destroy
   };

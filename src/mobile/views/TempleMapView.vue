@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import * as THREE from 'three'
 import { templeLocations, type TempleLocation } from '@/data/temples'
+import { getPerformanceProfile } from '@/utils/performance'
 
 const canvas = ref<HTMLCanvasElement>()
 const selectedTemple = ref<TempleLocation>(templeLocations[0])
@@ -15,8 +16,9 @@ function selectTemple(temple: TempleLocation) {
 onMounted(() => {
   if (!canvas.value) return
 
-  const renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true, alpha: true })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  const profile = getPerformanceProfile()
+  const renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: !profile.isLowEnd, alpha: true })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, profile.threePixelRatio))
   renderer.setClearColor(0x000000, 0)
 
   const scene = new THREE.Scene()
@@ -30,7 +32,7 @@ onMounted(() => {
   scene.add(sun)
 
   const floor = new THREE.Mesh(
-    new THREE.CircleGeometry(7.6, 96),
+    new THREE.CircleGeometry(7.6, profile.isLowEnd ? 48 : 96),
     new THREE.MeshStandardMaterial({ color: 0xf4ead7, roughness: 0.9, metalness: 0 })
   )
   floor.rotation.x = -Math.PI / 2
@@ -47,7 +49,7 @@ onMounted(() => {
   taiwanOutline.forEach(([x, z], index) => index === 0 ? shape.moveTo(x, z) : shape.lineTo(x, z))
   shape.closePath()
   const island = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(shape, { depth: 0.28, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.07, bevelThickness: 0.08 }),
+    new THREE.ExtrudeGeometry(shape, { depth: 0.28, bevelEnabled: true, bevelSegments: profile.isLowEnd ? 1 : 3, bevelSize: 0.07, bevelThickness: 0.08 }),
     new THREE.MeshStandardMaterial({ color: 0xe0b749, roughness: 0.66, metalness: 0.14 })
   )
   island.rotation.x = -Math.PI / 2
@@ -80,7 +82,7 @@ onMounted(() => {
     marker.userData.temple = temple
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.42, 10), pinMaterial)
     stem.position.y = 0.21
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 16), pinGlow)
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.105, profile.isLowEnd ? 8 : 16, profile.isLowEnd ? 8 : 16), pinGlow)
     cap.position.y = 0.47
     marker.add(stem, cap)
     markerGroup.add(marker)
@@ -163,9 +165,15 @@ onMounted(() => {
   updateCamera()
 
   let animationFrame = 0
+  const renderInterval = 1000 / profile.threeFps
+  let lastRenderTime = 0
   const clock = new THREE.Clock()
   function animate() {
     animationFrame = requestAnimationFrame(animate)
+    if (document.visibilityState === 'hidden') return
+    const now = performance.now()
+    if (now - lastRenderTime < renderInterval) return
+    lastRenderTime = now
     const time = clock.getElapsedTime()
     markerGroup.children.forEach((marker, index) => {
       marker.children[1].position.y = 0.47 + Math.sin(time * 1.8 + index * 0.8) * 0.035
@@ -181,7 +189,14 @@ onMounted(() => {
     canvas.value?.removeEventListener('pointermove', onPointerMove)
     canvas.value?.removeEventListener('pointerup', onPointerUp)
     canvas.value?.removeEventListener('wheel', onWheel)
-    renderer.dispose()
+     scene.traverse((object) => {
+       const mesh = object as THREE.Mesh
+       mesh.geometry?.dispose?.()
+       const material = mesh.material
+       if (Array.isArray(material)) material.forEach((item) => item.dispose())
+       else material?.dispose?.()
+     })
+     renderer.dispose()
   }
 })
 

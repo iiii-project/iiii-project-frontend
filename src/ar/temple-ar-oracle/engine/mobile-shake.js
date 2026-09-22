@@ -55,6 +55,8 @@ export function createMobileShake({ els, state, callbacks }) {
     els.qianStick.style.left = `${(state.selectedStickCx / 200) * 100}%`;
     els.qianStick.style.transform = 'translate(-50%, 0)';
     els.qianStick.classList.remove('hidden');
+    els.qianStick.classList.add('auto-draw');
+    state.drawSubState = 'revealing';
     els.drawHint.textContent = '感應完成，正在抽出籤條…';
     if (navigator.vibrate) navigator.vibrate([20, 45, 20]);
     setTimeout(() => callbacks.completeDraw(), 420);

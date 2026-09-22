@@ -31,6 +31,7 @@ import { createMobileShake } from './engine/mobile-shake.js';
 import { createDivinationApi } from './engine/divination-api.js';
 import { createFlowController , preloadOracleTransition } from './engine/flow-controller.js';
 import { renderTemplate } from './template.js';
+import { getPerformanceProfile } from '@/utils/performance';
 
 // styles.css 內容以字串方式內嵌，避免額外一次網路請求，且確保 Shadow DOM
 // 一定拿得到樣式（無論宿主專案的建置工具是否支援 CSS 檔案 import）。
@@ -228,6 +229,7 @@ class TempleArOracle extends HTMLElement {
   // 這裡包成一個 Promise 回傳的函式，供 flow-controller.start() 呼叫）
   _startCamera(){
     return new Promise((resolve, reject) => {
+      const profile = getPerformanceProfile();
       // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑，maxNumHands/modelComplexity
       // 降到最低夠用的設定，避免每幀疊加兩個重模型直接把 CPU 榨乾。
       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
@@ -247,20 +249,32 @@ class TempleArOracle extends HTMLElement {
 
       // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
       // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把實際送進
-      // MediaPipe 的頻率夾到約 12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
-      const INFERENCE_INTERVAL_MS = 1000 / 12;
-      let lastInferenceTime = 0;
+       // MediaPipe 的頻率依裝置 profile 夾在 8~12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
+       const INFERENCE_INTERVAL_MS = 1000 / profile.arInferenceFps;
+       let lastInferenceTime = 0;
+       let inferenceBusy = false;
+       let inferenceCount = 0;
 
       const camera = new Camera(this._els.video, {
-        onFrame: async () => {
-          const now = performance.now();
-          if (now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
-          lastInferenceTime = now;
-          await hands.send({ image: this._els.video });
-          await selfieSegmentation.send({ image: this._els.video });
-        },
-        width: 640,
-        height: 480,
+         onFrame: async () => {
+           const now = performance.now();
+           if (inferenceBusy || now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
+           lastInferenceTime = now;
+           inferenceBusy = true;
+           try {
+             await hands.send({ image: this._els.video });
+             // The segmentation mask changes slowly. Refreshing it every
+             // second inference avoids running two heavy models at once on
+             // low-end Android while keeping the composited image stable.
+             if (inferenceCount++ % 2 === 0) {
+               await selfieSegmentation.send({ image: this._els.video });
+             }
+           } finally {
+             inferenceBusy = false;
+           }
+         },
+         width: profile.arCameraWidth,
+         height: profile.arCameraHeight,
       });
       this._camera = camera;
 

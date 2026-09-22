@@ -404,18 +404,18 @@ export function createFlowController({
         s.classList.remove("selected"),
       );
       gestureEngine.resetShakeProgress();
-      gestureEngine.resetPinch();
+       gestureEngine.resetDrawReveal();
       const useMobileShake =
         state.resolvedMode === "motion" ||
         (isMobileDevice() && state.resolvedMode !== "manual");
-      els.drawHint.textContent =
-        state.resolvedMode === "manual"
-          ? "準備好後，點擊籤筒抽出一支籤。"
-          : useMobileShake && state.mobileShakeReady
-            ? "拿起手機，上下搖動三次即可抽籤"
-            : useMobileShake
-              ? "未開啟動作感測，可直接抽籤。"
-              : "請對著籤筒握拳，上下搖晃";
+       els.drawHint.textContent =
+         state.resolvedMode === "manual"
+           ? "準備好後，點擊籤筒即可自動抽籤。"
+           : useMobileShake && state.mobileShakeReady
+             ? "拿起手機，上下搖動三次即可抽籤"
+             : useMobileShake
+               ? "未開啟動作感測，可直接抽籤。"
+               : "請搖晃籤筒，籤條會自動抽出";
       // 手機正常流程只透過搖動抽籤；僅在感測器不可用時才顯示直接抽籤備援。
       els.btnManualDraw.classList.toggle(
         "hidden",
@@ -483,6 +483,23 @@ export function createFlowController({
   async function completeDraw() {
     if (state.current !== "draw") return;
     state.current = "transition";
+
+    // 手動備援沒有經過手勢引擎的選籤階段，這裡補上同一段自動抽籤動畫。
+    if (els.qianStick.classList.contains("hidden")) {
+      const stickEls = Array.from(els.sticksGroup.querySelectorAll(".stick"));
+      const chosen = stickEls[Math.floor(Math.random() * stickEls.length)];
+      stickEls.forEach((stick) => stick.classList.remove("selected"));
+      chosen?.classList.add("selected");
+      state.selectedStickCx = parseFloat(chosen?.dataset.cx || "100");
+      els.qianStick.style.left = `${(state.selectedStickCx / 200) * 100}%`;
+      els.qianStick.style.transform = "translate(-50%, 0)";
+      els.qianStick.classList.remove("hidden", "punch");
+      els.qianStick.classList.add("auto-draw");
+      state.drawSubState = "revealing";
+      els.drawHint.textContent = "籤條正在自動抽出…";
+      await new Promise((resolve) => setTimeout(resolve, 420));
+    }
+
     const rect = els.qianStick.getBoundingClientRect();
     const cx = rect.left + rect.width / 2,
       cy = rect.top;
@@ -497,6 +514,9 @@ export function createFlowController({
       setTimeout(() => playInkTransition(els, () => showScene("bwa")), 700);
     } catch (error) {
       state.current = "draw";
+      state.drawSubState = "shake";
+      gestureEngine.resetShakeProgress();
+      gestureEngine.resetDrawReveal();
       emit("toast", { message: error.message || "無法抽籤，請再試一次" });
     }
   }
@@ -754,7 +774,7 @@ export function createFlowController({
     els.outputCanvas?.classList.remove("blended");
     gestureEngine.resetIncenseProgress();
     gestureEngine.resetShakeProgress();
-    gestureEngine.resetPinch();
+    gestureEngine.resetDrawReveal();
     gestureEngine.resetBwaTracking();
     mobileShake.stop();
     // 離開儀式：預取的擲筊結果與解籤請求都不再屬於任何一場

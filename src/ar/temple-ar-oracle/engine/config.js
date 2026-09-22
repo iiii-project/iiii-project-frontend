@@ -14,10 +14,7 @@ export const CONFIG = {
   SHAKE_TARGET_DURATION_MS: 2400,
   SHAKE_RESET_GRACE_MS: 500,
 
-  PINCH_THRESHOLD_RATIO: 0.35,
-  DRAW_UP_DELTA_RATIO: 0.09,
-
-  // ---- 捧筊與拋擲（單手握拳抓杯／往下丟手勢）----
+   // ---- 捧筊與拋擲（單手握拳抓杯／往下丟手勢）----
   // 判定基準是「四指平均彎曲量」curlAmount（指尖到手腕距離 ÷ 指根到手腕距離）：
   // 值越小代表手指越收攏（握拳抓住筊杯），越大代表手掌張開（放手擲出）。
   CUP_CURL_MAX: 1.0,      // 放寬：低於此值視為「握拳抓住筊杯」（原 0.95，避免手指沒完全彎曲就判定失敗）
@@ -35,10 +32,10 @@ export const CONFIG = {
   // 因雙手合十時兩手影像高度重疊，MediaPipe 有時只能辨識出其中一隻手，
   // 此時只要偵測到的那隻手停留在畫面中央且保持穩定，也視為合十候選，避免因遮擋而完全偵測不到。
   INCENSE_PALM_DIST_MAX: 0.9,     // 雙手掌心距離（除以手掌尺度）需小於此值
-  INCENSE_HOLD_MS: 1700,          // 縮短至 1.7 秒，減少枯燥的無感等待
+   INCENSE_HOLD_MS: 10000,         // 雙手合十持續 10 秒即可完成
   INCENSE_CENTER_X: [0.28, 0.72], // 單手備援路徑：手部須落在畫面水平置中範圍
   INCENSE_CENTER_Y: [0.3, 0.85],  // 單手備援路徑：手部須落在畫面垂直置中範圍
-  INCENSE_RESET_GRACE_MS: 400,    // 合十判定短暫失敗（如雙手交疊瞬間 MediaPipe 只認到一隻手、或整段追蹤中斷一兩格）時，
+   INCENSE_RESET_GRACE_MS: 1500,   // 放寬追蹤中斷容錯，避免不要求精準姿勢時進度被輕易歸零
                                    // 在這段寬限時間內先暫停進度、不歸零，避免使用者一個小動作就前功盡棄
   INCENSE_FOLLOW_EASE: 0.18,       // 香跟隨手部時的低通濾波，越小越柔和
   INCENSE_FOLLOW_Y_OFFSET: 0.1,   // 香位於合十雙手稍下方，避免遮住掌心
