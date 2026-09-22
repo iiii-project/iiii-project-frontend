@@ -262,13 +262,15 @@ class TempleArOracle extends HTMLElement {
            lastInferenceTime = now;
            inferenceBusy = true;
            try {
-             await hands.send({ image: this._els.video });
              // The segmentation mask changes slowly. Refreshing it every
              // second inference avoids running two heavy models at once on
              // low-end Android while keeping the composited image stable.
              if (inferenceCount++ % 2 === 0) {
                await selfieSegmentation.send({ image: this._els.video });
              }
+             // First prepare the mask, then process landmarks. This prevents
+             // the first Hands result from drawing an unmasked camera frame.
+             await hands.send({ image: this._els.video });
            } finally {
              inferenceBusy = false;
            }

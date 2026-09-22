@@ -89,6 +89,12 @@
     const cw = els.outputCanvas.width, ch = els.outputCanvas.height;
     outCtx.save();
     outCtx.clearRect(0,0,cw,ch);
+    // 去背遮罩尚未準備好時不要先畫整張原始鏡頭畫面，
+    // 否則鏡頭剛開啟會短暫閃出使用者全身，再突然切成摳像。
+    if (!state.segmentationMask) {
+      outCtx.restore();
+      return;
+    }
     outCtx.scale(-1,1);
     if (state.segmentationMask){
       /* 人像去背：先把分割遮罩畫上去（人像=不透明、其餘=透明），source-in 疊圖模式
@@ -99,9 +105,6 @@
       outCtx.globalCompositeOperation = 'source-in';
       outCtx.drawImage(results.image, -cw, 0, cw, ch);
       outCtx.globalCompositeOperation = 'source-over';
-    } else {
-      // 分割模型還沒回傳第一格結果前，先照舊整格畫出來，避免畫面完全空白
-      outCtx.drawImage(results.image, -cw, 0, cw, ch);
     }
     outCtx.restore();
 
