@@ -358,6 +358,10 @@ export function createFlowController({
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach((s) =>
       s.classList.add("hidden"),
     );
+    // 筊杯場景在整個儀式建立時就已初始化，但只有真正顯示時才需要
+    // 讓 Three.js 佔用 GPU；上香與抽籤期間完全停止渲染。
+    if (name === "bwa") bwaScene.resume();
+    else bwaScene.pause();
     if (name !== "draw") mobileShake.stop();
     state.current = name;
 

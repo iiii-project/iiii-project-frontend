@@ -68,13 +68,19 @@ const REST_Y = -0.2;
 export function createBwaScene(state) {
   let renderer, scene, camera, cupA, cupB, ground, light;
   const profile = getPerformanceProfile();
-  const renderInterval = 1000 / profile.threeFps;
+  // 擲筊動畫使用固定時間軸取樣；低階裝置只需要播放 15 張/秒，
+  // 不再以 60Hz 即時物理更新兩個 GLB 網格。
+  const activeRenderInterval = 1000 / (profile.isLowEnd ? 15 : 30);
+  const idleRenderInterval = 1000 / (profile.isLowEnd ? 12 : 24);
+  const shadowsEnabled = !profile.isLowEnd;
   let holding = false;
   let destroyed = false;
   let container = null;
   let lastScreenPos = { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
   let loopRafId = null;
   let lastRenderTime = 0;
+  let modelLoadStarted = false;
+  let tossAnimation = null;
 
   /* 抓杯狀態：target 是手的世界座標（由 setHoldPosition 更新），
      curA/curB 是兩顆筊杯目前實際所在的位置（由 render loop 逐格逼近 target）。
@@ -113,8 +119,8 @@ export function createBwaScene(state) {
 
     inner.traverse((child) => {
       if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
+        child.castShadow = shadowsEnabled;
+        child.receiveShadow = shadowsEnabled;
       }
     });
 
@@ -136,7 +142,7 @@ export function createBwaScene(state) {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: !profile.isLowEnd, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, profile.threePixelRatio));
     renderer.setSize(w, h);
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = shadowsEnabled;
     renderer.shadowMap.type = profile.isLowEnd ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
@@ -151,7 +157,7 @@ export function createBwaScene(state) {
 
     light = new THREE.DirectionalLight(0xfff5ea, 1.5);
     light.position.set(3, 6, 3);
-    light.castShadow = true;
+    light.castShadow = shadowsEnabled;
     light.shadow.mapSize.set(profile.isLowEnd ? 512 : 1024, profile.isLowEnd ? 512 : 1024);
     light.shadow.radius = 4;
     scene.add(light);
@@ -161,19 +167,23 @@ export function createBwaScene(state) {
     fillLight.position.set(-3, 2, 1);
     scene.add(fillLight);
 
-    const groundGeo = new THREE.PlaneGeometry(50, 50);
-    const groundMat = new THREE.ShadowMaterial({ opacity: 0.25 });
-    ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = REST_Y - 0.1;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    if (shadowsEnabled) {
+      const groundGeo = new THREE.PlaneGeometry(50, 50);
+      const groundMat = new THREE.ShadowMaterial({ opacity: 0.25 });
+      ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = REST_Y - 0.1;
+      ground.receiveShadow = true;
+      scene.add(ground);
+    }
 
-    loopRafId = requestAnimationFrame(loop);
+  }
 
-    // 模型是非同步載入，載完才生出兩顆筊杯並加進場景；在這之前場景照常
-    // 渲染（燈光、地板都已就緒），下面幾個操作函式也都對 cupA/cupB 尚未
-    // 就緒的情況做了保護。
+  function ensureModelLoaded() {
+    if (modelLoadStarted) return;
+    modelLoadStarted = true;
+    // 延後到真的進入擲筊場景才下載／解析 GLB，避免使用者還在首頁或
+    // 上香時就讓低階裝置同時處理 3D 資源。
     loadJiaoTemplates().then(({ jiaoOne, jiaoTwo }) => {
       if (destroyed) return;
       cupA = makeCup(jiaoOne);
@@ -190,15 +200,18 @@ export function createBwaScene(state) {
       loopRafId = requestAnimationFrame(loop);
       return;
     }
+    const renderInterval = holding || tossAnimation ? activeRenderInterval : idleRenderInterval;
     if (now - lastRenderTime < renderInterval) {
       loopRafId = requestAnimationFrame(loop);
       return;
     }
     lastRenderTime = now;
-    if (cupA && cupB && !state.bwaTossing) {
-      if (holding) {
+    if (cupA && cupB) {
+      if (tossAnimation) {
+        updateTossAnimation(now);
+      } else if (holding) {
         updateHold(now);
-      } else {
+      } else if (!state.bwaTossing) {
         const time = now * 0.001;
         // 微弱優雅的懸浮，幅度調小
         const bob = Math.sin(time * 1.2) * 0.05;
@@ -304,6 +317,7 @@ export function createBwaScene(state) {
 
   function resetIdle() {
     holding = false;
+    tossAnimation = null;
     state.bwaTossing = false;
     hold.tiltA = 0; hold.tiltB = 0;
     if (!cupA || !cupB) return;
@@ -339,61 +353,72 @@ export function createBwaScene(state) {
     cupB.position.set(0.78, 1.85, 0.1);
     cupA.rotation.set(-0.7, 0.35, -0.4);
     cupB.rotation.set(0.55, -0.3, 0.45);
-    let vyA = -0.08, vyB = 0.04;
-    let doneA = false, doneB = false;
-    let bouncesA = 0, bouncesB = 0;
+    const impactTime = (startY, initialVelocity) =>
+      (initialVelocity + Math.sqrt(initialVelocity * initialVelocity + 2 * gravity * (startY - restY))) / gravity;
+    const impactA = impactTime(1.55, -0.08);
+    const impactB = impactTime(1.85, 0.04);
+    const bounceDurationA = (2 * 1.35) / gravity;
+    const bounceDurationB = (2 * 1.15) / gravity;
 
-    function step(now) {
-      const dt = 0.016;
+    // 預先決定整段動畫的時間軸；播放時只依 elapsed 取樣位置，
+    // 不再累積每一幀的速度／重力誤差，也不另外啟動高頻物理 rAF。
+    tossAnimation = {
+      startTime: performance.now(),
+      impactA,
+      impactB,
+      endTime: Math.max(impactA + bounceDurationA, impactB + bounceDurationB),
+      bounceDurationA,
+      bounceDurationB,
+      coinA,
+      coinB,
+      onImpact,
+      onSettle,
+      impactedA: false,
+      impactedB: false,
+    };
+    lastRenderTime = 0;
+  }
 
-      if (!doneA) {
-        vyA -= gravity * dt;
-        cupA.position.y += vyA * dt;
-        cupA.rotation.x += 0.16;
-        cupA.rotation.y += 0.09;
-        if (cupA.position.y <= restY) {
-          cupA.position.y = restY;
-          if (bouncesA < 1) {
-            bouncesA++;
-            vyA = 1.35;
-            cupA.rotation.x += Math.PI * 0.42;
-            onImpact && onImpact();
-            requestAnimationFrame(step);
-            return;
-          }
-          // coinA === 'domed' (凸面朝上) -> rotation.x = 0
-          // flat (平面朝上) -> rotation.x = Math.PI (翻轉180度)
-          cupA.rotation.set(coinA === 'domed' ? 0 : Math.PI, 0, 0);
-          doneA = true;
-          onImpact && onImpact();
-        }
-      }
-      if (!doneB) {
-        vyB -= gravity * dt;
-        cupB.position.y += vyB * dt;
-        cupB.rotation.x += 0.14;
-        cupB.rotation.z += 0.12;
-        if (cupB.position.y <= restY) {
-          cupB.position.y = restY;
-          if (bouncesB < 1) {
-            bouncesB++;
-            vyB = 1.15;
-            cupB.rotation.x += Math.PI * 0.36;
-            requestAnimationFrame(step);
-            return;
-          }
-          cupB.rotation.set(coinB === 'domed' ? 0 : Math.PI, 0, 0);
-          doneB = true;
-        }
-      }
+  function updateTossAnimation(now) {
+    if (!tossAnimation || !cupA || !cupB) return;
+    const animation = tossAnimation;
+    const elapsed = Math.max(0, (now - animation.startTime) / 1000);
 
-      if (doneA && doneB) {
-        onSettle && onSettle();
+    const sampleCup = (cup, startY, initialVelocity, bounceVelocity, impact, bounceDuration, finalSide, isA) => {
+      if (elapsed < impact) {
+        cup.position.y = startY + initialVelocity * elapsed - 0.5 * 4.8 * elapsed * elapsed;
+        cup.rotation.x = (isA ? -0.7 : 0.55) + elapsed * (isA ? 9.5 : 8.5);
+        cup.rotation.y = (isA ? 0.35 : -0.3) + elapsed * (isA ? 5.5 : 0);
         return;
       }
-      requestAnimationFrame(step);
+
+      const bounceElapsed = Math.min(elapsed - impact, bounceDuration);
+      if (bounceElapsed < bounceDuration) {
+        cup.position.y = REST_Y + bounceVelocity * bounceElapsed - 0.5 * 4.8 * bounceElapsed * bounceElapsed;
+        cup.rotation.x = (isA ? 1.9 : 1.7) + bounceElapsed * (isA ? 6 : 5);
+        cup.rotation.y = isA ? 5.2 : -0.3;
+        cup.rotation.z = isA ? -0.4 : 0.45;
+      } else {
+        cup.position.y = REST_Y;
+        cup.rotation.set(finalSide === 'domed' ? 0 : Math.PI, 0, 0);
+      }
+    };
+
+    sampleCup(cupA, 1.55, -0.08, 1.35, animation.impactA, animation.bounceDurationA, animation.coinA, true);
+    sampleCup(cupB, 1.85, 0.04, 1.15, animation.impactB, animation.bounceDurationB, animation.coinB, false);
+
+    if (!animation.impactedA && elapsed >= animation.impactA) {
+      animation.impactedA = true;
+      animation.onImpact && animation.onImpact();
     }
-    requestAnimationFrame(step);
+    if (!animation.impactedB && elapsed >= animation.impactB) {
+      animation.impactedB = true;
+      animation.onImpact && animation.onImpact();
+    }
+    if (elapsed >= animation.endTime) {
+      animation.onSettle && animation.onSettle();
+      tossAnimation = null;
+    }
   }
 
   // 新增：釋放資源用（原始版本活在單頁iframe裡，卸載時瀏覽器整包回收記憶體；
@@ -403,6 +428,13 @@ export function createBwaScene(state) {
     window.removeEventListener('resize', resize);
     if (loopRafId) cancelAnimationFrame(loopRafId);
     if (renderer) {
+      scene?.traverse((object) => {
+        const mesh = object;
+        mesh.geometry?.dispose?.();
+        const material = mesh.material;
+        if (Array.isArray(material)) material.forEach((item) => item.dispose());
+        else material?.dispose?.();
+      });
       renderer.dispose();
       if (renderer.domElement && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
@@ -433,8 +465,12 @@ export function createBwaScene(state) {
 
   return {
     init, setHoldPosition, resetIdle, getScreenPos: () => lastScreenPos, toss, destroy, hitTest,
-    // 過場影片播放期間暫停 three.js 迴圈
+     // 場景未顯示或過場影片播放期間暫停 three.js 迴圈
     pause(){ if (loopRafId) { cancelAnimationFrame(loopRafId); loopRafId = 0; } },
-    resume(){ if (!loopRafId && renderer) loopRafId = requestAnimationFrame(loop); },
+     resume(){
+       if (!renderer) return;
+       ensureModelLoaded();
+       if (!loopRafId) loopRafId = requestAnimationFrame(loop);
+     },
   };
 }
