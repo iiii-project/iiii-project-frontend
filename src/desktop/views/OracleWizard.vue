@@ -59,6 +59,7 @@ interface ArInterpretation {
 }
 interface TempleArOracleEl extends HTMLElement {
   start(options: { question?: string; category?: string; inputMode?: string }): Promise<void>
+  prepareCamera(): Promise<void>
   destroy(): void
 }
 
@@ -350,8 +351,13 @@ async function submit() {
     try {
       /* 手機（含把視窗縮窄的桌機）一律用搖的；桌機維持 auto，
          會先試鏡頭手勢，失敗才降級成點擊。 */
-      const useShake = window.matchMedia('(max-width: 640px)').matches
-      await el.start({
+       const useShake = window.matchMedia('(max-width: 640px)').matches
+       if (!useShake) {
+         // 使用者按下開始求籤的手勢中先預熱鏡頭與 MediaPipe；API 建立和畫面
+         // 轉換期間模型可以在背景準備好，進入誠心場景時不必再等初始化。
+         void el.prepareCamera().catch(() => undefined)
+       }
+       await el.start({
         question: askedQuestion.value,
         category: chosen.value?.arLabel ?? '綜合運勢',
         inputMode: useShake ? 'motion' : 'auto'

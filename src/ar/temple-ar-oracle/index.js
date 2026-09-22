@@ -46,6 +46,7 @@ class TempleArOracle extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this._destroyed = false;
     this._started = false;
+    this._cameraPromise = null;
   }
 
   connectedCallback(){
@@ -227,12 +228,16 @@ class TempleArOracle extends HTMLElement {
   // MediaPipe Hands + Camera 啟動（對應原始碼檔案尾端 4108–4126 行的 bootstrap，
   // 這裡包成一個 Promise 回傳的函式，供 flow-controller.start() 呼叫）
   _startCamera(){
-    return new Promise((resolve, reject) => {
+    if (this._cameraPromise) return this._cameraPromise;
+
+    this._cameraPromise = new Promise((resolve, reject) => {
       const profile = getPerformanceProfile();
-      // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑；保持最低模型複雜度，
-      // 但擲筊必須保留兩隻手的輸出，才能以雙手同時入鏡觸發。
+      // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑；開鏡先用單手模式，
+      // 進入擲筊場景時才切換兩手，避免把不必要的負載集中在開鏡瞬間。
       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-      hands.setOptions({ maxNumHands: 2, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+      const handOptions = { modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 };
+      let activeMaxHands = 1;
+      hands.setOptions({ ...handOptions, maxNumHands: activeMaxHands });
       hands.onResults(this._gestureEngine.onResults);
       this._hands = hands;
 
@@ -249,38 +254,67 @@ class TempleArOracle extends HTMLElement {
       // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
       // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把實際送進
        // MediaPipe 的頻率依裝置 profile 夾在 8~12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
-       const INFERENCE_INTERVAL_MS = 1000 / profile.arInferenceFps;
-       let lastInferenceTime = 0;
-       let inferenceBusy = false;
-       let inferenceCount = 0;
+        const INFERENCE_INTERVAL_MS = 1000 / profile.arInferenceFps;
+        let lastInferenceTime = 0;
+        let inferenceBusy = false;
+        let inferenceCount = 0;
+        let inferenceEnabledAt = Number.POSITIVE_INFINITY;
+        let hasSegmentationMask = false;
 
-      const camera = new Camera(this._els.video, {
-         onFrame: async () => {
-           const now = performance.now();
-           if (inferenceBusy || now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
-           lastInferenceTime = now;
-           inferenceBusy = true;
-           try {
-             // The segmentation mask changes slowly. Refreshing it every
-             // second inference avoids running two heavy models at once on
-             // low-end Android while keeping the composited image stable.
-             if (inferenceCount++ % 2 === 0) {
-               await selfieSegmentation.send({ image: this._els.video });
-             }
-             // First prepare the mask, then process landmarks. This prevents
-             // the first Hands result from drawing an unmasked camera frame.
-             await hands.send({ image: this._els.video });
-           } finally {
-             inferenceBusy = false;
-           }
+       const camera = new Camera(this._els.video, {
+          onFrame: async () => {
+            const now = performance.now();
+            // 先讓 camera/video、AR 畫面與頁面完成第一輪繪製，再啟動兩個
+            // MediaPipe WASM 模型，避免使用者按下開始後立刻被模型編譯卡住。
+            if (now < inferenceEnabledAt) return;
+            if (inferenceBusy || now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
+            lastInferenceTime = now;
+            inferenceBusy = true;
+            try {
+              const wantedMaxHands = this._state.current === 'bwa' ? 2 : 1;
+              if (wantedMaxHands !== activeMaxHands) {
+                activeMaxHands = wantedMaxHands;
+                hands.setOptions({ ...handOptions, maxNumHands: activeMaxHands });
+                inferenceCount = 0;
+              }
+
+              // 先做 Hands；去背模型延後到第二輪，避免開鏡第一幀同時初始化兩個模型。
+              await hands.send({ image: this._els.video });
+
+              // 遮罩變化比手勢慢：首次取得後每三輪更新一次，低階裝置不必每輪
+              // 同時執行兩個模型。沒有遮罩時第二輪一定補做一次，仍不會閃出原始畫面。
+              if (!hasSegmentationMask || inferenceCount % 3 === 0) {
+                await selfieSegmentation.send({ image: this._els.video });
+                hasSegmentationMask = true;
+              }
+              inferenceCount += 1;
+            } finally {
+              inferenceBusy = false;
+            }
          },
          width: profile.arCameraWidth,
          height: profile.arCameraHeight,
       });
       this._camera = camera;
 
-      camera.start().then(resolve).catch(reject);
+       camera.start().then(() => {
+         // 低階裝置多留一點時間給 video、頁面合成與權限提示完成；這段期間
+         // 仍由 ritual-overlay 蓋住鏡頭，不會露出未去背的原始畫面。
+         inferenceEnabledAt = performance.now() + (profile.isLowEnd ? 350 : 180);
+         resolve();
+       }).catch((error) => {
+         this._cameraPromise = null;
+         reject(error);
+       });
     });
+    // 預熱呼叫可能早於 flow.start()，但仍共用同一個 Promise，避免重複開鏡。
+    this._cameraPromise.catch(() => undefined);
+    return this._cameraPromise;
+  }
+
+  /** 在開始求籤的使用者手勢中先開啟鏡頭並預熱模型；真正顯示場景仍由 start() 控制。 */
+  prepareCamera(){
+    return this._startCamera();
   }
 
   /**
@@ -318,6 +352,7 @@ class TempleArOracle extends HTMLElement {
       this._onViewportResize = null;
     }
     try { this._camera?.stop?.(); } catch (e) {}
+    this._cameraPromise = null;
     try { this._hands?.close?.(); } catch (e) {}
     try { this._selfieSegmentation?.close?.(); } catch (e) {}
     try {

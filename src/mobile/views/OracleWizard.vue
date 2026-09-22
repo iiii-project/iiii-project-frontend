@@ -56,6 +56,7 @@ interface ArInterpretation {
 }
 interface TempleArOracleEl extends HTMLElement {
   start(options: { question?: string; category?: string; inputMode?: string }): Promise<void>
+  prepareCamera(): Promise<void>
   destroy(): void
 }
 
