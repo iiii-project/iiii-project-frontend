@@ -498,7 +498,7 @@ function restart() {
       <section v-else-if="step === 1" class="panel intro">
         <p class="kicker">第 一 步</p>
         <h2>今天想請示哪一方面？</h2>
-        <p class="lede">先讓神明知道你要問的方向，指點才會落在心坎上。</p>
+        <p class="lede">選擇想詢問的問題種類</p>
         <div class="choice-list">
           <button
             v-for="item in CATEGORIES"
@@ -526,7 +526,7 @@ function restart() {
         <p class="kicker">第 二 步 </p>
         <h2>想跟神明說什麼？</h2>
         <p class="lede">
-          像在神明面前稟告一樣，說清楚人、事、時間，解籤會更貼近你的處境。
+          說明你想詢問的問題
         </p>
         <div class="ask-wrap" :class="{ recording: isRecording }">
           <textarea
@@ -571,7 +571,7 @@ function restart() {
       <section v-else-if="step === 3" class="panel confide">
         <p class="kicker">第 三 步</p>
         <h2>確認要向神明請示的內容</h2>
-        <p class="lede">再看一次，確定沒問題就誠心送出。</p>
+        <p class="lede"></p>
         <!-- 掃碼把籤帶走 -->
 
         <dl class="summary">

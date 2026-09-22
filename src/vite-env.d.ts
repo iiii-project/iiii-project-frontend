@@ -43,5 +43,4 @@ declare module '@/ar/temple-ar-oracle/engine/flow-controller.js' {
     onCovered?: () => void,
     hooks?: { onStart?: () => void; onEnd?: () => void; src?: string }
   ): void
-  export function playInkTransition(els: TransitionEls, onCovered?: () => void): void
 }

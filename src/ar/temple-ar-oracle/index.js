@@ -103,7 +103,6 @@ class TempleArOracle extends HTMLElement {
       bwaHint: $('bwa-hint'),
       bwaThreeContainer: $('bwa-three-container'),
       btnClickBwa: $('btn-click-bwa'),
-      bwaThreeContainer: $('bwa-three-container'),
       bwaResultPanel: $('bwa-result-panel'),
       bwaResultTitle: $('bwa-result-title'),
       bwaResultDesc: $('bwa-result-desc'),

@@ -110,20 +110,18 @@ npm run preview   # 本機預覽 dist/ 建置產物
 
 ## 動作辨識實作
 
-動作辨識集中在 `src/composables/useActionDetection.ts`，由 `CameraActionPanel.vue` 使用。
+動作辨識集中在 `<temple-ar-oracle>` Web Component，核心位於
+`src/ar/temple-ar-oracle/`。
 
-- 使用 MediaPipe Pose 確認畫面中有人。
-- 使用 MediaPipe Hands 取得雙手或手腕關鍵點。
-- 合十：左右掌心關鍵點距離小於門檻，且位於畫面中央，持續約 2 秒後觸發 `PRAYER_DETECTED`。
-- 搖籤：手腕 Y 軸上下移動且方向變化至少 3 次，持續約 2 秒後觸發 `SHAKE_DETECTED`。
-- 擲筊：沿用手部上下擺動判斷，觸發 `BLOCK_CAST_DETECTED`。
-- 觸發後立即 lock 並停止攝影機，避免同一動作重複送 API。
+- 使用 MediaPipe Hands 取得手部關鍵點，並使用 Selfie Segmentation 顯示去背後的人像。
+- 攝影機模式依序處理合十、搖籤與擲筊；擲筊需要雙手同時入鏡。
+- 手機可由「啟用搖手機模式」按鈕改用 DeviceMotion 抽籤。
+- 每個階段都保留點擊備援，並在觸發後鎖定流程，避免重複送 API。
 - 攝影機影像只在瀏覽器送入 MediaPipe，不上傳後端。
-- 每個動作畫面都有「改用點擊」備援。
 
-目前辨識採 15 FPS 的輕量配置，適合第一階段展示；若之後要提升準確度，可加入更多 Pose 條件或校正門檻。
+低階裝置會自動降低攝影機解析度、推論 FPS、粒子更新頻率與 Three.js 渲染負載。
 
-Live2D 角色的麥克風語音輸入（VAD 語音活動偵測）跟 Cubism 渲染引擎所需的執行期函式庫（`live2dcubismcore.js`、onnxruntime-web 的 WASM 檔、Silero VAD 模型）都放在 `public/live2d/libs/`，**已經進版控，`git clone` 之後就有，不需要另外下載**。升級 `onnxruntime-web` 這個 npm 套件版本前要注意：這些 wasm 檔案是跟特定版本綁定編譯的，套件版本跟 wasm 檔要一起更新，不然可能出現版本不匹配的執行期錯誤。
+Live2D 只需要 `public/live2d/libs/live2dcubismcore.js` 這個 Cubism 執行期函式庫；對話輸入使用瀏覽器或後端 STT，不使用 VAD／ONNX 模型。
 
 ## Docker Compose 部署
 

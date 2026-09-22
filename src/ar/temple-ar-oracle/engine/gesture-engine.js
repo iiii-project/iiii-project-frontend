@@ -198,7 +198,7 @@
         centerPt = cA;
       }
       isClose = true;
-      statusText = '誠心感應中…';
+      statusText = '';
     } else {
       hideDualHandUI(); hideFistIndicator();
     }
@@ -269,7 +269,7 @@
     const elapsed = now - shake.startTime;
     const progress = Math.min(1, Math.max(elapsed/CONFIG.SHAKE_TARGET_DURATION_MS, shake.oscillations/CONFIG.SHAKE_REQUIRED_OSCILLATIONS));
     els.shakeRing.style.setProperty('--p', Math.round(progress*100));
-    els.drawHint.textContent = `神明降臨中… ${Math.round(progress*100)}%`;
+    els.drawHint.textContent = `求籤中… ${Math.round(progress*100)}%`;
     if (!shake.completed && shake.oscillations >= CONFIG.SHAKE_REQUIRED_OSCILLATIONS && elapsed >= CONFIG.SHAKE_MIN_DURATION_MS){ completeShakeStage(); }
   }
   function resetShakeProgress(){
@@ -292,7 +292,7 @@
     state.drawSubState = 'revealing';
     els.qianStick.classList.remove('hidden', 'punch');
     els.qianStick.classList.add('auto-draw');
-    els.drawHint.textContent = '神明已選定，籤條正在自動抽出…';
+    els.drawHint.textContent = '籤條抽出中…';
     if (navigator.vibrate) navigator.vibrate([20, 45, 20]);
     window.setTimeout(() => {
       if (state.current === 'draw') callbacks.completeDraw();

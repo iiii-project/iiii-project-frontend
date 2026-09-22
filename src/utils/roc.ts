@@ -24,20 +24,3 @@ export function formatRocDate(value?: string | number | Date): string {
   }
   return `${era(date.getFullYear())}年${date.getMonth() + 1}月${date.getDate()}日`
 }
-
-/** 例：民國115年8月6日 下午2:30 */
-export function formatRocDateTime(value?: string | number | Date): string {
-  const date = toDate(value)
-  if (!date) return ''
-  try {
-    const formatted = new Intl.DateTimeFormat('zh-TW-u-ca-roc', {
-      dateStyle: 'long',
-      timeStyle: 'short'
-    }).format(date)
-    if (formatted.includes('民國')) return formatted
-  } catch {
-    // 同上
-  }
-  const time = new Intl.DateTimeFormat('zh-TW', { timeStyle: 'short' }).format(date)
-  return `${formatRocDate(date)} ${time}`
-}

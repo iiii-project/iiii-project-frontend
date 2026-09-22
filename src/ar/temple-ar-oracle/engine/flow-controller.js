@@ -621,8 +621,8 @@ export function createFlowController({
 
       if (result.confirmed) {
         flashOnce();
-        els.bwaResultTitle.textContent = "聖筊 · 神明允准";
-        els.bwaResultDesc.textContent = "聖筊，神明允准解籤。";
+        els.bwaResultTitle.textContent = "聖筊 ";
+        els.bwaResultDesc.textContent = "聖筊";
         emit("bwa-result", { tier: "sacred" });
         /* 點擊擲筊這條路以前會進 finally 立刻解鎖，使用者在過場開始前再點一次
            就會對同一個 session 重送 /blocks/，後端已經確認過時會回 409。
@@ -694,8 +694,8 @@ export function createFlowController({
       particleSystem.burst(pos.x, pos.y);
       spawnLightBurst(rootEl, pos.x, pos.y);
       flashOnce();
-      els.bwaResultTitle.textContent = "聖筊 · 神明允准";
-      els.bwaResultDesc.textContent = "聖筊，神明允准解籤。";
+      els.bwaResultTitle.textContent = "聖筊 ";
+      els.bwaResultDesc.textContent = "聖筊";
       emit("bwa-result", { tier: "sacred" });
       /* 解籤與過場並行，使用者不必在定格畫面前乾等 AI 回應。
          pending 是擲筊結果剛回來時就發出的那一份請求（見 tossBwa）。

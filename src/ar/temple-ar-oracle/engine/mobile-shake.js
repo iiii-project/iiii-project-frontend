@@ -20,8 +20,6 @@ export function createMobileShake({ els, state, callbacks }) {
   let hits = 0;
   const requiredHits = 3;
 
-  function supportsMotion(){ return 'DeviceMotionEvent' in window; }
-
   async function requestAccess(){ return requestMotionAccess(); }
 
   function stop(){
@@ -94,7 +92,7 @@ export function createMobileShake({ els, state, callbacks }) {
 
 /* 可由頁面上的「搖動手機開始」按鈕直接呼叫，確保 iOS 的權限請求仍在
    使用者手勢期間發生；真正建立 AR 元件後會把結果傳回同一個流程。 */
-export async function requestMotionAccess(){
+async function requestMotionAccess(){
   if (typeof window === 'undefined' || !('DeviceMotionEvent' in window)) return false;
   try {
     if (typeof DeviceMotionEvent.requestPermission === 'function'){

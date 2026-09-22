@@ -44,7 +44,6 @@
 - Pinia
 - Axios
 - MediaPipe Hands
-- MediaPipe Pose
 - HTML5 Canvas
 - CSS3
 - Three.js 僅在確實需要 3D 時使用
@@ -261,7 +260,7 @@ DELETE /api/v1/divinations/{sessionId}/
 - 首頁分類為五項：身體健康／家庭平安／工作錢財／感情姻緣／其他心事，定義於 `CONFIG.CATEGORIES`
 - 分類名稱需對應到 `CATEGORY_API_MAP` 才能換成後端代碼；比賽用版本的七項分類名稱一併保留在該表中，舊分享連結仍可正確解析
 - 今日運勢、籤詩收藏、我的資料、已知籤號皆收在首頁底部的「更多功能」折疊區
-- 比賽用的舊版精靈（步驟圓點列、pill 分類、多顆小按鈕）原本以註解保留在 `temple_oracle_v17.html` 中；該檔案與對應的 `/temple-oracle-v17` 系列路由已於新版擲筊模型上線後移除，如需找回比賽用版本請翻 git 歷史
+- 比賽用的舊版精靈（步驟圓點列、pill 分類、多顆小按鈕）已於新版擲筊模型上線後移除，如需找回比賽用版本請翻 git 歷史
 
 後端狀態值：
 
@@ -286,7 +285,6 @@ cancelled
 使用：
 
 - MediaPipe Hands
-- MediaPipe Pose
 
 第一階段辨識：
 
