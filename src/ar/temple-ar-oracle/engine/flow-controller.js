@@ -246,10 +246,8 @@ export function createFlowController({
   let pendingCast = null; // 這一輪擲筊結果（Promise）
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
 
-  /* 神明實景疊加：插香/抽籤/擲筊三階段各自進場先完全不透明蓋住鏡頭，
-     維持這裡列的秒數之後才淡化，讓使用者透過半透明畫面看到自己（見 showScene）。 */
-  const RITUAL_OVERLAY_VEIL_MS = { incense: 1000, draw: 500, bwa: 500 };
-  let ritualOverlayTimer = 0;
+  /* 神明實景疊加：鏡頭模式等第一張去背遮罩完成就顯示人物，
+     不再用固定秒數讓使用者等待；手動／手機模式則立即顯示場景。 */
 
   function startInterpretOnce() {
     if (!pendingInterpret) pendingInterpret = interpretInBackground();
@@ -365,29 +363,24 @@ export function createFlowController({
     if (name !== "draw") mobileShake.stop();
     state.current = name;
 
-    /* 神明實景疊加：每次進場先恢復「純實景、人像先隱藏」（veil），停留該階段的秒數後
-       才同步切換——神明實景淡到六成、人像（去背後的#output_canvas）同時淡入疊上來。 */
-    window.clearTimeout(ritualOverlayTimer);
-    const veilMs = RITUAL_OVERLAY_VEIL_MS[name];
+    /* 神明實景疊加：鏡頭模式等去背遮罩完成，人物才淡入；沒有鏡頭的模式直接顯示。 */
     // 防呆：els.ritualOverlay / els.outputCanvas 理論上一定存在，
     // 但曾經在插香/抽籤/擲筊進場時炸過 undefined.classList，先擋著避免整個流程卡死。
-    if (veilMs != null) {
-      if (!els.ritualOverlay || !els.outputCanvas) {
-        console.warn(
-          "[temple-ar-oracle] showScene: ritualOverlay/outputCanvas 缺失，跳過神明實景淡入效果",
-          {
-            name,
-            hasRitualOverlay: !!els.ritualOverlay,
-            hasOutputCanvas: !!els.outputCanvas,
-          },
-        );
-      } else {
-        els.ritualOverlay.classList.remove("blended");
-        els.outputCanvas.classList.remove("blended");
-        ritualOverlayTimer = window.setTimeout(() => {
-          els.ritualOverlay?.classList.add("blended");
-          els.outputCanvas?.classList.add("blended");
-        }, veilMs);
+    if (!els.ritualOverlay || !els.outputCanvas) {
+      console.warn(
+        "[temple-ar-oracle] showScene: ritualOverlay/outputCanvas 缺失，跳過神明實景淡入效果",
+        {
+          name,
+          hasRitualOverlay: !!els.ritualOverlay,
+          hasOutputCanvas: !!els.outputCanvas,
+        },
+      );
+    } else {
+      els.ritualOverlay.classList.remove("blended");
+      els.outputCanvas.classList.remove("blended");
+      if (state.resolvedMode !== "camera" || state.segmentationMask) {
+        els.ritualOverlay.classList.add("blended");
+        els.outputCanvas.classList.add("blended");
       }
     }
 
@@ -773,7 +766,6 @@ export function createFlowController({
     );
     state.current = "idle";
     state.bwaTossing = false;
-    window.clearTimeout(ritualOverlayTimer);
     els.ritualOverlay?.classList.remove("blended");
     els.outputCanvas?.classList.remove("blended");
     gestureEngine.resetIncenseProgress();

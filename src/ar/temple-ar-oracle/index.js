@@ -248,7 +248,15 @@ class TempleArOracle extends HTMLElement {
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
       });
       selfieSegmentation.setOptions({ modelSelection: 1 });
-      selfieSegmentation.onResults((results) => { this._state.segmentationMask = results.segmentationMask; });
+       selfieSegmentation.onResults((results) => {
+         this._state.segmentationMask = results.segmentationMask;
+         // 預熱可能在 flow.start() 之前完成；若場景已經顯示，遮罩一到就
+         // 立即揭露人物，不再等待固定的 ritual veil 計時器。
+         if (this._state.resolvedMode === 'camera' && this._state.current !== 'creating' && this._state.current !== 'transition') {
+           this._els.ritualOverlay?.classList.add('blended');
+           this._els.outputCanvas?.classList.add('blended');
+         }
+       });
       this._selfieSegmentation = selfieSegmentation;
 
       // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，

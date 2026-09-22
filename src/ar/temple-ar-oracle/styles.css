@@ -51,7 +51,7 @@
 /* opacity 預設0（進場veil期間人像圖層先隱藏，只留#ritual-overlay的神明實景），
    加上 .blended 後淡入到1——跟 #ritual-overlay 的淡出時機由 showScene() 同步觸發，
    讓「veil結束的瞬間」呈現「神明實景退到六成 + 人像同時浮現」的疊圖效果。 */
-#output_canvas{ position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; z-index:1; opacity:0; filter:saturate(0.85) contrast(1.0) brightness(1.05); transition: filter 0.35s ease, opacity 0.5s ease; }
+#output_canvas{ position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; z-index:1; opacity:0; filter:saturate(0.85) contrast(1.0) brightness(1.05); transition: filter 0.35s ease, opacity 0.15s ease; }
 #output_canvas.blended{ opacity:1; }
 #vignette{
   position:fixed; inset:0; z-index:2; pointer-events:none;
@@ -76,7 +76,7 @@
    #output_canvas 只剩人像範圍不透明、其餘鏤空，鏤空處會直接透出這層神明實景，
    形成「人在神明實景前」的效果。預設 opacity:1（進場veil期間完全不透明），
    加上 .blended 後淡化到 0.6；切換時機由 flow-controller.js 的 showScene() 控制。 */
-.ritual-overlay{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:1; transition: opacity 0.5s ease; }
+.ritual-overlay{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:1; transition: opacity 0.15s ease; }
 .ritual-overlay.blended{ opacity:0.6; }
 /* 背景照套一層放射狀遮罩：中央（神明所在處）維持完全不透明、飽和度也拉高一點，
    往兩側漸漸淡出到全透明，形成聚光/光暈的視覺效果，而不是整張背景平均一致。 */
