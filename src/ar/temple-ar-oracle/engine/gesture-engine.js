@@ -66,10 +66,18 @@
        return { x: 0, y: 0, width, height };
     }
 
-    function personFrame(width, height){
+    function personFrame(width, height, sourceImage = els.video){
       const scale = CONFIG.PERSON_SCALE;
-      const personWidth = width * scale;
-      const personHeight = height * scale;
+      const source = imageSize(sourceImage, width, height);
+      const sourceRatio = source.width / source.height;
+      let personHeight = height * scale;
+      let personWidth = personHeight * sourceRatio;
+
+      // 以高度作為主要縮放基準；來源比例過寬時才限制在畫面內。
+      if (personWidth > width){
+        personWidth = width;
+        personHeight = personWidth / sourceRatio;
+      }
 
       return {
         // 人物顯示框獨立於 camera frame；PERSON_SCALE 只影響最後顯示大小。
@@ -83,20 +91,41 @@
     /* 座標提示使用縮小後的去背人物框，確保標記與人物保持一致。 */
     function toDisplayPoint(point, alreadyMirrored = false){
       const viewport = viewportSize();
-      const frame = personFrame(viewport.width, viewport.height);
-     const x = alreadyMirrored ? point.x : 1 - point.x;
-     return {
-       x: frame.x + x * frame.width,
-       y: frame.y + point.y * frame.height,
-     };
-   }
-
-    function imageSize(image, fallbackWidth, fallbackHeight){
+      const frame = personFrame(viewport.width, viewport.height, els.video);
+      const x = alreadyMirrored ? point.x : 1 - point.x;
       return {
-        width: image?.videoWidth || image?.naturalWidth || image?.width || fallbackWidth,
-        height: image?.videoHeight || image?.naturalHeight || image?.height || fallbackHeight,
+        x: frame.x + x * frame.width,
+        y: frame.y + point.y * frame.height,
       };
     }
+
+     function imageSize(image, fallbackWidth, fallbackHeight){
+       return {
+         width: image?.videoWidth || image?.naturalWidth || image?.width || fallbackWidth,
+         height: image?.videoHeight || image?.naturalHeight || image?.height || fallbackHeight,
+       };
+     }
+
+     function containedImageFrame(x, y, width, height, image, fallbackWidth, fallbackHeight){
+       const source = imageSize(image, fallbackWidth, fallbackHeight);
+       const sourceRatio = source.width / source.height;
+       const frameRatio = width / height;
+       let drawWidth = width;
+       let drawHeight = height;
+
+       if (sourceRatio > frameRatio){
+         drawHeight = width / sourceRatio;
+       } else if (sourceRatio < frameRatio){
+         drawWidth = height * sourceRatio;
+       }
+
+       return {
+         x: x + (width - drawWidth) / 2,
+         y: y + (height - drawHeight) / 2,
+         width: drawWidth,
+         height: drawHeight,
+       };
+     }
 
     function ensurePersonLayer(width, height){
       if (!personLayerCanvas){
@@ -111,13 +140,14 @@
     }
 
      /* Canvas 的 CSS object-fit 不會替 canvas 內部的 bitmap 保持比例；
-        這裡把完整來源影像 contain 到全螢幕鏡頭框，不做 source crop，
-        讓鏡頭與去背遮罩使用完全相同的範圍。 */
-    function drawContained(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
-      const source = imageSize(image, fallbackWidth, fallbackHeight);
-      // 呼叫端已將 canvas 水平翻轉，所以 destination x 必須從右側起算。
-      ctx.drawImage(image, 0, 0, source.width, source.height, -(dx + dw), dy, dw, dh);
-    }
+        這裡把完整來源影像 contain 到全螢幕鏡頭框，避免直式畫面拉伸人物。
+        鏡頭框本身仍然是完整畫布，兩側或上下的留白保持透明。 */
+     function drawContained(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
+       const source = imageSize(image, fallbackWidth, fallbackHeight);
+       const frame = containedImageFrame(dx, dy, dw, dh, image, fallbackWidth, fallbackHeight);
+       // 呼叫端已將 canvas 水平翻轉，所以 destination x 必須從右側起算。
+       ctx.drawImage(image, 0, 0, source.width, source.height, -(frame.x + frame.width), frame.y, frame.width, frame.height);
+     }
    function onResults(results){
     // 過場影片播放中：整格跳過，MediaPipe 的繪製與判斷都是重負載
     if (state.transitionActive) return;
@@ -132,7 +162,16 @@
       return;
     }
         const camera = cameraFrame(cw, ch);
-        const person = personFrame(cw, ch);
+        const person = personFrame(cw, ch, results.image);
+        const source = containedImageFrame(
+          camera.x,
+          camera.y,
+          camera.width,
+          camera.height,
+          results.image,
+          cw,
+          ch,
+        );
        const layerCtx = ensurePersonLayer(cw, ch);
        layerCtx.clearRect(0, 0, cw, ch);
        layerCtx.save();
@@ -144,12 +183,13 @@
        drawContained(layerCtx, state.segmentationMask, camera.x, camera.y, camera.width, camera.height, cw, ch);
        layerCtx.restore();
        layerCtx.globalCompositeOperation = 'source-over';
-        // source 使用完整的全螢幕去背結果；人物大小只由 destination 控制。
-        outCtx.drawImage(
-          personLayerCanvas,
-          0, 0, cw, ch,
-          person.x, person.y, person.width, person.height
-        );
+         // 最後只取保持來源比例的有效影像區，避免把透明留白一起縮放，
+         // 並讓人物框的寬高維持原始相機比例。
+         outCtx.drawImage(
+           personLayerCanvas,
+           source.x, source.y, source.width, source.height,
+           person.x, person.y, person.width, person.height
+         );
      outCtx.restore();
 
     const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
