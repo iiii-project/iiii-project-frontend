@@ -11,6 +11,11 @@ import FortunePoem from '@/desktop/components/FortunePoem.vue'
 import FortuneReading from '@/desktop/components/FortuneReading.vue'
 // 註冊 <temple-ar-oracle>（插香 → 搖籤 → 擲筊 的 AR 引擎）
 import '@/ar/temple-ar-oracle/index.js'
+// AR 引擎目前維持 JavaScript 模組，這兩個匯出只負責啟動資源預載入。
+// @ts-ignore -- JavaScript AR 模組沒有另外維護 declaration file
+import { preloadBwaModel } from '@/ar/temple-ar-oracle/engine/bwa-scene.js'
+// @ts-ignore -- JavaScript AR 模組沒有另外維護 declaration file
+import { preloadVideoAsset } from '@/ar/temple-ar-oracle/engine/flow-controller.js'
 import { sendWhenReady } from '@/live2d/websocketService'
 import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 
@@ -124,6 +129,14 @@ const {
 })
 
 onMounted(() => {
+  // 儀式頁一進入就先準備後面會用到的筊杯模型與影片，避免抽籤完成後
+  // 才第一次下載／解析資源，造成切到擲筊場景時卡頓。
+  void preloadBwaModel().catch((error: unknown) => {
+    console.warn('[OracleWizard] 筊杯模型預載入失敗，稍後將再次嘗試', error)
+  })
+  ;['/videos/dragon.mp4', '/videos/oracle-transition.mov', '/videos/tutorial.mp4']
+    .forEach((src) => preloadVideoAsset(src))
+
   // 雲霧散盡後把整層移除，之後就不再佔用繪圖資源
   mistTimer = window.setTimeout(() => (showEnterMist.value = false), 900)
 })

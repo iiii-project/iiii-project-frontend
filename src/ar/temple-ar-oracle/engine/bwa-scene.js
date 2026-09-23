@@ -51,7 +51,11 @@ const IDLE_SPREAD = 0.5;       // 閒置時兩杯的中心間距（半距）
 // 地板（陰影承接面）跟著往上移，維持跟原本一樣「杯底貼地」的相對距離（0.1）。
 const REST_Y = -0.2;
 
-export function createBwaScene(state) {
+ export function preloadBwaModel() {
+   return loadJiaoTemplates();
+ }
+
+ export function createBwaScene(state) {
   let renderer, scene, camera, cupA, cupB, ground, light;
   const profile = getPerformanceProfile();
   // 擲筊動畫使用固定時間軸取樣；低階裝置只需要播放 15 張/秒，
@@ -141,13 +145,16 @@ export function createBwaScene(state) {
       scene.add(ground);
     }
 
+    // 場景建立時就開始準備模型，不等到抽籤完成、第一次進入擲筊畫面才載入。
+    ensureModelLoaded();
+
   }
 
   function ensureModelLoaded() {
     if (modelLoadStarted) return;
     modelLoadStarted = true;
-    // 延後到真的進入擲筊場景才下載／解析 GLB，避免使用者還在首頁或
-    // 上香時就讓低階裝置同時處理 3D 資源。
+    // 模型通常已在 AR 場景初始化時開始下載；這裡只負責在 Three.js 場景
+    // 已經存在後建立筊杯實例。
     loadJiaoTemplates().then(({ jiaoOne, jiaoTwo }) => {
       if (destroyed) return;
       cupA = makeCup(jiaoOne);
@@ -155,6 +162,9 @@ export function createBwaScene(state) {
       resetIdle();
       scene.add(cupA);
       scene.add(cupB);
+    }).catch((error) => {
+      modelLoadStarted = false;
+      console.error('[BwaScene] 筊杯模型載入失敗', error);
     });
   }
 

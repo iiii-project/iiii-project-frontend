@@ -46,6 +46,21 @@ export const ORACLE_TRANSITION_SRC = "/videos/oracle-transition.mov";
 const ORACLE_TRANSITION_MS = 5120; // 素材長度（拿不到 metadata 時的備用值）
 const REVEAL_LEAD_MS = 350; // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
 const HARD_CAP_EXTRA_MS = 2500; // 影片真的卡死時的保險
+const preloadedVideos = new Map();
+
+/* 在儀式頁一載入就建立隱藏的 video loader，讓瀏覽器先把影片放進 HTTP
+   cache／解碼管線；真正播放時仍使用模板裡的 video 元素。 */
+export function preloadVideoAsset(src) {
+  if (typeof document === "undefined" || !src || preloadedVideos.has(src)) return;
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  video.setAttribute("aria-hidden", "true");
+  video.src = src;
+  video.load();
+  preloadedVideos.set(src, video);
+}
 
 export function preloadOracleTransition(els, options = {}) {
   const video = els.transitionVideo;
