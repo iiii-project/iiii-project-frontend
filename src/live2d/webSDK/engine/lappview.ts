@@ -52,8 +52,12 @@ export class LAppView {
     const { width, height } = canvas;
 
     const ratio: number = width / height;
-    const left: number = -ratio;
-    const right: number = ratio;
+    // 豎屏時若仍使用 ±width/height（例如 1080×1920 只有 ±0.56），
+    // Live2D 的左右可視範圍會過窄，角色看起來過大且靠近左右邊界。
+    // 豎屏改用完整 ±1 的水平邏輯範圍，再由專用倍率控制角色大小。
+    const horizontalRange: number = width > height ? ratio : 1.0;
+    const left: number = -horizontalRange;
+    const right: number = horizontalRange;
     const bottom: number = LAppDefine.ViewLogicalLeft;
     const top: number = LAppDefine.ViewLogicalRight;
 
