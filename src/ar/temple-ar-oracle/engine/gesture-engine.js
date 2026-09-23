@@ -82,7 +82,7 @@
       return {
         // 人物顯示框獨立於 camera frame；PERSON_SCALE 只影響最後顯示大小。
         x: (width - personWidth) / 2,
-        y: height - personHeight,
+        y: Math.max(0, height - personHeight - height * CONFIG.PERSON_BOTTOM_OFFSET),
         width: personWidth,
         height: personHeight,
       };
