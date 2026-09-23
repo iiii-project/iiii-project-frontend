@@ -15,6 +15,9 @@ const EASING_FACTOR = 0.3
 const EASE_STOP_THRESHOLD = 0.001
 const WHEEL_SCALE_STEP = 0.03
 const DEFAULT_SCALE = 1.0
+// 豎屏可視高度較長，角色維持橫屏比例會佔住太多神明與內容區域。
+// 這是相對於模型原本 kScale 的倍率，不會改動後端模型設定。
+const PORTRAIT_SCALE_FACTOR = 0.68
 
 // 角色預設站在畫面右下角一帶（畫面寬度 84%、高度 76% 處）。
 // 故意不去用 CubismModelMatrix.right()/bottom()/centerX() 這組 layout 輔助方法直接算——
@@ -30,15 +33,17 @@ const DEFAULT_POSITION_Y_FRACTION = 0.76
 // 用 rAF 輪詢等它出現，最多等 ~2 秒（120 frame），逾時就放棄不再重試。
 const MAX_POSITION_RETRY_FRAMES = 120
 
-export function applyScale(scale: number) {
+export function applyScale(scale: number): boolean {
   try {
     const manager = LAppLive2DManager.getInstance()
-    if (!manager) return
+    if (!manager) return false
     const model = manager.getModel(0) as any
-    if (!model) return
+    if (!model) return false
     model._modelMatrix.scale(scale, scale)
+    return true
   } catch {
     console.debug('Model not ready for scaling yet')
+    return false
   }
 }
 
@@ -68,6 +73,7 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
   let isAnimating = false
   let resizeAnimationFrame: number | null = null
   let hasAppliedInitialScale = false
+  let appliedOrientationFactor = 1
   let lastDimensions = { width: 0, height: 0 }
   let resizeObserver: ResizeObserver | undefined
   let hasAppliedInitialPosition = false
@@ -83,11 +89,25 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
     }
   }
 
+  function tryApplyOrientationScale(): boolean {
+    const isPortrait = window.innerHeight > window.innerWidth
+    const nextFactor = isPortrait ? PORTRAIT_SCALE_FACTOR : 1
+    if (Math.abs(nextFactor - appliedOrientationFactor) < EASE_STOP_THRESHOLD) return true
+
+    // 以「目前已套用的方向倍率」計算差值，避免旋轉螢幕多次後反覆
+    // 乘上 0.68 而讓角色越來越小。
+    const relativeScale = nextFactor / appliedOrientationFactor
+    if (!applyScale(relativeScale)) return false
+    appliedOrientationFactor = nextFactor
+    return true
+  }
+
   function scheduleDefaultPosition(canvas: HTMLCanvasElement) {
     cancelPositionRetry()
     const generation = positionGeneration
     const attempt = (framesLeft: number) => {
       if (generation !== positionGeneration) return
+      tryApplyOrientationScale()
       if (tryApplyDefaultPosition(canvas)) {
         hasAppliedInitialPosition = true
         positionRetryFrame = null
@@ -171,6 +191,7 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
       } else {
         console.warn('[Resize] LAppDelegate instance not found.')
       }
+      tryApplyOrientationScale()
       // 只在「這個模型還沒套用過預設右下角位置」時做一次，避免使用者拖曳角色到
       // 別的地方後，只是視窗改個尺寸就把角色彈回右下角。
       if (!hasAppliedInitialPosition) scheduleDefaultPosition(canvas)
@@ -196,6 +217,7 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
       lastScale = modelInfo.value?.kScale || DEFAULT_SCALE
       targetScale = lastScale
       hasAppliedInitialScale = false
+      appliedOrientationFactor = 1
       hasAppliedInitialPosition = false
       positionGeneration += 1
       cancelPositionRetry()

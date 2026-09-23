@@ -1,6 +1,5 @@
 import { apiClient } from './client'
 import type {
-  BlockCast,
   Category,
   Fortune,
   DivinationSession,
@@ -53,68 +52,11 @@ export async function createDivination(payload: {
   return unwrap(data)
 }
 
-export async function completePrayer(sessionId: string): Promise<DivinationSession> {
-  const { data } = await apiClient.post<ApiResponse<DivinationSession> | DivinationSession>(
-    `/divinations/${sessionId}/prayer-complete/`
-  )
-  return unwrap(data)
-}
-
-export async function drawFortune(sessionId: string): Promise<DivinationSession> {
-  const { data } = await apiClient.post<ApiResponse<DivinationSession> | DivinationSession>(
-    `/divinations/${sessionId}/draw/`
-  )
-  return unwrap(data)
-}
-
-export async function castBlocks(sessionId: string): Promise<BlockCast> {
-  const { data } = await apiClient.post<ApiResponse<BlockCast> | BlockCast>(`/divinations/${sessionId}/blocks/`)
-  return unwrap(data)
-}
-
 export async function interpretFortune(sessionId: string): Promise<DivinationSession & { interpretation: Interpretation }> {
   const { data } = await apiClient.post<
     ApiResponse<DivinationSession & { interpretation: Interpretation }> | (DivinationSession & { interpretation: Interpretation })
   >(
     `/divinations/${sessionId}/interpret/`
-  )
-  return unwrap(data)
-}
-
-export async function interpretFortuneWithContext(
-  sessionId: string,
-  payload: {
-    question: string
-    category: Category
-    categories: Category[]
-    divination_result?: Record<string, unknown>
-  }
-): Promise<DivinationSession & { interpretation: Interpretation }> {
-  const { category, ...requestBody } = payload
-  const { data } = await apiClient.post<
-    ApiResponse<DivinationSession & { interpretation: Interpretation }> | (DivinationSession & { interpretation: Interpretation })
-  >(
-    `/divinations/${sessionId}/interpret/`,
-    requestBody
-  )
-  return unwrap(data)
-}
-
-export async function sendChat(sessionId: string, message: string): Promise<{
-  reply: unknown
-  remaining_messages: number
-}> {
-  const { data } = await apiClient.post<
-    ApiResponse<{
-      reply: unknown
-      remaining_messages: number
-    }> | {
-      reply: unknown
-      remaining_messages: number
-    }
-  >(
-    `/divinations/${sessionId}/chat/`,
-    { message }
   )
   return unwrap(data)
 }

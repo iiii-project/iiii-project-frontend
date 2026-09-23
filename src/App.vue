@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-/* Live2D 小夥伴整套引擎（webSDK Framework + onnxruntime VAD 相關 composable）目前是
+/* Live2D 小夥伴整套引擎（webSDK Framework 與音訊播放 composable）目前是
    全站最大的一塊前端程式碼。改成動態 import 讓它獨立成一個 chunk，
    不再跟著 App.vue 一起塞進進站就要下載、解析的主 bundle——
    不然每一頁（含還沒用到小夥伴的頁面）都要先扛著這包重量才能開始渲染。 */
@@ -31,7 +31,7 @@ watch(
     <header class="app-header">
       <RouterLink class="brand" to="/">AI 求籤互動系統</RouterLink>
       <nav>
-        <RouterLink to="/temple-oracle-v17">求籤</RouterLink>
+        <RouterLink to="/oracle">求籤</RouterLink>
         <RouterLink to="/donation">捐款</RouterLink>
         <RouterLink to="/history">歷史</RouterLink>
       </nav>

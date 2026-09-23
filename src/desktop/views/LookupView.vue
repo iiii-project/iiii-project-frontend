@@ -421,7 +421,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
           目前離線，AI 解籤暫時無法提供。
         </p>
         <h1>想請示哪一方面？</h1>
-        <p class="lede">先讓神明知道你要問的方向，解籤才會落在心坎上。</p>
+        <p class="lede">選擇想詢問的問題種類</p>
         <div class="choice-list">
           <button
             v-for="item in CATEGORIES"
@@ -450,7 +450,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
         <p class="kicker">第 三 步 · {{ chosen?.label }}</p>
         <h1>想跟神明說什麼？</h1>
         <p class="lede">
-          像在神明面前稟告一樣，說清楚人、事、時間，解籤會更貼近你的處境。
+          說明你想詢問的問題
           <span class="note">不想打字也沒關係，直接送出，神明會依你選的方向指點。</span>
         </p>
         <textarea
@@ -487,7 +487,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
         <dl class="summary">
           <div>
             <dt>籤號</dt>
-            <dd>第 {{ fortune?.number }} 籤<span v-if="fortune?.fortune_level"> · {{ fortune.fortune_level }}</span></dd>
+             <dd>第 {{ fortune?.number }} 籤</dd>
           </div>
           <div>
             <dt>所問方向</dt>
@@ -575,8 +575,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
               :data="{
                 number: fortune.number,
                 ganzhi: fortune.ganzhi,
-                level: fortune.fortune_level,
-                poem: fortune.poem,
+                 poem: fortune.poem,
                 note: fortune.translation || fortune.general_meaning,
                 shareUrl: shareUrl || null
               }"
@@ -1207,7 +1206,7 @@ onBeforeUnmount(() => scannerEl.value?.stop())
 @media (max-width: 640px) and (max-height: 720px) {
   .choice-desc { display: none; }
   /* 字級開到「大／特大」時，第二步仍會超出約 20〜53px。
-     刪掉選方向那一頁的副標（「先讓神明知道你要問的方向…」）：標題
+     刪掉選方向那一頁的副標（「選擇想詢問的問題種類…」）：標題
      「想請示哪一方面？」已經把事情說完，而選項與「下一步」不能被裁掉。
      只針對有選項清單的那一頁，其他步驟的說明照舊。 */
   .panel:has(.choice-list) .lede { display: none; }

@@ -209,7 +209,6 @@ export function createDivinationApi(apiBase, options = {}) {
     return {
       no: fortune.number,
       ganzhi: fortune.ganzhi || '',
-      grade: fortune.fortune_level || '',
       poem: fortune.poem,
       explain: fortune.translation || '',
       modern: fortune.general_meaning || ''

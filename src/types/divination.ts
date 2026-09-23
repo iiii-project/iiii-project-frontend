@@ -21,8 +21,6 @@ export type Category =
   | 'travel'
   | 'other'
 
-export type ActionEvent = 'PRAYER_DETECTED' | 'SHAKE_DETECTED' | 'BLOCK_CAST_DETECTED'
-
 export interface FortuneSet {
   code: string
   name: string
@@ -34,7 +32,6 @@ export interface Fortune {
   number: number
   title: string
   ganzhi?: string
-  fortune_level?: string
   poem: string
   translation?: string
   story?: string
@@ -50,16 +47,6 @@ export interface Fortune {
   family_meaning?: string
   relationship_meaning?: string
   travel_meaning?: string
-}
-
-export interface BlockCast {
-  attempt_number: number
-  block_one: 'flat' | 'round'
-  block_two: 'flat' | 'round'
-  result: 'sheng' | 'xiao' | 'yin'
-  result_name: string
-  confirmed: boolean
-  remaining_attempts: number
 }
 
 export interface Interpretation {

@@ -15,6 +15,7 @@ import { LAppTextureManager } from './lapptexturemanager';
 import { LAppView } from './lappview';
 import { canvas, gl } from './lappglmanager';
 import { getCappedDevicePixelRatio } from '@/utils/device';
+import { getPerformanceProfile } from '@/utils/performance';
 
 export let s_instance: LAppDelegate | null = null;
 export let frameBuffer: WebGLFramebuffer | null = null;
@@ -168,6 +169,7 @@ export class LAppDelegate {
    * 执行处理。
    */
   public run(): void {
+    const targetFrameRate = getPerformanceProfile().live2dFps;
     // メインループ
     // 主循环
     const loop = (): void => {
@@ -177,14 +179,19 @@ export class LAppDelegate {
         return;
       }
 
-      // 時間更新
-      if (LAppDefine.ENABLE_LIMITED_FRAME_RATE) {
-        LAppPal.updateTime(false);
-        if (LAppPal.getDeltaTime() < 1 / LAppDefine.LIMITED_FRAME_RATE) {
-          requestAnimationFrame(loop);
-          return;
-        }
+      if (document.visibilityState === 'hidden') {
+        requestAnimationFrame(loop);
+        return;
       }
+
+      // 時間更新
+       if (LAppDefine.ENABLE_LIMITED_FRAME_RATE) {
+         LAppPal.updateTime(false);
+         if (LAppPal.getDeltaTime() < 1 / targetFrameRate) {
+           requestAnimationFrame(loop);
+           return;
+         }
+       }
 
       LAppPal.updateTime(true);
 

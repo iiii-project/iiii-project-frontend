@@ -12,6 +12,7 @@ import { CubismViewMatrix } from "@framework/math/cubismviewmatrix";
 import * as LAppDefine from "./lappdefine";
 import { LAppDelegate } from "./lappdelegate";
 import { canvas, gl } from "./lappglmanager";
+import { getCappedDevicePixelRatio } from '@/utils/device';
 import { LAppLive2DManager } from "./lapplive2dmanager";
 import { LAppPal } from "./lapppal";
 import { LAppSprite } from "./lappsprite";
@@ -186,8 +187,8 @@ export class LAppView {
    */
   public onTouchesBegan(pointX: number, pointY: number): void {
     this._touchManager.touchesBegan(
-      pointX * window.devicePixelRatio,
-      pointY * window.devicePixelRatio
+      pointX * getCappedDevicePixelRatio(),
+      pointY * getCappedDevicePixelRatio()
     );
   }
 
@@ -202,8 +203,8 @@ export class LAppView {
     const viewY: number = this.transformViewY(this._touchManager.getY());
 
     this._touchManager.touchesMoved(
-      pointX * window.devicePixelRatio,
-      pointY * window.devicePixelRatio
+      pointX * getCappedDevicePixelRatio(),
+      pointY * getCappedDevicePixelRatio()
     );
 
     const live2DManager: LAppLive2DManager = LAppLive2DManager.getInstance();

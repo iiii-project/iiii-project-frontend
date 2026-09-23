@@ -9,6 +9,7 @@
    2. 沒有內建的（iOS Safari 到現在都還沒有）就退到 jsQR，純 JS 解碼，
       靠 canvas 取影格。功能一樣，只是耗電多一點。 */
 import { onBeforeUnmount, ref } from 'vue'
+import { getPerformanceProfile } from '@/utils/performance'
 
 const emit = defineEmits<{ decoded: [text: string]; error: [message: string] }>()
 
@@ -21,6 +22,7 @@ const videoEl = ref<HTMLVideoElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
 const scanning = ref(false)
 const hint = ref('')
+const scanFps = getPerformanceProfile().isLowEnd ? 8 : 12
 
 let stream: MediaStream | null = null
 let rafId = 0
@@ -28,6 +30,7 @@ let detector: BarcodeDetectorLike | null = null
 type JsQrFn = typeof import('jsqr').default
 let jsQR: JsQrFn | null = null
 let stopped = false
+let lastDecodeAt = 0
 
 async function prepareDecoder() {
   const Ctor = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector
@@ -94,6 +97,12 @@ function stop() {
    避免同一張 QR 連續觸發好幾次。 */
 async function tick() {
   if (!scanning.value) return
+  const now = performance.now()
+  if (now - lastDecodeAt < 1000 / scanFps) {
+    rafId = requestAnimationFrame(() => void tick())
+    return
+  }
+  lastDecodeAt = now
   const video = videoEl.value
   const canvas = canvasEl.value
   if (!video || !canvas || video.readyState < 2) {

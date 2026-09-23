@@ -70,37 +70,6 @@ const heroBackgroundSrc = new URL('../../assets/images/blackground.webp', import
 // 左右下角祥雲：單張圖已經把兩側雲紋畫在一起、中間留空（見 .corner-clouds 註解）
 const cornerCloudsSrc = new URL('../../assets/images/cloud.webp', import.meta.url).href
 
-// 入殿音效：實際錄好的廟宇音檔，點擊當下才播（瀏覽器要有使用者手勢才允許）
-const ascendSoundUrl = new URL('../../assets/audio/temple-ascend.m4a', import.meta.url).href
-let ascendSound: HTMLAudioElement | null = null
-
-function primeAscendSound() {
-  if (ascendSound) return
-  ascendSound = new Audio(ascendSoundUrl)
-  ascendSound.preload = 'auto'
-  ascendSound.volume = 0.9
-  ascendSound.load()
-}
-
-/* 音檔開頭有 1.5 秒的環境音空白，撞擊聲從 1.534 秒才進來。
-   從 (撞擊點 − 預捲 − 畫面撞擊時間) 開始播，聲音的那一下就會正好砸在字被震碎的那一格。
-   直接在點擊當下播放，不用計時器，才不會被瀏覽器的自動播放政策擋掉。 */
-const AUDIO_IMPACT = 1.5 // 音檔裡撞擊聲的位置（秒）
-const AUDIO_PREROLL = 0.04 // 保留一點起音，避免被切掉
-const IMPACT_AT = 0.32 // 畫面上字被震碎的時間（秒）
-
-function playAscendChime() {
-  try {
-    primeAscendSound()
-    if (!ascendSound) return
-    ascendSound.currentTime = Math.max(0, AUDIO_IMPACT - AUDIO_PREROLL - IMPACT_AT)
-    // 換頁後音檔仍會播完，尾韻才不會被切斷
-    void ascendSound.play().catch(() => undefined)
-  } catch {
-    // 音效失敗不影響轉場
-  }
-}
-
 /* 背景音樂：進首頁就開始播，播完自動從頭再來，一直循環。
    不用 <audio loop> 的原生硬切，是因為銜接處聽得出喀一聲；改成自己在快播完時
    淡出，ended 事件觸發後歸零重播、再淡入，循環才聽不出接點。 */
@@ -174,39 +143,8 @@ function stopTempleMusic() {
   templeMusic?.pause()
 }
 
-const TITLE_CHARS = ['籤', '好', '運']
-
-// 入殿轉場用的霧絮：自中心朝四方捲開，角度均分再各自帶點偏移
-const ascendPuffs = Array.from({ length: 12 }, (_, index) => {
-  const angle = index * 30 + (index % 5) * 9
-  return {
-    id: index,
-    angle: `${angle}deg`,
-    dist: `${26 + (index % 6) * 8}vmax`,
-    spin: `${(index % 2 ? 1 : -1) * (70 + (index % 5) * 26)}deg`,
-    size: `${260 + (index % 5) * 110}px`,
-    // 等玉皇大帝散去之後，雲霧才捲上來
-    delay: `${1.22 + (index % 8) * 0.045}s`,
-    dur: `${1 + (index % 5) * 0.13}s`,
-    // 內層自己翻騰的速度，讓霧看起來一直在動
-    churn: `${2.4 + (index % 6) * 0.5}s`
-  }
-})
-
-// 入殿：玉皇大帝自雲霧中放大、光芒佔滿畫面後才換頁
-const isAscending = ref(false)
-let ascendTimer = 0
-
 function enterHall() {
-  if (isAscending.value) return
-  isAscending.value = true
-  playAscendChime()
-  if (prefersReducedMotion()) {
-    router.push('/oracle')
-    return
-  }
-  // 0.32s 撞破標題（與音檔撞擊聲同格） → 1.5s 玉皇大帝散去 → 1.22s 雲霧捲上 → 2.35s 換頁
-  ascendTimer = window.setTimeout(() => router.push('/oracle'), 2350)
+  router.push('/oracle')
 }
 
 function go(path: string) {
@@ -239,7 +177,6 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => {
   document.body.classList.add('celestial-home-open')
   buildMotes()
-  primeAscendSound() // 先把音檔載好，按下去才不會有延遲
   startTempleMusic()
   window.addEventListener('keydown', onKeydown)
   if (!prefersReducedMotion()) {
@@ -252,7 +189,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('keydown', onKeydown)
   if (raf) cancelAnimationFrame(raf)
-  if (ascendTimer) clearTimeout(ascendTimer)
   stopTempleMusic()
   const root = document.documentElement
   root.style.removeProperty('--px')
@@ -261,7 +197,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="celestial-home" :class="{ 'is-ascending': isAscending }">
+  <div class="celestial-home">
     <!-- ============ SVG 素材庫 ============ -->
     <svg width="0" height="0" class="asset-defs" aria-hidden="true">
       <defs>
@@ -364,23 +300,11 @@ onBeforeUnmount(() => {
 
     <!-- ============ 主視覺文案 ============ -->
     <main class="celestial-hero">
-      <h1 class="title"><span
-          v-for="char in TITLE_CHARS"
-          :key="char"
-          class="glyph"
-        ><span class="glyph-face">{{ char }}</span
-        ><span
-          v-for="band in 3"
-          :key="band"
-          class="shard"
-          :class="`s${band}`"
-          aria-hidden="true"
-        >{{ char }}</span
-        ></span></h1>
+      <h1 class="title">籤好運</h1>
       <p class="subtitle">誠 心 一 問 · 天 意 自 來</p>
       
       <div class="actions">
-        <button class="btn btn-primary" type="button" :disabled="isAscending" @click="enterHall()">入 殿 求 籤</button>
+        <button class="btn btn-primary" type="button" @click="enterHall()">入 殿 求 籤</button>
         <button class="btn btn-ghost" type="button" @click="go('/lookup')">線 上 查 籤</button>
       </div>
       <div class="tutorial-link">
@@ -405,36 +329,6 @@ onBeforeUnmount(() => {
         ></video>
       </div>
     </div>
-
-    <!-- 入殿光幕：玉皇大帝放大後的金光 -->
-    <!-- 入殿轉場：玉皇大帝化去之後，雲霧才自中心繚繞捲開 -->
-    <div v-if="isAscending" class="ascend-clouds" aria-hidden="true">
-      <span class="break-flash"></span>
-      <span class="break-wave"></span>
-      <span class="swirl d1"></span>
-      <span class="swirl d2"></span>
-      <span class="fogbank f1"></span>
-      <span class="fogbank f2"></span>
-      <span class="fogbank f3"></span>
-      <span
-        v-for="puff in ascendPuffs"
-        :key="puff.id"
-        class="puff"
-        :style="{
-          '--angle': puff.angle,
-          '--dist': puff.dist,
-          '--spin': puff.spin,
-          '--size': puff.size,
-          '--delay': puff.delay,
-          '--dur': puff.dur,
-          '--churn': puff.churn
-        }"
-      >
-        <i class="churn"></i>
-      </span>
-    </div>
-
-    <div class="ascend-veil" aria-hidden="true"></div>
 
     <!-- 背景音樂版權標示：預設收成一顆小圖示，滑過／focus 到才展開文字，
          平常不佔畫面，但版權資訊仍找得到、點得到 -->
@@ -541,180 +435,6 @@ body.celestial-home-open {
   display: block;
 }
 
-/* ===================== 入殿轉場 ===================== */
-/* 雲霧繚繞：兩層旋轉霧幕 + 十二朵向外捲開的祥雲 */
-.ascend-clouds {
-  position: absolute;
-  inset: 0;
-  z-index: 16;
-  pointer-events: none;
-  overflow: hidden;
-}
-/* 霧幕：柔邊交給漸層，blur 只補一點，避免整片畫面的模糊運算拖慢動畫 */
-.swirl {
-  position: absolute;
-  left: 50%;
-  top: 48%;
-  width: 86vmax;
-  height: 86vmax;
-  margin: -43vmax 0 0 -43vmax;
-  border-radius: 50%;
-  opacity: 0;
-  background: repeating-conic-gradient(
-    from 0deg at 50% 50%,
-    rgba(255, 255, 255, 0) 0deg,
-    rgba(255, 255, 255, 0.58) 14deg,
-    rgba(255, 252, 240, 0) 30deg,
-    rgba(255, 255, 255, 0) 46deg
-  );
-  -webkit-mask-image: radial-gradient(closest-side, #000 14%, rgba(0, 0, 0, 0.7) 46%, transparent 78%);
-  mask-image: radial-gradient(closest-side, #000 14%, rgba(0, 0, 0, 0.7) 46%, transparent 78%);
-  animation: swirl-open 1s cubic-bezier(0.3, 0.5, 0.3, 1) 1.2s forwards;
-}
-.swirl.d2 {
-  animation-name: swirl-open-back;
-  animation-duration: 1.15s;
-  animation-delay: 1.15s;
-  opacity: 0;
-}
-/* 底霧：大片緩慢翻湧的霧氣，把畫面墊厚 */
-.fogbank {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: 64vmax;
-  height: 44vmax;
-  margin: -22vmax 0 0 -32vmax;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.9), rgba(255, 252, 240, 0.42) 52%, rgba(255, 250, 236, 0) 80%);
-  opacity: 0;
-  animation:
-    fog-rise 1.2s ease-out 1.2s forwards,
-    fog-billow 5s ease-in-out 1.2s infinite;
-}
-.fogbank.f2 { width: 84vmax; height: 38vmax; margin: -19vmax 0 0 -42vmax; animation-delay: 1.32s, 1.32s; animation-duration: 1.3s, 6.4s; }
-.fogbank.f3 { width: 52vmax; height: 54vmax; margin: -27vmax 0 0 -26vmax; animation-delay: 1.4s, 1.4s; animation-duration: 1.2s, 4.2s; }
-
-/* 霧絮：外層向外捲、內層自己翻騰，霧才會一直在動 */
-.puff {
-  position: absolute;
-  left: 50%;
-  top: 48%;
-  width: var(--size, 300px);
-  height: calc(var(--size, 300px) * 0.66);
-  margin-left: calc(var(--size, 300px) / -2);
-  margin-top: calc(var(--size, 300px) * -0.33);
-  opacity: 0;
-  animation: puff-out var(--dur, 1.4s) cubic-bezier(0.22, 0.6, 0.3, 1) var(--delay, 0s) forwards;
-}
-.puff .churn {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: radial-gradient(
-    closest-side,
-    rgba(255, 255, 255, 0.95),
-    rgba(255, 252, 240, 0.55) 48%,
-    rgba(255, 248, 228, 0) 78%
-  );
-  animation: churn var(--churn, 3s) ease-in-out infinite;
-}
-
-.ascend-veil {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  pointer-events: none;
-  opacity: 0;
-  background:
-    radial-gradient(60% 45% at 50% 42%, rgba(255, 250, 232, 1) 0%, rgba(255, 240, 202, 0.9) 40%, rgba(250, 228, 186, 0.75) 70%, rgba(246, 222, 178, 0.6) 100%);
-}
-.is-ascending .ascend-veil {
-  /* 雲霧捲滿之後才蓋上光幕，接到 wizard */
-  animation: veil-in 0.72s ease-in 1.62s forwards;
-}
-.is-ascending .sovereign {
-  z-index: 12;
-  -webkit-mask-image: none;
-  mask-image: none;
-  /* 錨點改回頭部（50% 20%，與平時靜止的錨點一致），放大時以臉為軸往下擴張，
-     衝向鏡頭時放大的是臉，不是身體。（先前這裡改成 50% 50% 置中是為了避免
-     以頭為軸時「破題」撞擊那一格動勢看起來歪掉，如果放大後又覺得撞擊格畫面
-     跑位，要調整的是下面 ascend keyframe 21% 那一格的 translate 值。） */
-  transform-origin: 50% 20%;
-  animation: ascend 1.5s cubic-bezier(0.42, 0, 0.3, 1) forwards;
-}
-.is-ascending .sovereign-float,
-.is-ascending .rays {
-  animation-play-state: paused;
-}
-/* 破題：標題浮到玉皇大帝之前，等祂撞上來再被震開 */
-/* 震動掛在內層，根元素若有動畫，router 的 out-in 轉場會等它跑完才換頁 */
-.is-ascending .stage,
-.is-ascending .celestial-hero {
-  animation: screen-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.32s;
-}
-.is-ascending .celestial-hero {
-  z-index: 14;
-}
-.is-ascending .celestial-eyebrow,
-.is-ascending .subtitle,
-.is-ascending .desc,
-.is-ascending .actions {
-  animation: hero-out 0.4s ease-in forwards;
-}
-/* 先愈抖愈兇，0.46 秒被撞上時才炸成五截 */
-.is-ascending .title .glyph {
-  animation: glyph-shudder 0.32s linear forwards;
-}
-.is-ascending .title .glyph:nth-child(2) { animation-delay: 0.02s; }
-.is-ascending .title .glyph:nth-child(3) { animation-delay: 0.04s; }
-
-.is-ascending .glyph-face {
-  animation: face-out 0.05s linear 0.32s forwards;
-}
-.is-ascending .shard {
-  opacity: 1;
-  animation: shard-fly 0.8s cubic-bezier(0.1, 0.72, 0.3, 1) 0.32s forwards;
-}
-/* 五道橫截各飛各的：上下分離、中間那截被正面貫穿 */
-.is-ascending .glyph .s1 { --fy: -1.05; --fr: -30deg; --fs: 1.3; }
-.is-ascending .glyph .s2 { --fy: 0.08; --fr: 16deg; --fs: 1.45; animation-delay: 0.335s; }
-.is-ascending .glyph .s3 { --fy: 1.05; --fr: -24deg; --fs: 1.3; animation-delay: 0.35s; }
-/* 左字往左甩、右字往右甩，中間的字直接朝觀眾炸開 */
-.is-ascending .glyph:nth-child(1) .shard { --dx: -1.15; }
-.is-ascending .glyph:nth-child(2) .shard { --dx: 0.1; }
-.is-ascending .glyph:nth-child(3) .shard { --dx: 1.15; }
-
-/* 撞擊白光 */
-.break-flash {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(38% 28% at 50% 46%, rgba(255, 255, 255, 0.95), rgba(255, 246, 214, 0.5) 45%, rgba(255, 244, 208, 0) 75%);
-  opacity: 0;
-  animation: flash 0.42s ease-out 0.32s forwards;
-}
-/* 撞破瞬間的光環 */
-.break-wave {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: 40vmax;
-  height: 40vmax;
-  margin: -20vmax 0 0 -20vmax;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 244, 208, 0.9);
-  box-shadow: 0 0 60px rgba(255, 236, 180, 0.75), inset 0 0 50px rgba(255, 240, 195, 0.6);
-  opacity: 0;
-  animation: break-wave 0.8s cubic-bezier(0.15, 0.7, 0.3, 1) 0.32s forwards;
-}
-.is-ascending .mist {
-  animation-play-state: running;
-  opacity: 0;
-  transition: opacity 0.9s ease;
-}
-
 /* 霧氣：大面積柔光團 */
 .mist {
   position: absolute;
@@ -806,31 +526,6 @@ body.celestial-home-open {
   opacity: 0;
   animation: reveal 1.4s 0.35s ease-out forwards;
 }
-.title .glyph {
-  position: relative;
-  display: inline-block;
-  animation: float-glyph 6s ease-in-out infinite;
-}
-/* 三截碎片疊在字上，平時隱形，撞破時才各自飛出 */
-.title .shard {
-  position: absolute;
-  left: 0;
-  top: 0;
-  opacity: 0;
-  pointer-events: none;
-  will-change: transform, opacity;
-}
-/* 沿兩道斜裂縫切成三大塊，飛出去時還看得出原本是哪個字 */
-.title .s1 { clip-path: polygon(-14% -6%, 114% -6%, 114% 30%, -14% 38%); }
-.title .s2 { clip-path: polygon(-14% 38%, 114% 30%, 114% 68%, -14% 74%); }
-.title .s3 { clip-path: polygon(-14% 74%, 114% 68%, 114% 114%, -14% 114%); }
-/* 碎片壓一層暗影，飛過玉皇大帝的金光時才不會被吃掉 */
-.title .shard {
-  text-shadow: 0 2px 10px rgba(90, 26, 26, 0.45), 0 0 2px rgba(90, 26, 26, 0.5);
-}
-.title .glyph:nth-child(2) { animation-delay: 0.4s; }
-.title .glyph:nth-child(3) { animation-delay: 0.8s; }
-
 .subtitle {
   margin: 26px 0 0;
   font-size: clamp(14px, 2.2vw, 18px);
@@ -1053,149 +748,6 @@ body.celestial-home-open {
   0%, 100% { opacity: 0.82; }
   50% { opacity: 1; }
 }
-@keyframes ascend {
-  0% {
-    transform: translate3d(-50%, -50%, 0) scale(1);
-    opacity: 0.3;
-    filter: blur(2.2px);
-  }
-  18% {
-    opacity: 0.95;
-    filter: blur(0.4px);
-  }
-  /* 撞上標題的瞬間：與字同高，才看得出是祂把字撞碎的 */
-  21% {
-    transform: translate3d(-50%, -48%, 0) scale(1.15);
-    opacity: 1;
-    filter: blur(0);
-  }
-  /* 撞破後先維持一下，讓碎片在還看得清的背景上飛出去 */
-  42% {
-    transform: translate3d(-50%, -46%, 0) scale(1.9);
-    opacity: 1;
-    filter: blur(0);
-  }
-  /* 再一口氣衝滿畫面 */
-  72% {
-    transform: translate3d(-50%, -43%, 0) scale(3.8);
-    opacity: 1;
-    filter: blur(0);
-  }
-  /* 就地化去，雲霧隨後才捲上來 */
-  100% {
-    transform: translate3d(-50%, -40%, 0) scale(5.8);
-    opacity: 0;
-    filter: blur(10px);
-  }
-}
-@keyframes swirl-open {
-  0% { transform: rotate(0deg) scale(0.3); opacity: 0; }
-  26% { opacity: 0.95; }
-  100% { transform: rotate(168deg) scale(1.45); opacity: 1; }
-}
-@keyframes swirl-open-back {
-  0% { transform: rotate(40deg) scale(0.42); opacity: 0; }
-  30% { opacity: 0.8; }
-  100% { transform: rotate(-150deg) scale(1.6); opacity: 1; }
-}
-@keyframes puff-out {
-  0% {
-    transform: rotate(var(--angle, 0deg)) translateX(0) rotate(calc(var(--angle, 0deg) * -1)) scale(0.3);
-    opacity: 0;
-  }
-  18% { opacity: 0.95; }
-  100% {
-    transform: rotate(var(--angle, 0deg)) translateX(var(--dist, 40vmax))
-      rotate(calc(var(--angle, 0deg) * -1 + var(--spin, 90deg))) scale(2.4);
-    opacity: 0.92;
-  }
-}
-/* 霧團自己的翻騰：邊捲邊變形，不是單純放大 */
-@keyframes churn {
-  0%, 100% { transform: rotate(0deg) scale(1, 1); }
-  33% { transform: rotate(14deg) scale(1.18, 0.86); }
-  66% { transform: rotate(-11deg) scale(0.88, 1.16); }
-}
-@keyframes fog-rise {
-  0% { opacity: 0; }
-  100% { opacity: 0.85; }
-}
-@keyframes fog-billow {
-  0%, 100% { transform: translate3d(-2%, 2%, 0) scale(1) rotate(0deg); }
-  50% { transform: translate3d(3%, -3%, 0) scale(1.22) rotate(8deg); }
-}
-@keyframes veil-in {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
-}
-@keyframes hero-out {
-  0% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-  100% { opacity: 0; transform: translate3d(0, 24px, 0) scale(0.96); }
-}
-/* 撞擊前的抖動：幅度一路放大到整個字在震 */
-@keyframes glyph-shudder {
-  0% { transform: translate3d(0, 0, 0); }
-  10% { transform: translate3d(-3px, 2px, 0) rotate(-0.8deg); }
-  20% { transform: translate3d(5px, -3px, 0) rotate(1.2deg); }
-  30% { transform: translate3d(-7px, 4px, 0) rotate(-1.8deg) scale(1.02); }
-  40% { transform: translate3d(9px, -5px, 0) rotate(2.4deg) scale(1.03); }
-  50% { transform: translate3d(-11px, 6px, 0) rotate(-3deg) scale(1.04); }
-  60% { transform: translate3d(13px, -7px, 0) rotate(3.6deg) scale(1.05); }
-  70% { transform: translate3d(-15px, 8px, 0) rotate(-4.2deg) scale(1.06); }
-  80% { transform: translate3d(16px, -9px, 0) rotate(4.6deg) scale(1.08); }
-  90% { transform: translate3d(-17px, 9px, 0) rotate(-5deg) scale(1.1); }
-  /* 撞上前一瞬間被壓住，反差更大 */
-  100% { transform: translate3d(0, 0, 0) scale(1.14); }
-}
-/* 字面在撞上的瞬間消失，改由三截碎片接手 */
-@keyframes face-out {
-  to { opacity: 0; }
-}
-/* 碎片飛散：前半段保持清晰看得出是字，後半段才拖糊消失 */
-@keyframes shard-fly {
-  0% {
-    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
-    opacity: 1;
-    filter: blur(0);
-  }
-  14% {
-    transform: translate3d(calc(var(--dx, 0) * 4vw), calc(var(--fy, 0) * 3vh), 0)
-      rotate(calc(var(--fr, 0deg) * 0.22)) scale(1.06);
-    opacity: 1;
-    filter: blur(0);
-  }
-  62% {
-    transform: translate3d(calc(var(--dx, 0) * 20vw), calc(var(--fy, 0) * 15vh), 0)
-      rotate(calc(var(--fr, 0deg) * 0.62)) scale(calc(1 + (var(--fs, 1.3) - 1) * 0.55));
-    opacity: 0.92;
-    filter: blur(0.5px);
-  }
-  100% {
-    transform: translate3d(calc(var(--dx, 0) * 52vw), calc(var(--fy, 0) * 42vh), 0)
-      rotate(var(--fr, 0deg)) scale(var(--fs, 1.3));
-    opacity: 0;
-    filter: blur(7px);
-  }
-}
-@keyframes flash {
-  0% { opacity: 0; }
-  18% { opacity: 1; }
-  100% { opacity: 0; }
-}
-/* 撞擊時整個畫面震一下 */
-@keyframes screen-shake {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  15% { transform: translate3d(-9px, 5px, 0); }
-  30% { transform: translate3d(8px, -6px, 0); }
-  45% { transform: translate3d(-6px, -3px, 0); }
-  60% { transform: translate3d(5px, 4px, 0); }
-  80% { transform: translate3d(-3px, 2px, 0); }
-}
-@keyframes break-wave {
-  0% { transform: scale(0.12); opacity: 0; border-width: 6px; }
-  22% { opacity: 0.95; }
-  100% { transform: scale(3.6); opacity: 0; border-width: 1px; }
-}
 @keyframes emerge {
   0%, 100% { opacity: 0.78; }
   46% { opacity: 1; }
@@ -1223,11 +775,6 @@ body.celestial-home-open {
   from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
   to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
-@keyframes float-glyph {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
 /* 觸控裝置不要留下卡住的 hover 效果 */
 @media (hover: none) {
   .btn:hover,
@@ -1326,12 +873,9 @@ body.celestial-home-open {
 
 @media (prefers-reduced-motion: reduce) {
   .mist, .mote, .halo-glow,
-  .sovereign, .sovereign-float, .title .glyph,
-  .is-ascending, .title .shard, .glyph-face, .puff, .puff .churn,
-  .fogbank, .swirl, .break-flash, .break-wave {
+  .sovereign, .sovereign-float {
     animation: none !important;
   }
-  .title .shard { opacity: 0 !important; }
   .sovereign { opacity: 0.32; }
   .celestial-eyebrow, .title, .subtitle, .desc, .actions {
     opacity: 1;

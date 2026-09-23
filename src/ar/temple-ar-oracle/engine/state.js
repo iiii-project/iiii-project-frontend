@@ -8,8 +8,8 @@
    這裡只抽出 AR 引擎三個模組（GestureEngine / BwaScene / flow-controller）
    實際會讀寫、且原始值語意完全相同的欄位：
 
-     current           'incense' | 'draw' | 'bwa'   目前在哪個場景（原欄位同名）
-     drawSubState      'shake' | 'pinch'             抽籤子階段（原欄位同名）
+      current           'idle' | 'incense' | 'draw' | 'bwa'   目前在哪個場景（原欄位同名）
+     drawSubState      'shake' | 'revealing'         搖籤／自動抽出動畫子階段
      bwaTossing        boolean                        擲筊拋擲動畫是否進行中（原欄位同名）
      selectedStickCx   number                          抽到的籤枝在籤筒SVG裡的x座標（原欄位同名）
      mobileShakeReady  boolean                        手機是否已取得動作感測權限（原欄位同名）
@@ -24,7 +24,8 @@
    ========================================================================= */
 export function createArState() {
   return {
-    current: 'incense',
+    // 預熱相機時維持 idle，避免尚未開始求籤就誤判合十手勢。
+    current: 'idle',
     drawSubState: 'shake',
     bwaTossing: false,
     selectedStickCx: 100,
