@@ -57,7 +57,7 @@
      再被 CSS 拉到滿螢幕（還要乘上 devicePixelRatio），畫面自然糊掉。
      這裡讓後備緩衝區跟著實際顯示尺寸走；只在尺寸真的變了才重設，
      因為指定 width/height 會清空畫布內容。 */
-  function syncCanvasSize(){
+   function syncCanvasSize(){
     const canvas = els.outputCanvas;
      const dpr = profile.canvasPixelRatio;
     const w = Math.round((canvas.clientWidth || window.innerWidth) * dpr);
@@ -66,7 +66,54 @@
     if (canvas.width !== w || canvas.height !== h){
       canvas.width = w;
       canvas.height = h;
-    }
+   }
+
+   function personScale(){
+     return window.innerHeight > window.innerWidth
+       ? CONFIG.PERSON_SCALE_PORTRAIT
+       : CONFIG.PERSON_SCALE;
+   }
+
+   /* 去背人物使用畫布中央的縮小區域繪製；座標提示也必須使用同一個
+      inset/scale，否則縮小人物後提示點會留在原本的全螢幕位置。 */
+   function toDisplayPoint(point, alreadyMirrored = false){
+     const scale = personScale();
+     const inset = (1 - scale) / 2;
+     const x = alreadyMirrored ? point.x : 1 - point.x;
+     return {
+       x: (inset + x * scale) * window.innerWidth,
+       y: (inset + point.y * scale) * window.innerHeight,
+     };
+   }
+
+   function imageSize(image, fallbackWidth, fallbackHeight){
+     return {
+       width: image?.videoWidth || image?.naturalWidth || image?.width || fallbackWidth,
+       height: image?.videoHeight || image?.naturalHeight || image?.height || fallbackHeight,
+     };
+   }
+
+   /* Canvas 的 CSS object-fit 不會替 canvas 內部的 bitmap 保持比例；
+      drawImage 若直接塞滿豎屏畫布，來源是橫屏時仍會被拉伸。因此這裡
+      先用 object-fit: cover 的規則計算來源裁切區，再繪製到人物縮小區域。 */
+   function drawCover(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
+     const source = imageSize(image, fallbackWidth, fallbackHeight);
+     const targetRatio = dw / dh;
+     const sourceRatio = source.width / source.height;
+     let sx = 0;
+     let sy = 0;
+     let sw = source.width;
+     let sh = source.height;
+     if (sourceRatio > targetRatio){
+       sw = source.height * targetRatio;
+       sx = (source.width - sw) / 2;
+     } else if (sourceRatio < targetRatio){
+       sh = source.width / targetRatio;
+       sy = (source.height - sh) / 2;
+     }
+     // 呼叫端已將 canvas 水平翻轉，所以 destination x 必須從右側起算。
+     ctx.drawImage(image, sx, sy, sw, sh, -(dx + dw), dy, dw, dh);
+   }
   }
 
   function onResults(results){
@@ -82,15 +129,21 @@
       outCtx.restore();
       return;
     }
-    outCtx.scale(-1,1);
-    if (state.segmentationMask){
+     const scale = personScale();
+     const inset = (1 - scale) / 2;
+     const drawW = cw * scale;
+     const drawH = ch * scale;
+     const drawX = inset * cw;
+     const drawY = inset * ch;
+     outCtx.scale(-1,1);
+     if (state.segmentationMask){
       /* 人像去背：先把分割遮罩畫上去（人像=不透明、其餘=透明），source-in 疊圖模式
          會讓下一筆 drawImage 只保留跟遮罩重疊、不透明的範圍，其餘鏤空——鏤空的地方
          會露出下方 z-index 比 #output_canvas 低的 #ritual-overlay（神明實景疊加層），
          人像本身則維持鏡頭原始畫質，不受神明實景疊加層淡化影響。 */
-      outCtx.drawImage(state.segmentationMask, -cw, 0, cw, ch);
-      outCtx.globalCompositeOperation = 'source-in';
-      outCtx.drawImage(results.image, -cw, 0, cw, ch);
+       drawCover(outCtx, state.segmentationMask, drawX, drawY, drawW, drawH, cw, ch);
+       outCtx.globalCompositeOperation = 'source-in';
+       drawCover(outCtx, results.image, drawX, drawY, drawW, drawH, cw, ch);
       outCtx.globalCompositeOperation = 'source-over';
     }
     outCtx.restore();
@@ -115,7 +168,8 @@
     const rawLm = handLandmarks[0];
 
     // 金色香灰粒子會被移動中的手輕輕撥開，增加畫面互動感
-    particleSystem.repel(rawLm[0].x * window.innerWidth, rawLm[0].y * window.innerHeight, CONFIG.PARTICLE_REPEL_RADIUS);
+     const handPoint = toDisplayPoint(rawLm[0], true);
+     particleSystem.repel(handPoint.x, handPoint.y, CONFIG.PARTICLE_REPEL_RADIUS);
 
     if (state.current === 'bwa'){
       // 捧筊／拋擲階段使用未經重度平滑的座標，確保「張手瞬間」判定即時
@@ -152,8 +206,9 @@
   }
   function updateIncenseFollow(point){
     // MediaPipe coordinates are unmirrored; match the mirrored camera canvas for the AR object.
-    const targetX = 1 - point.x;
-    const targetY = Math.min(0.82, Math.max(0.28, point.y + CONFIG.INCENSE_FOLLOW_Y_OFFSET));
+     const displayPoint = toDisplayPoint(point);
+     const targetX = displayPoint.x / window.innerWidth;
+     const targetY = Math.min(0.82, Math.max(0.28, displayPoint.y / window.innerHeight + CONFIG.INCENSE_FOLLOW_Y_OFFSET));
     const ease = CONFIG.INCENSE_FOLLOW_EASE;
     const dx = targetX - incense.visualX;
     incense.visualX += dx * ease;
@@ -216,7 +271,7 @@
       els.incenseHint.classList.add('sensing'); els.incenseStick.classList.add('sensing');
       // 誠心凝聚的即時回饋：附近的金色香灰粒子緩緩向雙手中心匯聚，進度越高匯聚力道越強
       if (visualCenter){
-        particleSystem.converge(visualCenter.x*window.innerWidth, visualCenter.y*window.innerHeight, 260, 2 + progress*5);
+       particleSystem.converge(visualCenter.x*window.innerWidth, visualCenter.y*window.innerHeight, 260, 2 + progress*5);
       }
       if (progress >= 1){ callbacks.completeIncense(); }
       return;
@@ -353,7 +408,8 @@
   function hideFingertipUI(){ if (markerA){ markerA.style.opacity=0; markerB.style.opacity=0; line.style.opacity=0; } }
   function updateFistIndicator(wrist, fistNow){
     ensureMarkers();
-    fistDot.style.left=(wrist.x*window.innerWidth)+'px'; fistDot.style.top=(wrist.y*window.innerHeight)+'px';
+     const point = toDisplayPoint(wrist, true);
+     fistDot.style.left=point.x+'px'; fistDot.style.top=point.y+'px';
     fistDot.style.opacity = fistNow?1:0.35; fistDot.style.borderColor = fistNow ? 'var(--gold-soft)' : 'rgba(255,255,255,0.4)';
   }
   function hideFistIndicator(){ if (fistDot) fistDot.style.opacity=0; }
@@ -361,8 +417,9 @@
   // 合十階段視覺回饋：雙手可見時顯示兩個掌心點+連線；只偵測到單手時顯示單一穩定指示點
   function updateDualHandUI(cA, cB, isClose){
     ensureMarkers();
-    const ax=cA.x*window.innerWidth, ay=cA.y*window.innerHeight;
-    const bx=cB.x*window.innerWidth, by=cB.y*window.innerHeight;
+     const pointA=toDisplayPoint(cA), pointB=toDisplayPoint(cB);
+     const ax=pointA.x, ay=pointA.y;
+     const bx=pointB.x, by=pointB.y;
     markerA.style.left=ax+'px'; markerA.style.top=ay+'px'; markerA.style.opacity=1;
     markerB.style.left=bx+'px'; markerB.style.top=by+'px'; markerB.style.opacity=1;
     const len=Math.hypot(bx-ax,by-ay), angle=Math.atan2(by-ay,bx-ax)*180/Math.PI;
@@ -373,7 +430,8 @@
   function hideDualHandUI(){ if (markerA){ markerA.style.opacity=0; markerB.style.opacity=0; line.style.opacity=0; } }
   function updateFistIndicatorRaw(c){
     ensureMarkers();
-    fistDot.style.left=(c.x*window.innerWidth)+'px'; fistDot.style.top=(c.y*window.innerHeight)+'px';
+     const point = toDisplayPoint(c);
+     fistDot.style.left=point.x+'px'; fistDot.style.top=point.y+'px';
     fistDot.style.opacity = 1; fistDot.style.borderColor = 'var(--gold-soft)';
   }
 

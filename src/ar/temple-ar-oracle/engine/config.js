@@ -14,7 +14,11 @@ export const CONFIG = {
    SHAKE_REQUIRED_OSCILLATIONS: 5,
    SHAKE_MIN_DURATION_MS: 450,
   SHAKE_TARGET_DURATION_MS: 2400,
-  SHAKE_RESET_GRACE_MS: 500,
+   SHAKE_RESET_GRACE_MS: 500,
+
+   // 去背人物只佔畫面中央一部分，讓神明實景保留足夠可見範圍。
+   PERSON_SCALE: 0.72,
+   PERSON_SCALE_PORTRAIT: 0.66,
 
    SMOOTHING: 0.5,
    // 搖籤在低階裝置可能只有 8 FPS，降低專用平滑量才能保留快速換向；
