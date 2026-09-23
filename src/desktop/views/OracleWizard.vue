@@ -58,14 +58,12 @@ interface ArInterpretation {
   offline?: boolean
 }
 interface TempleArOracleEl extends HTMLElement {
-  start(options: { question?: string; category?: string; inputMode?: string; motionAccessGranted?: boolean }): Promise<void>
-  prepareCamera(): Promise<void>
+  start(options: { question?: string; category?: string; inputMode?: string }): Promise<void>
+  next(): void
   destroy(): void
 }
 
 const arEl = ref<TempleArOracleEl | null>(null)
-const cameraWarmup = ref(false)
-const cameraWarmupStarted = ref(false)
 const arNotice = ref('')
 const isOffline = ref(false)
 const fortune = ref<ArFortune | null>(null)
@@ -130,26 +128,6 @@ function goStep(next: number) {
 function chooseCategory(value: Category) {
   errorMessage.value = ''
   category.value = value
-  warmupCamera()
-}
-
-function warmupCamera() {
-  if (cameraWarmupStarted.value) return
-  cameraWarmupStarted.value = true
-  cameraWarmup.value = true
-  void nextTick().then(async () => {
-    const el = arEl.value
-    if (!el) {
-      cameraWarmupStarted.value = false
-      return
-    }
-    try {
-      await el.prepareCamera()
-    } catch {
-      // 真正開始求籤時仍會再次嘗試，失敗後由 AR 引擎提供備援模式。
-      cameraWarmupStarted.value = false
-    }
-  })
 }
 
 // 不打字也能繼續：沒寫就以所選方向請示
@@ -159,20 +137,6 @@ const askedQuestion = computed(() => {
   return `想請示關於${chosen.value?.label ?? '心中'}的事`
 })
 const hasTypedQuestion = computed(() => question.value.trim().length > 0)
-
-async function requestMotionAccess(): Promise<boolean> {
-  if (!('DeviceMotionEvent' in window)) return false
-  const MotionEvent = window.DeviceMotionEvent as typeof DeviceMotionEvent & {
-    requestPermission?: () => Promise<'granted' | 'denied'>
-  }
-  try {
-    return typeof MotionEvent.requestPermission === 'function'
-      ? await MotionEvent.requestPermission() === 'granted'
-      : true
-  } catch {
-    return false
-  }
-}
 
 function confirmQuestion() {
   if (isRecording.value) stopRecording()
@@ -269,7 +233,6 @@ function onArComplete(event: Event) {
   interpretation.value = detail?.interpretation ?? null
   waitingInterpretation.value = !detail?.interpretation
   if (detail?.interpretation?.offline) isOffline.value = true
-  unbindAr()
   setBodyLock(false)
   step.value = 5
   void buildShareQr(detail?.sessionId ?? '')
@@ -285,10 +248,9 @@ function onArComplete(event: Event) {
    <temple-ar-oracle> 其實會發 8 種事件，這裡另外接的 3 個（input-mode-resolved／
    incense-complete／draw-complete）原本沒人在聽，正好是「進燒香」「進抽籤」
    「進擲筊」這三個階段轉換點。文案依 input-mode-resolved 給的模式分桌面／手機：
-   camera 會經過燒香，motion（使用者手動選擇）與 manual（鏡頭失敗備援）
-   都直接跳過燒香、從抽籤開始。 */
+   camera（桌面鏡頭手勢）才會經過燒香，motion（手機搖動）跟 manual（桌面鏡頭
+   失敗退成點擊）都直接跳過燒香、從抽籤開始。 */
 type ArInputMode = 'camera' | 'motion' | 'manual'
-type RequestedInputMode = 'camera' | 'motion'
 let resolvedInputMode: ArInputMode | null = null
 let ritualDismissed = false
 
@@ -349,24 +311,21 @@ function bindAr(el: TempleArOracleEl) {
 
 function unbindAr() {
   const el = arEl.value
-  if (el) {
-    el.removeEventListener('toast', onArToast)
-    el.removeEventListener('offline', onArOffline)
-    el.removeEventListener('sequence-complete', onArComplete)
-    el.removeEventListener('interpretation-ready', onArInterpretation)
-    el.removeEventListener('input-mode-resolved', onArInputModeResolved)
-    el.removeEventListener('incense-complete', onArIncenseComplete)
-    el.removeEventListener('draw-complete', onArDrawComplete)
-    try { el.destroy() } catch { /* 元件可能已卸載 */ }
-  }
-  cameraWarmup.value = false
-  cameraWarmupStarted.value = false
+  if (!el) return
+  el.removeEventListener('toast', onArToast)
+  el.removeEventListener('offline', onArOffline)
+  el.removeEventListener('sequence-complete', onArComplete)
+  el.removeEventListener('interpretation-ready', onArInterpretation)
+  el.removeEventListener('input-mode-resolved', onArInputModeResolved)
+  el.removeEventListener('incense-complete', onArIncenseComplete)
+  el.removeEventListener('draw-complete', onArDrawComplete)
+  try { el.destroy() } catch { /* 元件可能已卸載 */ }
 }
 
 // 收集完成 → 進入 AR 儀式
 let isSubmitting = false
 
-async function submit(requestedMode: RequestedInputMode = 'camera') {
+async function submit() {
   /* isBusy 目前恆為 false（loadingLabel 從未被賦值，見上面 99 行），單靠它擋不住
      連點——button 從 DOM 移除是等 Vue 下一輪渲染，兩次 click 事件仍可能在那之前
      都進到這裡，各自呼叫一次 api.create()。isSubmitting 是同步旗標，在事件迴圈
@@ -374,11 +333,6 @@ async function submit(requestedMode: RequestedInputMode = 'camera') {
   if (isSubmitting || isBusy.value) return
   isSubmitting = true
   try {
-    // motion 模式需要在這個按鈕事件裡先取得 iOS 動作感測權限；結果會
-    // 傳給 AR 引擎，避免切換畫面或等待 API 後失去使用者手勢資格。
-    const motionAccessGranted = requestedMode === 'motion'
-      ? await requestMotionAccess()
-      : undefined
     errorMessage.value = ''
     arNotice.value = ''
     resolvedInputMode = null
@@ -395,17 +349,12 @@ async function submit(requestedMode: RequestedInputMode = 'camera') {
     bindAr(el)
     setBodyLock(true)
     try {
-       if (requestedMode === 'camera') {
-         // 使用者按下開始求籤的手勢中先預熱鏡頭與 MediaPipe；API 建立和畫面
-         // 轉換期間模型可以在背景準備好，進入誠心場景時不必再等初始化。
-         void el.prepareCamera().catch(() => undefined)
-       }
-       await el.start({
-         question: askedQuestion.value,
-         category: chosen.value?.arLabel ?? '綜合運勢',
-         inputMode: requestedMode,
-         motionAccessGranted
-       })
+      /* 只有電腦版：一律 auto，先試鏡頭手勢，失敗才降級成點擊。 */
+      await el.start({
+        question: askedQuestion.value,
+        category: chosen.value?.arLabel ?? '綜合運勢',
+        inputMode: 'auto'
+      })
     } catch (error) {
       // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況
       errorMessage.value = error instanceof Error ? error.message : '無法開始求籤，請稍後再試。'
@@ -413,6 +362,13 @@ async function submit(requestedMode: RequestedInputMode = 'camera') {
   } finally {
     isSubmitting = false
   }
+}
+
+/* 「下一步」：手勢做不出來（或懶得做）時，把儀式往前推一步。
+   引擎會依目前階段走跟手勢成功時一樣的流程（見 flow-controller.js 的 advance），
+   正在過場或擲筊動畫進行中按了沒有作用。 */
+function nextRitualStep() {
+  arEl.value?.next()
 }
 
 function quitRitual() {
@@ -524,7 +480,7 @@ function restart() {
       <section v-else-if="step === 1" class="panel intro">
         <p class="kicker">第 一 步</p>
         <h2>今天想請示哪一方面？</h2>
-        <p class="lede">選擇想詢問的問題種類</p>
+        <p class="lede">先讓神明知道你要問的方向，指點才會落在心坎上。</p>
         <div class="choice-list">
           <button
             v-for="item in CATEGORIES"
@@ -552,7 +508,7 @@ function restart() {
         <p class="kicker">第 二 步 </p>
         <h2>想跟神明說什麼？</h2>
         <p class="lede">
-          說明你想詢問的問題
+          像在神明面前稟告一樣，說清楚人、事、時間，解籤會更貼近你的處境。
         </p>
         <div class="ask-wrap" :class="{ recording: isRecording }">
           <textarea
@@ -560,7 +516,7 @@ function restart() {
             class="ask"
             rows="5"
             :maxlength="QUESTION_MAX"
-            placeholder="例：該不該換工作？"
+            placeholder="例：今年運勢是否順利，能否心想事成？"
           ></textarea>
         </div>
         <div class="ask-tools">
@@ -597,7 +553,7 @@ function restart() {
       <section v-else-if="step === 3" class="panel confide">
         <p class="kicker">第 三 步</p>
         <h2>確認要向神明請示的內容</h2>
-        <p class="lede"></p>
+        <p class="lede">再看一次，確定沒問題就誠心送出。</p>
         <!-- 掃碼把籤帶走 -->
 
         <dl class="summary">
@@ -615,10 +571,7 @@ function restart() {
         </dl>
         <div class="row">
           <button class="btn ghost" type="button" @click="goStep(2)">回去修改</button>
-          <button class="btn ghost motion-choice" type="button" @click="submit('motion')">
-            啟 用 搖 手 機 模 式
-          </button>
-          <button class="btn primary" type="button" @click="submit('camera')">誠 心 送 出</button>
+          <button class="btn primary" type="button" @click="submit">誠 心 送 出</button>
         </div>
       </section>
 
@@ -682,6 +635,7 @@ function restart() {
                 :data="{
                   number: fortune.no,
                   ganzhi: fortune.ganzhi,
+                  level: fortune.grade,
                   poem: fortune.poem,
                   note: fortune.modern || fortune.explain,
                   shareUrl: canShare ? shareUrl : null
@@ -716,10 +670,13 @@ function restart() {
 
     <!-- AR 儀式全螢幕層 -->
     <Teleport to="body">
-      <div v-if="cameraWarmup" :class="step === 4 ? 'ar-fullscreen' : 'ar-prewarm'">
+      <div v-if="step === 4" class="ar-fullscreen">
         <temple-ar-oracle ref="arEl" api-base="/api/v1" transition-src="/videos/dragon.mp4"></temple-ar-oracle>
-        <p v-if="step === 4 && arNotice" class="ar-toast">{{ arNotice }}</p>
-        <button v-if="step === 4" class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
+        <p v-if="arNotice" class="ar-toast">{{ arNotice }}</p>
+        <div class="ar-actions">
+          <button class="ar-btn ar-next" type="button" @click="nextRitualStep">下一步</button>
+          <button class="ar-btn ar-exit" type="button" @click="quitRitual">離開儀式</button>
+        </div>
       </div>
     </Teleport>
   </div>
@@ -736,18 +693,6 @@ body.ar-ritual-open { overflow: hidden; }
   z-index: 60;
   background: #120d0a;
 }
-
-/* 分類選定後先預熱相機與 MediaPipe，但在正式進入儀式前完全不露出
-   AR 畫面與人物；這段隱藏層仍讓 video/WASM/去背模型持續準備。 */
-.ar-prewarm {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  overflow: hidden;
-}
 .ar-fullscreen temple-ar-oracle {
   display: block;
   width: 100%;
@@ -756,11 +701,16 @@ body.ar-ritual-open { overflow: hidden; }
   --jiang-hong: #a63a3a;
   --ink: #3a2c22;
 }
-.ar-exit {
+/* 右上角按鈕列：「下一步」在左、「離開儀式」在右（離開鈕位置不變） */
+.ar-actions {
   position: fixed;
   top: calc(14px + env(safe-area-inset-top));
   right: 14px;
   z-index: 80;
+  display: flex;
+  gap: 10px;
+}
+.ar-btn {
   padding: 9px 18px;
   border: 1px solid rgba(212, 175, 55, 0.5);
   border-radius: 999px;
@@ -771,6 +721,11 @@ body.ar-ritual-open { overflow: hidden; }
   letter-spacing: 0.16em;
   cursor: pointer;
   backdrop-filter: blur(6px);
+}
+/* 「下一步」用朱紅底色跟旁邊的「離開儀式」區分，避免手忙腳亂時按錯 */
+.ar-next {
+  background: rgba(166, 58, 58, 0.85);
+  border-color: rgba(212, 175, 55, 0.8);
 }
 .ar-toast {
   position: fixed;
@@ -1553,38 +1508,6 @@ body.ar-ritual-open { overflow: hidden; }
     transform: none;
   }
   .btn:active, .choice-row:active { transform: scale(0.99); }
-}
-
-/* 1920×1080 是桌面展示的基準尺寸：縮小外框與文字的留白，讓分類、
-   問題與確認內容在一次視窗內完整看見，不必依賴瀏覽器縮放。 */
-@media (min-width: 1440px) and (min-height: 800px) {
-  .oracle-page { padding: 0 24px 28px; }
-  .oracle-bar { max-width: 1120px; padding: 16px 0 6px; }
-  .link-btn { font-size: 16px; }
-  .steps { gap: 6px 18px; }
-  .steps li { font-size: 15px; gap: 7px; }
-  .steps i { width: 26px; height: 26px; font-size: 13px; }
-  .oracle-main { max-width: 780px; }
-  .oracle-main.wide { max-width: 1160px; }
-  .panel { padding: 28px 32px 26px; border-radius: 18px; }
-  .kicker { margin-bottom: 8px; font-size: 13px; }
-  .panel h2 { margin-bottom: 7px; font-size: clamp(21px, 2.2vw, 27px); }
-  .lede { margin-bottom: 18px; font-size: 13px; line-height: 1.75; }
-  .choice-list { gap: 9px; }
-  .choice-row { min-height: 68px; gap: 11px; padding: 0.25rem 0.9rem; border-radius: 12px; }
-  .choice-row.selected { padding: calc(0.7rem - 1px) calc(0.9rem - 1px); }
-  .choice-icon { width: 54px; height: 54px; }
-  .choice-label { font-size: 16px; }
-  .choice-desc { margin-top: 1px; font-size: 12px; }
-  .choice-check { width: 24px; height: 24px; font-size: 13px; }
-  .ask { min-height: 118px; padding: 13px 16px; font-size: 15px; line-height: 1.7; }
-  .ask-tools { margin-top: 8px; }
-  .mic { padding: 8px 18px 8px 13px; }
-  .row { gap: 10px; margin-top: 18px; }
-  .btn { padding: 13px 32px; font-size: 15px; }
-  .summary > div { padding: 0.55rem 0.2rem; }
-  .summary dt { font-size: 13px; }
-  .summary dd { font-size: 15px; line-height: 1.65; }
 }
 
 @media (max-width: 640px) {

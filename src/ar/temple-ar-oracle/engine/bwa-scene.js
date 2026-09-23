@@ -24,7 +24,6 @@
    ========================================================================= */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { getPerformanceProfile } from '@/utils/performance';
 
 // 筊杯 3D 模型來源：Digital-Jiaobei 專案的 models/jiaobeii.glb（原封不動複製到
 // public/models/jiaobei.glb）。模型內含 JiaoOne / JiaoTwo 兩個節點，各自的原始
@@ -44,7 +43,46 @@ function loadJiaoTemplates() {
   return jiaoTemplatesPromise;
 }
 
-const IDLE_SPREAD = 0.5;       // 閒置時兩杯的中心間距（半距）
+/* ---- 抓杯（hold）動畫參數 ----
+   舊版 setHoldPosition 是每收到一次手勢座標就把兩顆筊杯硬設到該位置，
+   所以筊杯是「瞬間出現在手上」而且跟著 MediaPipe 的抖動一起跳。
+   改成：setHoldPosition 只記錄目標點，實際位移由 render loop 每格插值，
+   前 GRAB_MS 毫秒播「被抓起來」的動畫（帶弧線抬起＋握緊的旋轉＋放大回饋），
+   之後轉為阻尼跟隨，並依橫向速度給一點慣性傾斜。 */
+const GRAB_MS = 420;          // 抓起動畫長度
+const GRAB_LIFT = 0.45;       // 抓起過程中額外抬高的弧線高度（世界單位）
+const GRAB_SCALE_PUNCH = 0.14; // 抓起瞬間的放大回饋比例
+const GRAB_ROLL = 0.55;       // 抓起過程中兩杯向內握緊的旋轉量（弧度）
+const HOLD_SPREAD = 0.4;      // 手持時兩杯的中心間距（半距）
+/* 閒置時兩杯的中心間距（半距）。原本 0.5；要跟 CUP_WIDTH 等比例調整，兩杯才會各落在手部圖的兩個手心
+   （約各在手部圖寬度的 38%、62%）。CUP_WIDTH 改多少，這個就跟著乘多少（目前 = CUP_WIDTH × 0.575）。 */
+const IDLE_SPREAD = 0.39;
+/* 筊杯寬度（世界單位）。原本 0.75；手部圖出現後為了放進手心凹處縮到 0.45，畫面上太小，現在調成 0.68
+   （1080x1920 直式約 345px 寬，每個手心約 300px，杯子會略為超出手心邊緣）。
+   落下、落地的位置沿用原本的數值。 */
+const CUP_WIDTH = 0.68;
+/* 擲筊場景的手部圖是固定在畫面下方的圖片，筊杯要留在手心裡，不能再跟著使用者真實的手位置跑，
+   所以關掉「筊杯跟手」。要恢復舊行為（抓起動畫＋阻尼跟隨）就改成 true。 */
+const BWA_FOLLOW_HAND = false;
+const FOLLOW_EASE_A = 0.3;    // 跟手的阻尼係數；兩杯稍微不同，跟隨時會有自然的錯位晃動
+const FOLLOW_EASE_B = 0.24;
+const HOLD_TILT_MAX = 0.35;   // 慣性傾斜上限（弧度）
+
+/* ---- 渲染負擔（JJ5 效能較差；筊杯畫布是全螢幕，1080x1920 直式 = 200 萬像素）----
+   模型本身很輕（兩杯合計約 1,800 個三角面、貼圖各 225x225），瓶頸在「填色的像素量」，所以降解析度最有效：
+   畫布的實際像素 = CSS 尺寸 × min(devicePixelRatio, BWA_MAX_PIXEL_RATIO) × BWA_RENDER_SCALE，
+   再由瀏覽器拉伸回滿版。筊杯邊緣會稍微變柔，覺得太糊就把 BWA_RENDER_SCALE 往 1 調。 */
+const BWA_MAX_PIXEL_RATIO = 1;    // 不管螢幕 DPR 多高，最多當成 1 倍（原本上限是 2）
+const BWA_RENDER_SCALE = 0.75;    // 再縮到 75%（像素量 ≈ 56%）
+const BWA_SHADOW_MAP_SIZE = 512;  // 陰影貼圖邊長（原本 1024；筊杯只有兩顆，512 夠用）
+/* 閒置時（筊杯只是在原地輕輕懸浮，沒有被手抓住、也沒有在擲出）只需要 30 FPS 就看不出差別，
+   顯示器 60Hz 時等於隔一格才畫一次，這段時間 GPU 負擔直接減半。
+   抓杯跟手（阻尼是逐格計算，降格數會改變手感）與擲出落下的過程仍維持全速。 */
+const BWA_IDLE_FPS = 30;
+const BWA_IDLE_FRAME_MS = 1000 / BWA_IDLE_FPS;
+function bwaPixelRatio() {
+  return Math.min(window.devicePixelRatio || 1, BWA_MAX_PIXEL_RATIO) * BWA_RENDER_SCALE;
+}
 
 // 筊杯落地後的最終高度：跟鏡頭視線焦點（camera.lookAt 的 y）對齊，
 // 這樣擲出的結果會停在畫面正中間，而不是偏向畫面下方。
@@ -53,23 +91,40 @@ const REST_Y = -0.2;
 
 export function createBwaScene(state) {
   let renderer, scene, camera, cupA, cupB, ground, light;
-  const profile = getPerformanceProfile();
-  // 擲筊動畫使用固定時間軸取樣；低階裝置只需要播放 15 張/秒，
-  // 不再以 60Hz 即時物理更新兩個 GLB 網格。
-  const activeRenderInterval = 1000 / (profile.isLowEnd ? 15 : 30);
-  const idleRenderInterval = 1000 / (profile.isLowEnd ? 12 : 24);
-  const shadowsEnabled = !profile.isLowEnd;
+  let holding = false;
   let destroyed = false;
   let container = null;
   let lastScreenPos = { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
   let loopRafId = null;
   let lastRenderTime = 0;
-  let modelLoadStarted = false;
-  let tossAnimation = null;
+  // 手心凹處：閒置時兩顆筊杯的中心（世界座標，z=0 平面）。由 setPalmAnchor() 指定的元素位置換算而來
+  const idle = { x: 0, y: 0 };
+  let anchorEl = null;
+  const anchorVec = new THREE.Vector3();
+
+  /* 抓杯狀態：target 是手的世界座標（由 setHoldPosition 更新），
+     curA/curB 是兩顆筊杯目前實際所在的位置（由 render loop 逐格逼近 target）。
+     from* 記錄「開始被抓起」那一刻的位置與旋轉，抓起動畫就是從這裡插值到手上。 */
+  const hold = {
+    startTime: 0,
+    target: { x: 0, y: 0 },
+    curA: { x: -IDLE_SPREAD, y: 0 },
+    curB: { x: IDLE_SPREAD, y: 0 },
+    fromA: { x: -IDLE_SPREAD, y: 0 },
+    fromB: { x: IDLE_SPREAD, y: 0 },
+    fromRotA: { x: 0, y: 0, z: -Math.PI / 8 },
+    fromRotB: { x: 0, y: 0, z: Math.PI / 8 },
+    tiltA: 0,
+    tiltB: 0,
+  };
+
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
   // 把模型節點複製成一顆獨立的筊杯：重置成原始網格座標（見上方註解），
-  // 置中並統一縮放到跟舊版程序化幾何體相近的尺寸，這樣閒置與擲筊動畫的
-  // 位置／旋轉／間距數值都不必更動。
+  // 置中並統一縮放到跟舊版程序化幾何體相近的尺寸，這樣其餘的位置／旋轉／
+  // 間距數值（idle、hold、toss 裡的座標）都不必更動。
   function makeCup(template) {
     const inner = template.clone(true);
     inner.position.set(0, 0, 0);
@@ -84,16 +139,16 @@ export function createBwaScene(state) {
 
     inner.traverse((child) => {
       if (child.isMesh) {
-        child.castShadow = shadowsEnabled;
-        child.receiveShadow = shadowsEnabled;
+        child.castShadow = true;
+        child.receiveShadow = true;
       }
     });
 
     const cup = new THREE.Group();
     cup.add(inner);
-    // 用寬度（X 軸）決定筊杯大小，讓兩顆筊杯在閒置與落地時保持清楚間距。
-    cup.scale.setScalar(0.75 / size.x);
-    // 記下原始尺寸，重置或開始下一次擲筊時統一還原。
+    // 用寬度（X 軸）決定筊杯大小（見上方 CUP_WIDTH）
+    cup.scale.setScalar(CUP_WIDTH / size.x);
+    // 抓起動畫要對筊杯做放大回饋，先把「原始尺寸」記下來當基準，動畫結束再還原
     cup.userData.baseScale = cup.scale.x;
     return cup;
   }
@@ -103,11 +158,11 @@ export function createBwaScene(state) {
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
 
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: !profile.isLowEnd, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, profile.threePixelRatio));
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(bwaPixelRatio());
     renderer.setSize(w, h);
-    renderer.shadowMap.enabled = shadowsEnabled;
-    renderer.shadowMap.type = profile.isLowEnd ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // 比 PCFSoftShadowMap 便宜（原本用 Soft）
     container.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
@@ -121,9 +176,14 @@ export function createBwaScene(state) {
 
     light = new THREE.DirectionalLight(0xfff5ea, 1.5);
     light.position.set(3, 6, 3);
-    light.castShadow = shadowsEnabled;
-    light.shadow.mapSize.set(profile.isLowEnd ? 512 : 1024, profile.isLowEnd ? 512 : 1024);
+    light.castShadow = true;
+    light.shadow.mapSize.set(BWA_SHADOW_MAP_SIZE, BWA_SHADOW_MAP_SIZE);
     light.shadow.radius = 4;
+    // 把陰影相機的涵蓋範圍縮到只框住筊杯的活動範圍（預設 ±5），同樣的貼圖尺寸下陰影反而更細
+    const shadowCam = light.shadow.camera;
+    shadowCam.left = -4; shadowCam.right = 4; shadowCam.top = 4; shadowCam.bottom = -4;
+    shadowCam.near = 1; shadowCam.far = 16;
+    shadowCam.updateProjectionMatrix();
     scene.add(light);
 
     // 補光
@@ -131,23 +191,19 @@ export function createBwaScene(state) {
     fillLight.position.set(-3, 2, 1);
     scene.add(fillLight);
 
-    if (shadowsEnabled) {
-      const groundGeo = new THREE.PlaneGeometry(50, 50);
-      const groundMat = new THREE.ShadowMaterial({ opacity: 0.25 });
-      ground = new THREE.Mesh(groundGeo, groundMat);
-      ground.rotation.x = -Math.PI / 2;
-      ground.position.y = REST_Y - 0.1;
-      ground.receiveShadow = true;
-      scene.add(ground);
-    }
+    const groundGeo = new THREE.PlaneGeometry(50, 50);
+    const groundMat = new THREE.ShadowMaterial({ opacity: 0.25 });
+    ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = REST_Y - 0.1;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
-  }
+    loopRafId = requestAnimationFrame(loop);
 
-  function ensureModelLoaded() {
-    if (modelLoadStarted) return;
-    modelLoadStarted = true;
-    // 延後到真的進入擲筊場景才下載／解析 GLB，避免使用者還在首頁或
-    // 上香時就讓低階裝置同時處理 3D 資源。
+    // 模型是非同步載入，載完才生出兩顆筊杯並加進場景；在這之前場景照常
+    // 渲染（燈光、地板都已就緒），下面幾個操作函式也都對 cupA/cupB 尚未
+    // 就緒的情況做了保護。
     loadJiaoTemplates().then(({ jiaoOne, jiaoTwo }) => {
       if (destroyed) return;
       cupA = makeCup(jiaoOne);
@@ -160,25 +216,21 @@ export function createBwaScene(state) {
 
   function loop(now) {
     if (!renderer) return;
-    if (document.visibilityState === 'hidden') {
-      loopRafId = requestAnimationFrame(loop);
-      return;
-    }
-    const renderInterval = tossAnimation ? activeRenderInterval : idleRenderInterval;
-    if (now - lastRenderTime < renderInterval) {
+    // 閒置時跳過中間的影格（-1ms 是給 60Hz 下 16.67ms 一格的計時誤差留餘裕，確保剛好隔一格畫一次）
+    if (!holding && !state.bwaTossing && now - lastRenderTime < BWA_IDLE_FRAME_MS - 1) {
       loopRafId = requestAnimationFrame(loop);
       return;
     }
     lastRenderTime = now;
-    if (cupA && cupB) {
-      if (tossAnimation) {
-        updateTossAnimation(now);
-      } else if (!state.bwaTossing) {
+    if (cupA && cupB && !state.bwaTossing) {
+      if (holding) {
+        updateHold(now);
+      } else {
         const time = now * 0.001;
         // 微弱優雅的懸浮，幅度調小
         const bob = Math.sin(time * 1.2) * 0.05;
-        cupA.position.y = bob;
-        cupB.position.y = bob;
+        cupA.position.y = idle.y + bob;
+        cupB.position.y = idle.y + bob;
         cupA.rotation.z = Math.sin(time) * 0.03 - Math.PI / 8;
         cupB.rotation.z = Math.cos(time) * 0.03 + Math.PI / 8;
       }
@@ -191,21 +243,133 @@ export function createBwaScene(state) {
     if (!renderer || !container) return;
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
+    renderer.setPixelRatio(bwaPixelRatio());
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    applyAnchor();
   }
   window.addEventListener('resize', resize);
 
-  function resetIdle() {
-    tossAnimation = null;
-    state.bwaTossing = false;
+  /* 把「手心凹處」元素的畫面位置換算成 z=0 平面上的世界座標，當作筊杯閒置的位置。
+     用相機的反投影（unproject）沿視線射線打到 z=0 平面，所以不論畫面比例、相機角度都對得準。
+     場景隱藏中（元素沒有版面）就先不動，等場景顯示後 flow-controller 會觸發一次 resize 再算。 */
+  function setPalmAnchor(el) {
+    anchorEl = el;
+    applyAnchor();
+  }
+  function applyAnchor() {
+    if (!anchorEl || !renderer || !camera) return;
+    if (!anchorEl.getClientRects().length) return;
+    const canvasRect = renderer.domElement.getBoundingClientRect();
+    if (!canvasRect.width || !canvasRect.height) return;
+    const a = anchorEl.getBoundingClientRect();
+    camera.updateMatrixWorld();
+    anchorVec.set(
+      ((a.left - canvasRect.left) / canvasRect.width) * 2 - 1,
+      -((a.top - canvasRect.top) / canvasRect.height) * 2 + 1,
+      0.5,
+    ).unproject(camera);
+    const dir = anchorVec.sub(camera.position).normalize();
+    if (Math.abs(dir.z) < 1e-6) return;
+    const t = -camera.position.z / dir.z;
+    idle.x = camera.position.x + dir.x * t;
+    idle.y = camera.position.y + dir.y * t;
+    // 閒置中才把筊杯移過去；抓起或擲出過程中不去動它
+    if (cupA && cupB && !holding && !state.bwaTossing) resetIdle();
+  }
+
+  /* 只負責把「手現在在哪」換算成世界座標記下來；真正的位移與旋轉都交給
+     render loop 的 updateHold() 逐格插值，這樣筊杯是「被抓起來並跟著手」，
+     而不是每次收到手勢座標就瞬移過去（也順便濾掉 MediaPipe 的座標抖動）。 */
+  function setHoldPosition(nx01, ny01) {
+    lastScreenPos = { x: nx01 * window.innerWidth, y: ny01 * window.innerHeight };
+    if (!BWA_FOLLOW_HAND) return; // 筊杯留在手心凹處，不跟著使用者的手跑
     if (!cupA || !cupB) return;
-    // 回到閒置時一律還原成基準尺寸。
+    const vFOV = camera.fov * Math.PI / 180;
+    const dist = camera.position.z;
+    const worldH = 2 * Math.tan(vFOV / 2) * dist;
+    const worldW = worldH * camera.aspect;
+
+    hold.target.x = (nx01 - 0.5) * worldW;
+    hold.target.y = -(ny01 - 0.5) * worldH * 0.6;
+
+    if (!holding) {
+      // 剛被抓起：記錄兩顆筊杯此刻（閒置懸浮中）的位置與旋轉當作動畫起點
+      holding = true;
+      hold.startTime = performance.now();
+      hold.fromA = { x: cupA.position.x, y: cupA.position.y };
+      hold.fromB = { x: cupB.position.x, y: cupB.position.y };
+      hold.fromRotA = { x: cupA.rotation.x, y: cupA.rotation.y, z: cupA.rotation.z };
+      hold.fromRotB = { x: cupB.rotation.x, y: cupB.rotation.y, z: cupB.rotation.z };
+      hold.curA = { ...hold.fromA };
+      hold.curB = { ...hold.fromB };
+      hold.tiltA = 0;
+      hold.tiltB = 0;
+    }
+  }
+
+  /* 抓杯動畫（每格呼叫一次）：
+     階段一（t < 1）「被抓起來」——從閒置位置沿弧線抬起飛進手裡，
+     兩杯同時向內握緊旋轉，並帶一次放大回饋，做出「抓住」的手感；
+     階段二（t >= 1）「跟著手」——以阻尼逼近手的位置（兩杯係數略有差異，
+     跟隨時會自然錯位晃動），並依橫向殘餘距離換算慣性傾斜。 */
+  function updateHold(now) {
+    const t = Math.min(1, (now - hold.startTime) / GRAB_MS);
+    const e = easeOutCubic(t);
+    const arc = Math.sin(t * Math.PI); // 0→1→0：抬起再落回手中的弧線
+
+    if (t < 1) {
+      // 抓起中：位置由起點插值到手上，spread 同時從閒置間距收成手持間距
+      const spread = lerp(IDLE_SPREAD, HOLD_SPREAD, e);
+      hold.curA.x = lerp(hold.fromA.x, hold.target.x - spread, e);
+      hold.curA.y = lerp(hold.fromA.y, hold.target.y, e) + arc * GRAB_LIFT;
+      hold.curB.x = lerp(hold.fromB.x, hold.target.x + spread, e);
+      hold.curB.y = lerp(hold.fromB.y, hold.target.y, e) + arc * GRAB_LIFT;
+
+      cupA.rotation.set(lerp(hold.fromRotA.x, 0.2, e), lerp(hold.fromRotA.y, 0.1, e),
+                        lerp(hold.fromRotA.z, -0.05, e) - arc * GRAB_ROLL);
+      cupB.rotation.set(lerp(hold.fromRotB.x, 0.2, e), lerp(hold.fromRotB.y, -0.1, e),
+                        lerp(hold.fromRotB.z, 0.05, e) + arc * GRAB_ROLL);
+
+      const punch = 1 + arc * GRAB_SCALE_PUNCH;
+      cupA.scale.setScalar(cupA.userData.baseScale * punch);
+      cupB.scale.setScalar(cupB.userData.baseScale * punch);
+    } else {
+      // 已在手上：阻尼跟隨。先取殘餘距離當作橫向速度，再更新位置
+      const dxA = (hold.target.x - HOLD_SPREAD) - hold.curA.x;
+      const dxB = (hold.target.x + HOLD_SPREAD) - hold.curB.x;
+      hold.curA.x += dxA * FOLLOW_EASE_A;
+      hold.curA.y += (hold.target.y - hold.curA.y) * FOLLOW_EASE_A;
+      hold.curB.x += dxB * FOLLOW_EASE_B;
+      hold.curB.y += (hold.target.y - hold.curB.y) * FOLLOW_EASE_B;
+
+      // 慣性傾斜：手往哪個方向移動，筊杯就往反方向後仰一點
+      hold.tiltA += (clamp(-dxA * 0.6, -HOLD_TILT_MAX, HOLD_TILT_MAX) - hold.tiltA) * 0.2;
+      hold.tiltB += (clamp(-dxB * 0.6, -HOLD_TILT_MAX, HOLD_TILT_MAX) - hold.tiltB) * 0.2;
+
+      // 握在手上的細微呼吸感，避免完全靜止時看起來像貼圖
+      const breath = Math.sin(now * 0.0026) * 0.025;
+      cupA.rotation.set(0.2, 0.1, -0.05 + hold.tiltA + breath);
+      cupB.rotation.set(0.2, -0.1, 0.05 + hold.tiltB - breath);
+      cupA.scale.setScalar(cupA.userData.baseScale);
+      cupB.scale.setScalar(cupB.userData.baseScale);
+    }
+
+    cupA.position.set(hold.curA.x, hold.curA.y, 0);
+    cupB.position.set(hold.curB.x, hold.curB.y, 0);
+  }
+
+  function resetIdle() {
+    holding = false;
+    state.bwaTossing = false;
+    hold.tiltA = 0; hold.tiltB = 0;
+    if (!cupA || !cupB) return;
+    // 抓起動畫可能停在放大狀態，回到閒置一律還原成基準尺寸
     cupA.scale.setScalar(cupA.userData.baseScale);
     cupB.scale.setScalar(cupB.userData.baseScale);
-    cupA.position.set(-IDLE_SPREAD, 0, 0);
-    cupB.position.set(IDLE_SPREAD, 0, 0);
+    cupA.position.set(idle.x - IDLE_SPREAD, idle.y, 0);
+    cupB.position.set(idle.x + IDLE_SPREAD, idle.y, 0);
     // 預設閒置時：凸面朝上 (0,0,0)
     cupA.rotation.set(0, 0, -Math.PI / 8);
     cupB.rotation.set(0, 0, Math.PI / 8);
@@ -218,8 +382,9 @@ export function createBwaScene(state) {
       requestAnimationFrame(() => toss(coinA, coinB, onImpact, onSettle));
       return;
     }
+    holding = false;
     state.bwaTossing = true;
-    // 擲出前還原基準尺寸，避免上一輪狀態影響落下動畫。
+    // 擲出前先把抓起動畫的放大回饋還原，避免整段落下都維持放大狀態
     cupA.scale.setScalar(cupA.userData.baseScale);
     cupB.scale.setScalar(cupB.userData.baseScale);
     const restY = REST_Y;
@@ -232,72 +397,61 @@ export function createBwaScene(state) {
     cupB.position.set(0.78, 1.85, 0.1);
     cupA.rotation.set(-0.7, 0.35, -0.4);
     cupB.rotation.set(0.55, -0.3, 0.45);
-    const impactTime = (startY, initialVelocity) =>
-      (initialVelocity + Math.sqrt(initialVelocity * initialVelocity + 2 * gravity * (startY - restY))) / gravity;
-    const impactA = impactTime(1.55, -0.08);
-    const impactB = impactTime(1.85, 0.04);
-    const bounceDurationA = (2 * 1.35) / gravity;
-    const bounceDurationB = (2 * 1.15) / gravity;
+    let vyA = -0.08, vyB = 0.04;
+    let doneA = false, doneB = false;
+    let bouncesA = 0, bouncesB = 0;
 
-    // 預先決定整段動畫的時間軸；播放時只依 elapsed 取樣位置，
-    // 不再累積每一幀的速度／重力誤差，也不另外啟動高頻物理 rAF。
-    tossAnimation = {
-      startTime: performance.now(),
-      impactA,
-      impactB,
-      endTime: Math.max(impactA + bounceDurationA, impactB + bounceDurationB),
-      bounceDurationA,
-      bounceDurationB,
-      coinA,
-      coinB,
-      onImpact,
-      onSettle,
-      impactedA: false,
-      impactedB: false,
-    };
-    lastRenderTime = 0;
-  }
+    function step(now) {
+      const dt = 0.016;
 
-  function updateTossAnimation(now) {
-    if (!tossAnimation || !cupA || !cupB) return;
-    const animation = tossAnimation;
-    const elapsed = Math.max(0, (now - animation.startTime) / 1000);
+      if (!doneA) {
+        vyA -= gravity * dt;
+        cupA.position.y += vyA * dt;
+        cupA.rotation.x += 0.16;
+        cupA.rotation.y += 0.09;
+        if (cupA.position.y <= restY) {
+          cupA.position.y = restY;
+          if (bouncesA < 1) {
+            bouncesA++;
+            vyA = 1.35;
+            cupA.rotation.x += Math.PI * 0.42;
+            onImpact && onImpact();
+            requestAnimationFrame(step);
+            return;
+          }
+          // coinA === 'domed' (凸面朝上) -> rotation.x = 0
+          // flat (平面朝上) -> rotation.x = Math.PI (翻轉180度)
+          cupA.rotation.set(coinA === 'domed' ? 0 : Math.PI, 0, 0);
+          doneA = true;
+          onImpact && onImpact();
+        }
+      }
+      if (!doneB) {
+        vyB -= gravity * dt;
+        cupB.position.y += vyB * dt;
+        cupB.rotation.x += 0.14;
+        cupB.rotation.z += 0.12;
+        if (cupB.position.y <= restY) {
+          cupB.position.y = restY;
+          if (bouncesB < 1) {
+            bouncesB++;
+            vyB = 1.15;
+            cupB.rotation.x += Math.PI * 0.36;
+            requestAnimationFrame(step);
+            return;
+          }
+          cupB.rotation.set(coinB === 'domed' ? 0 : Math.PI, 0, 0);
+          doneB = true;
+        }
+      }
 
-    const sampleCup = (cup, startY, initialVelocity, bounceVelocity, impact, bounceDuration, finalSide, isA) => {
-      if (elapsed < impact) {
-        cup.position.y = startY + initialVelocity * elapsed - 0.5 * 4.8 * elapsed * elapsed;
-        cup.rotation.x = (isA ? -0.7 : 0.55) + elapsed * (isA ? 9.5 : 8.5);
-        cup.rotation.y = (isA ? 0.35 : -0.3) + elapsed * (isA ? 5.5 : 0);
+      if (doneA && doneB) {
+        onSettle && onSettle();
         return;
       }
-
-      const bounceElapsed = Math.min(elapsed - impact, bounceDuration);
-      if (bounceElapsed < bounceDuration) {
-        cup.position.y = REST_Y + bounceVelocity * bounceElapsed - 0.5 * 4.8 * bounceElapsed * bounceElapsed;
-        cup.rotation.x = (isA ? 1.9 : 1.7) + bounceElapsed * (isA ? 6 : 5);
-        cup.rotation.y = isA ? 5.2 : -0.3;
-        cup.rotation.z = isA ? -0.4 : 0.45;
-      } else {
-        cup.position.y = REST_Y;
-        cup.rotation.set(finalSide === 'domed' ? 0 : Math.PI, 0, 0);
-      }
-    };
-
-    sampleCup(cupA, 1.55, -0.08, 1.35, animation.impactA, animation.bounceDurationA, animation.coinA, true);
-    sampleCup(cupB, 1.85, 0.04, 1.15, animation.impactB, animation.bounceDurationB, animation.coinB, false);
-
-    if (!animation.impactedA && elapsed >= animation.impactA) {
-      animation.impactedA = true;
-      animation.onImpact && animation.onImpact();
+      requestAnimationFrame(step);
     }
-    if (!animation.impactedB && elapsed >= animation.impactB) {
-      animation.impactedB = true;
-      animation.onImpact && animation.onImpact();
-    }
-    if (elapsed >= animation.endTime) {
-      animation.onSettle && animation.onSettle();
-      tossAnimation = null;
-    }
+    requestAnimationFrame(step);
   }
 
   // 新增：釋放資源用（原始版本活在單頁iframe裡，卸載時瀏覽器整包回收記憶體；
@@ -307,13 +461,6 @@ export function createBwaScene(state) {
     window.removeEventListener('resize', resize);
     if (loopRafId) cancelAnimationFrame(loopRafId);
     if (renderer) {
-      scene?.traverse((object) => {
-        const mesh = object;
-        mesh.geometry?.dispose?.();
-        const material = mesh.material;
-        if (Array.isArray(material)) material.forEach((item) => item.dispose());
-        else material?.dispose?.();
-      });
       renderer.dispose();
       if (renderer.domElement && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
@@ -343,13 +490,9 @@ export function createBwaScene(state) {
   }
 
   return {
-    init, resetIdle, getScreenPos: () => lastScreenPos, toss, destroy, hitTest,
-     // 場景未顯示或過場影片播放期間暫停 three.js 迴圈
+    init, setHoldPosition, setPalmAnchor, resetIdle, getScreenPos: () => lastScreenPos, toss, destroy, hitTest,
+    // 過場影片播放期間暫停 three.js 迴圈
     pause(){ if (loopRafId) { cancelAnimationFrame(loopRafId); loopRafId = 0; } },
-     resume(){
-       if (!renderer) return;
-       ensureModelLoaded();
-       if (!loopRafId) loopRafId = requestAnimationFrame(loop);
-     },
+    resume(){ if (!loopRafId && renderer) loopRafId = requestAnimationFrame(loop); },
   };
 }

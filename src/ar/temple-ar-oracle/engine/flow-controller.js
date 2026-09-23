@@ -246,8 +246,10 @@ export function createFlowController({
   let pendingCast = null; // 這一輪擲筊結果（Promise）
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
 
-  /* 神明實景疊加：鏡頭模式等第一張去背遮罩完成就顯示人物，
-     不再用固定秒數讓使用者等待；手動／手機模式則立即顯示場景。 */
+  /* 神明實景疊加：插香/抽籤/擲筊三階段各自進場先完全不透明蓋住鏡頭，
+     維持這裡列的秒數之後才淡化，讓使用者透過半透明畫面看到自己（見 showScene）。 */
+  const RITUAL_OVERLAY_VEIL_MS = { incense: 1000, draw: 500, bwa: 500 };
+  let ritualOverlayTimer = 0;
 
   function startInterpretOnce() {
     if (!pendingInterpret) pendingInterpret = interpretInBackground();
@@ -356,31 +358,32 @@ export function createFlowController({
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach((s) =>
       s.classList.add("hidden"),
     );
-    // 筊杯場景在整個儀式建立時就已初始化，但只有真正顯示時才需要
-    // 讓 Three.js 佔用 GPU；上香與抽籤期間完全停止渲染。
-    if (name === "bwa") bwaScene.resume();
-    else bwaScene.pause();
     if (name !== "draw") mobileShake.stop();
     state.current = name;
 
-    /* 神明實景疊加：鏡頭模式等去背遮罩完成，人物才淡入；沒有鏡頭的模式直接顯示。 */
+    /* 神明實景疊加：每次進場先恢復「純實景、人像先隱藏」（veil），停留該階段的秒數後
+       才同步切換——神明實景淡到六成、人像（去背後的#output_canvas）同時淡入疊上來。 */
+    window.clearTimeout(ritualOverlayTimer);
+    const veilMs = RITUAL_OVERLAY_VEIL_MS[name];
     // 防呆：els.ritualOverlay / els.outputCanvas 理論上一定存在，
     // 但曾經在插香/抽籤/擲筊進場時炸過 undefined.classList，先擋著避免整個流程卡死。
-    if (!els.ritualOverlay || !els.outputCanvas) {
-      console.warn(
-        "[temple-ar-oracle] showScene: ritualOverlay/outputCanvas 缺失，跳過神明實景淡入效果",
-        {
-          name,
-          hasRitualOverlay: !!els.ritualOverlay,
-          hasOutputCanvas: !!els.outputCanvas,
-        },
-      );
-    } else {
-      els.ritualOverlay.classList.remove("blended");
-      els.outputCanvas.classList.remove("blended");
-      if (state.resolvedMode !== "camera" || state.segmentationMask) {
-        els.ritualOverlay.classList.add("blended");
-        els.outputCanvas.classList.add("blended");
+    if (veilMs != null) {
+      if (!els.ritualOverlay || !els.outputCanvas) {
+        console.warn(
+          "[temple-ar-oracle] showScene: ritualOverlay/outputCanvas 缺失，跳過神明實景淡入效果",
+          {
+            name,
+            hasRitualOverlay: !!els.ritualOverlay,
+            hasOutputCanvas: !!els.outputCanvas,
+          },
+        );
+      } else {
+        els.ritualOverlay.classList.remove("blended");
+        els.outputCanvas.classList.remove("blended");
+        ritualOverlayTimer = window.setTimeout(() => {
+          els.ritualOverlay?.classList.add("blended");
+          els.outputCanvas?.classList.add("blended");
+        }, veilMs);
       }
     }
 
@@ -401,17 +404,18 @@ export function createFlowController({
         s.classList.remove("selected"),
       );
       gestureEngine.resetShakeProgress();
-       gestureEngine.resetDrawReveal();
+      gestureEngine.resetPinch();
       const useMobileShake =
-        state.resolvedMode === "motion";
-       els.drawHint.textContent =
-         state.resolvedMode === "manual"
-           ? "準備好後，點擊籤筒即可自動抽籤。"
-           : useMobileShake && state.mobileShakeReady
-             ? "拿起手機，上下搖動三次即可抽籤"
-             : useMobileShake
-               ? "未開啟動作感測，可直接抽籤。"
-               : "請搖晃籤筒，籤條會自動抽出";
+        state.resolvedMode === "motion" ||
+        (isMobileDevice() && state.resolvedMode !== "manual");
+      els.drawHint.textContent =
+        state.resolvedMode === "manual"
+          ? "準備好後，點擊籤筒抽出一支籤。"
+          : useMobileShake && state.mobileShakeReady
+            ? "拿起手機，上下搖動三次即可抽籤"
+            : useMobileShake
+              ? "未開啟動作感測，可直接抽籤。"
+              : "請握拳握住籤筒，或雙手上下搖晃";
       // 手機正常流程只透過搖動抽籤；僅在感測器不可用時才顯示直接抽籤備援。
       els.btnManualDraw.classList.toggle(
         "hidden",
@@ -430,18 +434,20 @@ export function createFlowController({
       /* 筊杯容器在隱藏狀態下 clientWidth/Height 都是 0，three.js 會以 0×0 建立
          renderer。這裡等它顯示出來後觸發一次 resize，讓畫布重新取得正確尺寸。 */
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+      setBwaHands("cup"); // 進場顯示「捧著」的手，筊杯放在手心凹處（位置由 bwa-scene 的 setPalmAnchor 決定）
       els.bwaResultPanel.classList.add("hidden");
       /* 手動模式改成「直接點筊杯」：不再另外給一顆擲筊按鈕，
          筊杯容器打開 pointer-events，由 index.js 的 pointerdown 做命中判定。 */
       const isClickBwaMode =
         state.resolvedMode === "manual" ||
-        state.resolvedMode === "motion";
+        state.resolvedMode === "motion" ||
+        isMobileDevice();
       state.clickBwaMode = isClickBwaMode;
       els.btnClickBwa.classList.add("hidden");
       els.bwaThreeContainer.classList.toggle("tossable", isClickBwaMode);
       els.bwaHint.textContent = isClickBwaMode
         ? "點擊筊杯，向神明請示此籤"
-        : "請讓雙手同時進入畫面即可擲筊";
+        : "請握拳抓住筊杯，往下一丟即可擲出";
       if (!isClickBwaMode) {
         resetBwaVisual();
         gestureEngine.resetBwaTracking();
@@ -478,23 +484,6 @@ export function createFlowController({
   async function completeDraw() {
     if (state.current !== "draw") return;
     state.current = "transition";
-
-    // 手動備援沒有經過手勢引擎的選籤階段，這裡補上同一段自動抽籤動畫。
-    if (els.qianStick.classList.contains("hidden")) {
-      const stickEls = Array.from(els.sticksGroup.querySelectorAll(".stick"));
-      const chosen = stickEls[Math.floor(Math.random() * stickEls.length)];
-      stickEls.forEach((stick) => stick.classList.remove("selected"));
-      chosen?.classList.add("selected");
-      state.selectedStickCx = parseFloat(chosen?.dataset.cx || "100");
-      els.qianStick.style.left = `${(state.selectedStickCx / 200) * 100}%`;
-      els.qianStick.style.transform = "translate(-50%, 0)";
-      els.qianStick.classList.remove("hidden", "punch");
-      els.qianStick.classList.add("auto-draw");
-      state.drawSubState = "revealing";
-      els.drawHint.textContent = "籤條正在自動抽出…";
-      await new Promise((resolve) => setTimeout(resolve, 420));
-    }
-
     const rect = els.qianStick.getBoundingClientRect();
     const cx = rect.left + rect.width / 2,
       cy = rect.top;
@@ -509,11 +498,15 @@ export function createFlowController({
       setTimeout(() => playInkTransition(els, () => showScene("bwa")), 700);
     } catch (error) {
       state.current = "draw";
-      state.drawSubState = "shake";
-      gestureEngine.resetShakeProgress();
-      gestureEngine.resetDrawReveal();
       emit("toast", { message: error.message || "無法抽籤，請再試一次" });
     }
+  }
+
+  /* 擲筊手部圖切換：'cup' 捧著（進場、可以再擲時）／'toss' 拋擲（擲出到筊杯動畫結束）／'none' 都不顯示。
+     兩張都預先載入在 DOM 裡，這裡只切 .on（CSS 是 opacity 淡入淡出約 250ms）。 */
+  function setBwaHands(mode) {
+    els.bwaHandsCup.classList.toggle("on", mode === "cup");
+    els.bwaHandsToss.classList.toggle("on", mode === "toss");
   }
 
   function resetBwaVisual() {
@@ -563,6 +556,7 @@ export function createFlowController({
   async function tossBwa(_sx, _sy, _vx, _vy) {
     if (state.bwaTossing) return;
     state.bwaTossing = true;
+    setBwaHands("toss"); // 擲出：手部圖切成「拋擲」，同時開始既有的筊杯拋擲動畫
     els.bwaHint.textContent = "筊杯擲出中…";
     try {
       // 進場時就預取好的結果，這裡通常立刻拿到，不會卡在網路上
@@ -590,6 +584,8 @@ export function createFlowController({
           if (navigator.vibrate) navigator.vibrate(20);
         },
         () => {
+          // 筊杯動畫結束：拋擲的手淡出（250ms），淡出完再接續原本的結果判定
+          setBwaHands("none");
           setTimeout(() => {
             resolveBwaResult();
           }, 250);
@@ -597,7 +593,8 @@ export function createFlowController({
       );
     } catch (error) {
       state.bwaTossing = false;
-      els.bwaHint.textContent = "請讓雙手同時進入畫面即可擲筊";
+      setBwaHands("cup");
+      els.bwaHint.textContent = "請握拳抓住筊杯，往下一丟即可擲出";
       emit("toast", { message: error.message || "無法完成擲筊，請再試一次" });
     }
   }
@@ -606,6 +603,7 @@ export function createFlowController({
     if (state.bwaTossing || !state.sessionId || state.current !== "bwa") return;
     let keepLockedForTransition = false;
     state.bwaTossing = true;
+    setBwaHands("toss");
     els.btnClickBwa.disabled = true;
     // 結果通常已經預取好了，所以這裡直接說「擲出中」，不再出現「正在請示…」的等待字樣
     els.bwaHint.textContent = "筊杯擲出中…";
@@ -617,12 +615,13 @@ export function createFlowController({
          這裡只是取回同一個 Promise，讓過場去等它。 */
       const pending = result.confirmed ? startInterpretOnce() : null;
       await playClickBwaAnimation(result);
+      setBwaHands("none");
       els.bwaResultPanel.classList.remove("hidden");
 
       if (result.confirmed) {
         flashOnce();
-        els.bwaResultTitle.textContent = "聖筊 ";
-        els.bwaResultDesc.textContent = "聖筊";
+        els.bwaResultTitle.textContent = "聖筊 · 神明允准";
+        els.bwaResultDesc.textContent = "聖筊，神明允准解籤。";
         emit("bwa-result", { tier: "sacred" });
         /* 點擊擲筊這條路以前會進 finally 立刻解鎖，使用者在過場開始前再點一次
            就會對同一個 session 重送 /blocks/，後端已經確認過時會回 409。
@@ -667,6 +666,7 @@ export function createFlowController({
         prefetchCast();
       }
     } catch (error) {
+      setBwaHands("cup"); // 出錯沒擲成：手部圖回到「捧著」
       emit("toast", { message: error.message || "無法完成擲筊，請再試一次" });
     } finally {
       if (!keepLockedForTransition) {
@@ -694,8 +694,8 @@ export function createFlowController({
       particleSystem.burst(pos.x, pos.y);
       spawnLightBurst(rootEl, pos.x, pos.y);
       flashOnce();
-      els.bwaResultTitle.textContent = "聖筊 ";
-      els.bwaResultDesc.textContent = "聖筊";
+      els.bwaResultTitle.textContent = "聖筊 · 神明允准";
+      els.bwaResultDesc.textContent = "聖筊，神明允准解籤。";
       emit("bwa-result", { tier: "sacred" });
       /* 解籤與過場並行，使用者不必在定格畫面前乾等 AI 回應。
          pending 是擲筊結果剛回來時就發出的那一份請求（見 tossBwa）。
@@ -717,8 +717,9 @@ export function createFlowController({
       setTimeout(() => {
         els.bwaResultPanel.classList.add("hidden");
         resetBwaVisual();
-        gestureEngine.lockBwaUntilHandsLeave();
-        els.bwaHint.textContent = "請讓雙手同時進入畫面即可擲筊";
+        gestureEngine.resetBwaTracking();
+        setBwaHands("cup"); // 還沒連續聖筊、可以再擲：手部圖回到「捧著」，筊杯回到手心
+        els.bwaHint.textContent = "請握拳抓住筊杯，往下一丟即可擲出";
         state.bwaTossing = false;
       }, 2200);
     } else {
@@ -764,11 +765,12 @@ export function createFlowController({
     );
     state.current = "idle";
     state.bwaTossing = false;
+    window.clearTimeout(ritualOverlayTimer);
     els.ritualOverlay?.classList.remove("blended");
     els.outputCanvas?.classList.remove("blended");
     gestureEngine.resetIncenseProgress();
     gestureEngine.resetShakeProgress();
-    gestureEngine.resetDrawReveal();
+    gestureEngine.resetPinch();
     gestureEngine.resetBwaTracking();
     mobileShake.stop();
     // 離開儀式：預取的擲筊結果與解籤請求都不再屬於任何一場
@@ -782,17 +784,15 @@ export function createFlowController({
   // 方便Web Component呼叫），內部判斷順序與原始碼行為一致：
   //   requestedMode === 'manual' → 一律走純點擊路徑，略過插香手勢偵測（優先權最高，
   //                                 即使同時在手機上也以此為準）
-  //   requestedMode === 'camera' → 所有裝置都走攝影機手勢路徑，若手機鏡頭失敗
-  //                                 再降級到 motion，桌機則降級到 manual。
-  //   手機裝置（且非manual/camera） → 走 devicemotion 搖晃路徑
-  //   其餘（桌機） → 走攝影機手勢路徑（含插香偵測）
+  //   手機裝置（且非manual） → 一律走 devicemotion 搖晃路徑，略過插香手勢偵測
+  //   其餘（桌機） → 走攝影機手勢路徑（含插香偵測），若鏡頭權限被拒絕
+  //                  則自動降級為純點擊路徑（取代原本的 window.parent.location.assign）
   // ============================================================
   async function start({
     question,
     category,
     requestedMode = "auto",
     startCamera,
-    motionAccessGranted,
   }) {
     state.userQuery = { question, category };
     state.current = "creating";
@@ -810,7 +810,7 @@ export function createFlowController({
        這裡補上，讓宿主可以依畫面寬度（而非 UA）決定手機版就用搖的。 */
     if (requestedMode === "motion") {
       state.resolvedMode = "motion";
-      state.mobileShakeReady = motionAccessGranted ?? await mobileShake.requestAccess();
+      state.mobileShakeReady = await mobileShake.requestAccess();
       emit("input-mode-resolved", {
         mode: "motion",
         motionGranted: state.mobileShakeReady,
@@ -831,37 +831,6 @@ export function createFlowController({
       return;
     }
 
-    if (requestedMode === "camera") {
-      try {
-        await startCamera();
-        state.resolvedMode = "camera";
-        emit("input-mode-resolved", { mode: "camera" });
-        showScene("incense");
-        return;
-      } catch (error) {
-        if (mobile) {
-          // 手機鏡頭被拒絕或不支援時，保留原本的搖手機備援流程。
-          state.resolvedMode = "motion";
-          state.mobileShakeReady = await mobileShake.requestAccess();
-          emit("input-mode-resolved", {
-            mode: "motion",
-            motionGranted: state.mobileShakeReady,
-            fallbackFrom: "camera",
-          });
-          await api.prayer(state.sessionId);
-          showScene("draw");
-          emit("toast", {
-            message: state.mobileShakeReady
-              ? "鏡頭無法啟動，已改用搖動手機抽籤。"
-              : "鏡頭無法啟動，已提供直接抽籤。",
-          });
-          return;
-        }
-        // 桌機繼續走下方的手動備援提示。
-        emit("toast", { message: error?.message || "無法啟動鏡頭，已切換為手動抽籤。" });
-      }
-    }
-
     if (mobile) {
       state.resolvedMode = "motion";
       state.mobileShakeReady = await mobileShake.requestAccess();
@@ -876,7 +845,7 @@ export function createFlowController({
       return;
     }
 
-    // 桌機 auto：嘗試攝影機手勢路徑，交由外部（index.js）啟動 MediaPipe camera
+    // 桌機：嘗試攝影機手勢路徑，交由外部（index.js）啟動 MediaPipe camera
     try {
       await startCamera();
       state.resolvedMode = "camera";
@@ -905,8 +874,30 @@ export function createFlowController({
     }
   }
 
+  /* 「下一步」按鈕：不靠手勢，把儀式往前推一步。每個階段都走手勢成功時會走的同一組函式，
+     所以畫面（手部圖、動畫、過場）與後續流程都跟手勢觸發完全一樣：
+       誠心默念 → 完成合十／搖籤 → 選出命中籤並出現捏取的手／捏取 → 抽出籤條／擲筊 → 擲出筊杯。
+     擲筊結果由原本的判定決定（聖筊才會結束，否則照舊要重擲或重抽）。
+     正在過場、擲筊動畫進行中、儀式尚未開始或已結束時，按了沒有作用。 */
+  function advance() {
+    if (state.bwaTossing) return;
+    switch (state.current) {
+      case "incense":
+        completeIncense();
+        break;
+      case "draw":
+        gestureEngine.advanceDraw();
+        break;
+      case "bwa":
+        if (state.clickBwaMode) castClickBwa();
+        else tossBwa();
+        break;
+    }
+  }
+
   return {
     start,
+    advance,
     reset,
     showScene,
     completeIncense,

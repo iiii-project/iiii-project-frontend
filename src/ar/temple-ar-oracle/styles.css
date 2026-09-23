@@ -51,7 +51,7 @@
 /* opacity 預設0（進場veil期間人像圖層先隱藏，只留#ritual-overlay的神明實景），
    加上 .blended 後淡入到1——跟 #ritual-overlay 的淡出時機由 showScene() 同步觸發，
    讓「veil結束的瞬間」呈現「神明實景退到六成 + 人像同時浮現」的疊圖效果。 */
-#output_canvas{ position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; z-index:1; opacity:0; filter:saturate(0.85) contrast(1.0) brightness(1.05); transition: filter 0.35s ease, opacity 0.15s ease; }
+#output_canvas{ position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; z-index:1; opacity:0; filter:saturate(0.85) contrast(1.0) brightness(1.05); transition: filter 0.35s ease, opacity 0.5s ease; }
 #output_canvas.blended{ opacity:1; }
 #vignette{
   position:fixed; inset:0; z-index:2; pointer-events:none;
@@ -76,7 +76,7 @@
    #output_canvas 只剩人像範圍不透明、其餘鏤空，鏤空處會直接透出這層神明實景，
    形成「人在神明實景前」的效果。預設 opacity:1（進場veil期間完全不透明），
    加上 .blended 後淡化到 0.6；切換時機由 flow-controller.js 的 showScene() 控制。 */
-.ritual-overlay{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:1; transition: opacity 0.15s ease; }
+.ritual-overlay{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:1; transition: opacity 0.5s ease; }
 .ritual-overlay.blended{ opacity:0.6; }
 /* 背景照套一層放射狀遮罩：中央（神明所在處）維持完全不透明、飽和度也拉高一點，
    往兩側漸漸淡出到全透明，形成聚光/光暈的視覺效果，而不是整張背景平均一致。 */
@@ -131,11 +131,47 @@
 /* 標題卡：跟 px-14/py-6 通用工具class脫鉤，才能單獨縮小這三張卡，
    不影響共用同一組utility class的擲筊結果卡（bwa-result-panel）。 */
 .ritual-card{ padding: 1.1rem 2.25rem; }
+/* 標題文字卡永遠在手部圖上面：手（含從上方滑入的捏取手臂）只能在卡片後面經過，不遮字也不遮白框。
+   手部圖層：誠心 #incense-hands = 1、搖籤 #draw-stage = 2、捏取 #draw-pinch = 5，卡片要比它們都高。 */
+#scene-incense .ritual-card, #scene-draw .ritual-card{ z-index:6; }
 .scene{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; pointer-events:none; }
 .hidden{ display:none !important; }
 
 /* ===================== 畫面一：電子籤筒 ===================== */
-#qian-tong-zone{ position:relative; width:min(24vw, 210px); height:min(46vh, 380px); margin-bottom: 4vh; filter: drop-shadow(0 18px 30px rgba(0,0,0,0.55)); }
+/* 搖籤舞台：手部圖 + 籤筒。以下 CSS 變數都是給你微調用的：
+   --draw-hands-w   手部圖寬度（高度依 1448:1086 自動算；上限 80vh 讓高度不超過螢幕 60%，才不會蓋到文字卡）
+   --tong-cx/cy     籤筒「中心」在手部圖上的位置（百分比，相對手部圖左上角）＝兩手中間空隙的位置
+   --tong-w/h       籤筒大小
+   --draw-stage-bottom  整個舞台離螢幕底邊的距離 */
+#draw-stage{
+  --draw-hands-w: min(100vw, 1000px, 80vh);
+  --tong-cx: 54%; --tong-cy: 56%;
+  --tong-w: min(24vw, 210px); --tong-h: min(46vh, 380px);
+  position:absolute; left:0; right:0; bottom:var(--draw-stage-bottom, 0px); margin-inline:auto; z-index:2;
+  width:var(--draw-hands-w); aspect-ratio:1448 / 1086; pointer-events:none;
+}
+/* 搖晃中：手部圖與籤筒一起上下抖動，只動 transform */
+#draw-stage.shaking{ animation: handsTongShake 0.16s ease-in-out infinite; will-change: transform; }
+@keyframes handsTongShake{
+  0%,100%{ transform: translate3d(0,0,0); }
+  25%{ transform: translate3d(0,-14px,0); }
+  75%{ transform: translate3d(0,10px,0); }
+}
+.draw-hands-img{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:contain; z-index:2; pointer-events:none;
+  opacity:1; transition: opacity 0.25s ease;
+}
+.draw-hands-img.off{ opacity:0; }
+/* 手部圖相對籤筒往下移（百分比＝手部圖自身高度）：讓右手掌托在籤筒底部、左手扶在側邊。
+   籤筒位置不動；手臂會往畫面下緣延伸出去。調這個值就能微調手托住的高度。 */
+#draw-stage{ --hands-dy: 12%; }
+#draw-hands-shake{ transform: translate3d(0, var(--hands-dy), 0); }
+/* 用 left/top 而不是 transform 置中，才不會跟 tongJitter（motion 模式）的 transform 動畫打架 */
+#qian-tong-zone{
+  position:absolute; z-index:1;
+  left:calc(var(--tong-cx) - var(--tong-w) / 2); top:calc(var(--tong-cy) - var(--tong-h) / 2);
+  width:var(--tong-w); height:var(--tong-h); filter: drop-shadow(0 18px 30px rgba(0,0,0,0.55));
+}
 #qian-tong-zone.shaking{ animation: tongJitter 0.14s ease-in-out infinite; }
 @keyframes tongJitter{
   0%{ transform: translateX(0) rotate(0deg);} 25%{ transform: translateX(-3px) rotate(-1.2deg);}
@@ -151,8 +187,43 @@
 #shake-progress-ring.on{ opacity:1; }
 #qian-tong{ position:absolute; bottom:0; left:0; right:0; top:0; transition: filter 0.5s ease; }
 #qian-tong svg{ width:100%; height:100%; overflow:visible; }
-#qian-tong.aligned{ animation: breatheGlow 1.8s ease-in-out infinite; }
-@keyframes breatheGlow{ 0%,100%{ filter: drop-shadow(0 0 0px rgba(255,207,122,0)); } 50%{ filter: drop-shadow(0 0 26px rgba(255,207,122,0.85)); } }
+/* 命中籤枝被「抽起」時，籤筒裡原本那支先藏起來，由 #qian-stick 接手往上移 */
+.stick.lifted{ visibility:hidden; }
+
+/* 捏取的手：錨點固定在「命中籤枝頂端」，圖片再用 --pinch-x/--pinch-y（圖上的捏取點）對位。
+   --pinch-x/--pinch-y  圖片上的捏取點（約 48%, 86%），對不準時改這兩個
+   --pinch-w            手的大小
+   --lift-y             上滑觸發後手與籤枝一起上移的距離（JS 會依 PINCH_LIFT_VH 覆寫）
+   --slide-from         滑入起點（往上偏移，畫面外） */
+/* 裁切層：以「祈願抽籤」文字卡的下緣為界（--clip-top 由 JS 量測寫入），手與手臂只會出現在卡片下方，
+   從上方滑入、上移時都是從卡片後面出來／消失，永遠不會蓋到白框。 */
+#draw-pinch-clip{
+  position:absolute; inset:0; z-index:5; pointer-events:none;
+  clip-path: inset(var(--clip-top, 0px) 0 0 0);
+}
+#draw-pinch{
+  --pinch-x: 48%; --pinch-y: 86%;
+  --pinch-w: min(40vw, 460px, 55vh);
+  --lift-y: -20vh; --slide-from: -110vh;
+  position:absolute; left:var(--target-x, 50%); top:var(--target-y, 60%); width:0; height:0; pointer-events:none;
+  opacity:0; transform:translate3d(0, var(--slide-from), 0);
+}
+#draw-pinch.is-in{
+  opacity:1; transform:translate3d(0,0,0); will-change: transform, opacity;
+  transition: transform 0.4s cubic-bezier(0.22,0.61,0.36,1), opacity 0.25s ease;
+}
+#draw-pinch.is-lift{
+  transform:translate3d(0, var(--lift-y), 0);
+  transition: transform 0.6s cubic-bezier(0.22,0.61,0.36,1), opacity 0.25s ease;
+}
+#draw-pinch.is-out{ opacity:0; }
+/* 圖片頂端（手臂被裁切的邊）用靜態遮罩淡出，手臂看起來是從上方延伸進來，不會在畫面中間出現一條硬邊 */
+#draw-pinch-img{
+  position:absolute; left:0; top:0; width:var(--pinch-w); height:auto; max-width:none;
+  transform:translate(calc(var(--pinch-x) * -1), calc(var(--pinch-y) * -1));
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 26%);
+          mask-image: linear-gradient(to bottom, transparent 0%, #000 26%);
+}
 
 .stick{ transform-box: fill-box; transform-origin: bottom center; }
 #sticks.is-shaking .stick{ animation: stickShake 0.16s ease-in-out infinite; }
@@ -170,14 +241,8 @@
   position:absolute; top:-16px; left:50%; transform:translateX(-50%); width:24px; height:24px; border-radius:50%;
   background: radial-gradient(circle, var(--gold-soft) 0%, var(--gold) 45%, transparent 75%); opacity:0; filter: blur(1px);
 }
-.qian-stick.auto-draw .stick-tip{ animation: burstGlow 0.6s ease-out infinite; }
+.qian-stick.pinched .stick-tip{ animation: burstGlow 0.6s ease-out infinite; }
 @keyframes burstGlow{ 0%{ opacity:0.4; transform:translateX(-50%) scale(0.8);} 50%{ opacity:1; transform:translateX(-50%) scale(1.6);} 100%{ opacity:0.4; transform:translateX(-50%) scale(0.8);} }
-.qian-stick.auto-draw{ animation: drawStickOut 0.42s cubic-bezier(.2,.8,.3,1) both; }
-@keyframes drawStickOut{
-  0%{ opacity:0.35; transform:translate(-50%, 100px) rotate(-3deg); }
-  70%{ opacity:1; transform:translate(-50%, -8px) rotate(1deg); }
-  100%{ opacity:1; transform:translate(-50%, 0) rotate(0deg); }
-}
 .qian-stick.punch{ animation: punchScale 0.25s ease-out; }
 @keyframes punchScale{ 0%{ filter:brightness(1);} 40%{ filter:brightness(1.8) drop-shadow(0 0 20px #fff4dc);} 100%{ filter:brightness(1);} }
 
@@ -195,7 +260,29 @@
   position:absolute; z-index:15; width:34px; height:34px; border-radius:50%; border:2px solid var(--gold-soft);
   opacity:0; pointer-events:none; transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(255,207,122,0.6); transition: opacity 0.15s ease;
 }
-/* ===================== 畫面二：雙手擲筊與結果動畫（Three.js 3D 渲染）===================== */
+.cup-indicator{
+  position:absolute; z-index:15; width:46px; height:46px; border-radius:50%; border:2px dashed var(--gold-soft);
+  opacity:0; pointer-events:none; transform:translate(-50%,-50%); transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+/* ===================== 畫面二：抓杯與拋擲（Three.js 3D 渲染）===================== */
+/* 擲筊手部圖（方形圖，貼畫面下緣置中）。給你微調用的 CSS 變數：
+   --bwa-hands-w   手部圖寬度（高度＝寬度；上限 60vh 才不會頂到上面的文字卡）
+   --cup-x/--cup-y 「手心凹處」在手部圖上的位置（百分比，相對手部圖左上角）＝ 3D 筊杯閒置時放的地方
+   筊杯畫布（#bwa-three-container，z-index 11）在手部圖上層，所以筊杯看起來是放在手上。 */
+#bwa-hands{
+  --bwa-hands-w: min(94vw, 900px, 60vh);
+  --cup-x: 50%; --cup-y: 46%;
+  position:absolute; left:0; right:0; bottom:0; margin-inline:auto; z-index:1; pointer-events:none;
+  width:var(--bwa-hands-w); aspect-ratio:1 / 1;
+}
+.bwa-hands-img{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+  opacity:0; transition: opacity 0.25s ease;
+}
+.bwa-hands-img.on{ opacity:1; }
+#bwa-cup-anchor{ position:absolute; left:var(--cup-x); top:var(--cup-y); width:0; height:0; }
+
 #bwa-three-container{ position:fixed; inset:0; z-index:11; pointer-events:none; }
 /* 手動模式：改成直接點筊杯擲出，這時容器才需要收事件 */
 #bwa-three-container.tossable{ pointer-events:auto; cursor:pointer; }
@@ -258,6 +345,17 @@
   position:fixed; left:50%; top:62%; width:54px; height:180px; z-index:20; pointer-events:none;
   transform:translate3d(-50%,-50%,0); transform-origin:50% 85%; will-change:left,top,transform;
 }
+/* 手部示意圖：兩張同尺寸疊在一起，只用 opacity 淡入淡出（不用 filter/blur/box-shadow，省低階 GPU）。
+   z-index 比 #incense-anchor(20) 低，香與進度環仍疊在手部圖上面。 */
+#incense-hands{
+  position:absolute; left:50%; top:62%; z-index:1; pointer-events:none;
+  width:min(86vw, 860px); aspect-ratio:1448 / 1086; transform:translate(-50%,-50%);
+}
+.incense-hands-img{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+  opacity:0; transition: opacity 0.25s ease;
+}
+.incense-hands-img.on{ opacity:1; }
 #incense-stick{ position:relative; width:14px; height:180px; margin:0 auto; }
 #incense-stick .stick-body{ position:absolute; bottom:0; left:0; width:100%; height:140px; background:linear-gradient(180deg,#e9c46a,#8a5a30); border-radius:2px; }
 #incense-stick .stick-tip{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:8px; height:8px; border-radius:50%; background:radial-gradient(circle,#ffcf7a,#c94b40); box-shadow:0 0 14px rgba(255,160,80,0.9); }
@@ -300,12 +398,6 @@
 /* 直式螢幕（手機）比例本來就吻合，讓它鋪滿裁掉極少的邊 */
 @media (max-aspect-ratio: 3/4){
   #oracle-transition-video{ object-fit:cover; }
-
-  /* 直式畫面保留足夠寬度給籤筒與手部動作，避免 24vw 在手機上縮成
-     只有八、九十像素，使用者看得到但不好對準。 */
-  #qian-tong-zone{ width:min(48vw, 210px); height:min(42vh, 360px); }
-  .ritual-card{ max-width:calc(100vw - 28px); padding:0.9rem 1.25rem; }
-  .ritual-title{ font-size:1.8rem; }
 }
 
 /* 换成非預設影片時（見 index.js 的 transition-src / data-fill），不受上面

@@ -13,6 +13,15 @@
    （神像照本身已去背，直接疊在背景照上方置中即可，不需要另外合成一張圖）。 */
 const ritualOverlayBgUrl = new URL('../../assets/images/temple_background.webp', import.meta.url).href
 const ritualOverlayEmperorUrl = new URL('../../assets/images/jade.webp', import.meta.url).href
+/* 誠心默念的手部圖：兩張各自都是「左右兩隻手」在同一張圖裡，尺寸相同（已轉 WebP 縮到 900x675，顯示寬度上限 860px） */
+const handsOpenUrl = new URL('../../assets/images/hands-open.webp', import.meta.url).href
+const handsPrayUrl = new URL('../../assets/images/hands-pray.webp', import.meta.url).href
+/* 搖籤：兩手中間留有空隙的雙手圖（籤筒放進空隙）。捏取：單手、手臂從上方進入、指尖朝下。已轉 WebP：shake 1000x750（顯示上限 1000px）、pinch 760x570（顯示上限 720px）*/
+const handsShakeUrl = new URL('../../assets/images/hands-shake.webp', import.meta.url).href
+const handsPinchUrl = new URL('../../assets/images/hands-pinch.webp', import.meta.url).href
+/* 擲筊：雙手捧著（筊杯放在手心凹處）與雙手拋擲。方形圖，已轉 WebP 900x900（顯示寬度上限 900px） */
+const handsCupUrl = new URL('../../assets/images/hands-cup.webp', import.meta.url).href
+const handsTossUrl = new URL('../../assets/images/hands-toss.webp', import.meta.url).href
 
 export function renderTemplate() {
   return `
@@ -71,6 +80,12 @@ export function renderTemplate() {
       <div class="hairline mt-4"></div>
       <p id="incense-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請雙手合十，於心中默念所求之事</p>
     </div>
+    <!-- 手部示意圖：預設「雙手在兩側」，偵測到合十時淡入「雙手合十」。兩張同時放在 DOM 裡預先載入，
+         只切 opacity（見 gesture-engine.js 的 updatePrayImage）。 -->
+    <div id="incense-hands" aria-hidden="true">
+      <img id="incense-hands-open" class="incense-hands-img on" src="${handsOpenUrl}" alt="" decoding="async" />
+      <img id="incense-hands-pray" class="incense-hands-img" src="${handsPrayUrl}" alt="" decoding="async" />
+    </div>
     <div id="incense-anchor">
       <div id="incense-progress-ring"></div>
       <div id="incense-stick"><div class="stick-body"></div><div class="stick-tip"></div></div>
@@ -82,10 +97,13 @@ export function renderTemplate() {
     <div class="glass-card ritual-card text-center fade-in">
       <h1 class="ritual-title">祈　願　抽　籤</h1>
       <div class="hairline mt-4"></div>
-      <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請對著籤筒握拳，上下搖晃</p>
+      <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請握拳握住籤筒，或雙手上下搖晃</p>
       <button id="btn-manual-draw" class="btn-line mt-4 hidden" type="button">點 擊 抽 籤</button>
     </div>
 
+    <!-- 搖籤舞台：手部圖 + 籤筒放在同一個容器裡，搖晃時整個容器一起做 transform 上下抖動。
+         籤筒在下層、手部圖在上層，手指才會蓋在筒身邊緣，看起來像手握著籤筒。 -->
+    <div id="draw-stage">
     <div id="qian-tong-zone">
       <div id="shake-progress-ring"></div>
       <div id="qian-tong">
@@ -126,6 +144,16 @@ export function renderTemplate() {
         <div class="stick-tip"></div>
       </div>
     </div>
+    <img id="draw-hands-shake" class="draw-hands-img" src="${handsShakeUrl}" alt="" decoding="async" />
+    </div>
+
+    <!-- 捏取的手：搖出命中籤後從上方滑入，指尖對準命中籤枝頂端（位置由 gesture-engine.js 量測後寫入
+         --target-x / --target-y）。手往上滑動觸發後，這隻手與籤枝一起上移再淡出。 -->
+    <div id="draw-pinch-clip" aria-hidden="true">
+      <div id="draw-pinch">
+        <img id="draw-pinch-img" src="${handsPinchUrl}" alt="" decoding="async" />
+      </div>
+    </div>
   </div>
 
   <!-- ============ 畫面二：捧筊與拋擲 ============ -->
@@ -135,6 +163,14 @@ export function renderTemplate() {
       <div class="hairline mt-4"></div>
       <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請讓雙手同時進入畫面即可擲筊</p>
       <button id="btn-click-bwa" class="btn-line mt-4 hidden" type="button">擲　筊</button>
+    </div>
+
+    <!-- 手部圖：進場顯示「捧著」，擲出時切成「拋擲」，筊杯動畫結束後淡出。兩張預先載入、只切 opacity。
+         #bwa-cup-anchor 標出「手心凹處」的位置（--cup-x/--cup-y），3D 筊杯閒置時就放在這裡（見 bwa-scene.js 的 setPalmAnchor）。 -->
+    <div id="bwa-hands" aria-hidden="true">
+      <img id="bwa-hands-cup" class="bwa-hands-img on" src="${handsCupUrl}" alt="" decoding="async" />
+      <img id="bwa-hands-toss" class="bwa-hands-img" src="${handsTossUrl}" alt="" decoding="async" />
+      <div id="bwa-cup-anchor"></div>
     </div>
 
     <!-- 筊杯以 Three.js 即時 3D 渲染（真實光照 + 陰影 + PBR 材質），取代先前的 2D 卡片翻轉 -->

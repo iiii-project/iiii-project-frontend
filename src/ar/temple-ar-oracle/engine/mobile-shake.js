@@ -15,17 +15,30 @@ export function createMobileShake({ els, state, callbacks }) {
   let active = false;
   let sawMotion = false;
   let watchdog = 0;
-   let lastVector = null;
+  let lastMagnitude = null;
   let lastHitAt = 0;
   let hits = 0;
-   const requiredHits = 5;
+  const requiredHits = 3;
 
-  async function requestAccess(){ return requestMotionAccess(); }
+  function supportsMotion(){ return 'DeviceMotionEvent' in window; }
+
+  async function requestAccess(){
+    if (!supportsMotion()) return false;
+    try {
+      if (typeof DeviceMotionEvent.requestPermission === 'function'){
+        const permission = await DeviceMotionEvent.requestPermission();
+        return permission === 'granted';
+      }
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
 
   function stop(){
     active = false;
     if (watchdog) { clearTimeout(watchdog); watchdog = 0; }
-     lastVector = null;
+    lastMagnitude = null;
     lastHitAt = 0;
     hits = 0;
     els.qianTongZone.classList.remove('shaking');
@@ -42,8 +55,6 @@ export function createMobileShake({ els, state, callbacks }) {
     els.qianStick.style.left = `${(state.selectedStickCx / 200) * 100}%`;
     els.qianStick.style.transform = 'translate(-50%, 0)';
     els.qianStick.classList.remove('hidden');
-    els.qianStick.classList.add('auto-draw');
-    state.drawSubState = 'revealing';
     els.drawHint.textContent = '感應完成，正在抽出籤條…';
     if (navigator.vibrate) navigator.vibrate([20, 45, 20]);
     setTimeout(() => callbacks.completeDraw(), 420);
@@ -57,19 +68,9 @@ export function createMobileShake({ els, state, callbacks }) {
       .some(value => Number.isFinite(value));
     const acceleration = hasRawAcceleration ? rawAcceleration : event.accelerationIncludingGravity;
     if (!acceleration) return;
-     const vector = {
-       x: Number.isFinite(acceleration.x) ? acceleration.x : 0,
-       y: Number.isFinite(acceleration.y) ? acceleration.y : 0,
-       z: Number.isFinite(acceleration.z) ? acceleration.z : 0,
-     };
-     // 不使用加速度總量差：直式／橫式握持會改變重力落在哪一軸，
-     // 只看總量容易在直式時完全沒有命中。三軸向量的變化量對裝置方向不敏感，
-     // raw acceleration 與 accelerationIncludingGravity 兩種資料都能使用。
-     const delta = lastVector
-       ? Math.hypot(vector.x - lastVector.x, vector.y - lastVector.y, vector.z - lastVector.z)
-       : 0;
+    const magnitude = Math.hypot(acceleration.x || 0, acceleration.y || 0, acceleration.z || 0);
     const now = performance.now();
-    if (lastVector && delta > 2.8 && now - lastHitAt > 220){
+    if (lastMagnitude !== null && Math.abs(magnitude - lastMagnitude) > 4.5 && now - lastHitAt > 280){
       hits += 1;
       lastHitAt = now;
       els.qianTongZone.classList.remove('shaking');
@@ -78,7 +79,7 @@ export function createMobileShake({ els, state, callbacks }) {
       els.drawHint.textContent = `感應到搖動 ${hits} / ${requiredHits}`;
       if (hits >= requiredHits) complete();
     }
-     lastVector = vector;
+    lastMagnitude = magnitude;
   }
 
   /* 看門狗：有些裝置（桌機瀏覽器、沒有加速度計的平板）即使拿得到權限，
@@ -100,24 +101,10 @@ export function createMobileShake({ els, state, callbacks }) {
   return { requestAccess, start, stop };
 }
 
-/* 可由頁面上的「搖動手機開始」按鈕直接呼叫，確保 iOS 的權限請求仍在
-   使用者手勢期間發生；真正建立 AR 元件後會把結果傳回同一個流程。 */
-async function requestMotionAccess(){
-  if (typeof window === 'undefined' || !('DeviceMotionEvent' in window)) return false;
-  try {
-    if (typeof DeviceMotionEvent.requestPermission === 'function'){
-      const permission = await DeviceMotionEvent.requestPermission();
-      return permission === 'granted';
-    }
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-// 裝置偵測：原始碼裡的判斷式（User-Agent + 觸控點數 + pointer:coarse媒體查詢 + 視窗寬度），
-// 完全原封不動搬遷，用來決定要走「攝影機手勢」還是「手機搖晃」路徑。
+// 裝置偵測：本案唯一目標裝置 Warpple JJ5 是 27 吋固定式 Android 機台，
+// 原本的 User-Agent 判斷（/Android|iPhone|.../）會把它誤判成手機、改走「拿起手機搖晃」，
+// 但機台沒辦法搖，所以一律視為非手機，走「攝影機手勢 → 失敗降級為點擊」的桌機流程。
+// 仍保留 requestedMode === "motion" 這條由宿主明確指定的搖晃路徑（見 flow-controller.js）。
 export function isMobileDevice(){
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-    || (navigator.maxTouchPoints > 1 && window.matchMedia('(pointer:coarse)').matches && window.innerWidth < 900);
+  return false;
 }
