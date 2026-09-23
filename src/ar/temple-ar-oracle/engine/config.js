@@ -16,9 +16,10 @@ export const CONFIG = {
   SHAKE_TARGET_DURATION_MS: 2400,
    SHAKE_RESET_GRACE_MS: 500,
 
-   // 去背人物只佔畫面中央一部分，讓神明實景保留足夠可見範圍。
+   // 橫屏去背人物只佔畫面中央一部分，讓神明實景保留足夠可見範圍。
    PERSON_SCALE: 0.48,
-   PERSON_SCALE_PORTRAIT: 0.44,
+   // 豎屏鏡頭框左右貼齊螢幕；實際高度由相機原始比例計算。
+   PERSON_SCALE_PORTRAIT: 1.0,
 
    SMOOTHING: 0.5,
    // 搖籤在低階裝置可能只有 8 FPS，降低專用平滑量才能保留快速換向；
