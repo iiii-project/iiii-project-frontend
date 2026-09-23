@@ -39,13 +39,14 @@
      再被 CSS 拉到滿螢幕（還要乘上 devicePixelRatio），畫面自然糊掉。
      這裡讓後備緩衝區跟著實際顯示尺寸走；只在尺寸真的變了才重設，
      因為指定 width/height 會清空畫布內容。 */
-   function viewportSize(){
-     const canvas = els.outputCanvas;
-     return {
-       width: canvas.clientWidth || window.innerWidth,
-       height: canvas.clientHeight || window.innerHeight,
-     };
-   }
+    function viewportSize(){
+      return {
+        // AR 座標系以整個瀏覽器視窗為基準，不受 canvas 尚未完成 layout
+        // 或宿主元件尺寸影響。
+        width: window.innerWidth,
+        height: window.innerHeight,
+      };
+    }
 
    function syncCanvasSize(){
      const canvas = els.outputCanvas;
