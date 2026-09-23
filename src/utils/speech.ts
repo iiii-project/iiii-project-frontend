@@ -63,7 +63,25 @@ export function useSpeechInput(options: UseSpeechInputOptions) {
   const hint = ref('')
 
   let recognition: SpeechRecognitionLike | null = null
-  let committed = ''
+  let baseText = ''
+  // SpeechRecognition 可能重送同一個 resultIndex 的 final 結果。
+  // 用 index 記錄並覆寫，而不是每次事件都 append，避免「你好」變成「你好你好」。
+  let finalSegments = new Map<number, string>()
+  let sessionId = 0
+
+  function finalText(): string {
+    let previous = ''
+    return [...finalSegments.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, text]) => {
+        // 少數瀏覽器會把同一段 final transcript 放進相鄰的兩個結果索引；
+        // 同句完全重複時只保留一次，但不影響真正不同的連續句子。
+        if (text === previous) return ''
+        previous = text
+        return text
+      })
+      .join('')
+  }
 
   function start() {
     const Ctor = getRecognitionCtor()
@@ -73,27 +91,31 @@ export function useSpeechInput(options: UseSpeechInputOptions) {
       return
     }
     hint.value = ''
-    committed = options.get()
+    if (recognition) return
+    const currentSession = ++sessionId
+    baseText = options.get()
+    finalSegments = new Map()
 
-    recognition = new Ctor()
-    recognition.lang = options.lang ?? 'zh-TW'
-    recognition.continuous = true
-    recognition.interimResults = true
+    const currentRecognition = new Ctor()
+    recognition = currentRecognition
+    currentRecognition.lang = options.lang ?? 'zh-TW'
+    currentRecognition.continuous = true
+    currentRecognition.interimResults = true
 
-    recognition.onresult = (event) => {
-      let settled = ''
+    currentRecognition.onresult = (event) => {
+      if (currentSession !== sessionId) return
       let pending = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
         const text = result[0]?.transcript ?? ''
-        if (result.isFinal) settled += text
+        if (result.isFinal) finalSegments.set(i, text)
         else pending += text
       }
-      if (settled) committed = (committed + settled).slice(0, options.maxLength)
-      options.set((committed + pending).slice(0, options.maxLength))
+      options.set((baseText + finalText() + pending).slice(0, options.maxLength))
     }
 
-    recognition.onerror = (event) => {
+    currentRecognition.onerror = (event) => {
+      if (currentSession !== sessionId) return
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         hint.value = '麥克風權限被拒絕，請在瀏覽器網址列開啟麥克風權限後再試。'
       } else if (event.error === 'no-speech') {
@@ -108,18 +130,20 @@ export function useSpeechInput(options: UseSpeechInputOptions) {
       }
     }
 
-    recognition.onend = () => {
+    currentRecognition.onend = () => {
+      if (currentSession !== sessionId) return
       isRecording.value = false
-      options.set(committed)
+      options.set((baseText + finalText()).slice(0, options.maxLength))
       recognition = null
     }
 
     try {
-      recognition.start()
+      currentRecognition.start()
       isRecording.value = true
       hint.value = '正在聆聽，說完再按一次停止。'
     } catch {
       isRecording.value = false
+      recognition = null
       hint.value = '無法啟動語音輸入，請直接打字。'
     }
   }
@@ -135,6 +159,7 @@ export function useSpeechInput(options: UseSpeechInputOptions) {
   }
 
   onBeforeUnmount(() => {
+    sessionId += 1
     recognition?.abort()
     recognition = null
   })
