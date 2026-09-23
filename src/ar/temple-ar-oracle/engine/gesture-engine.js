@@ -57,7 +57,7 @@
        : CONFIG.PERSON_SCALE;
    }
 
-   function personFrame(width, height){
+    function personFrame(width, height, sourceImage = els.video){
      const scale = personScale();
      const frame = {
        scale,
@@ -67,20 +67,22 @@
        height: scale * height,
      };
 
-     /* 豎屏相機若實際回傳橫向影像，不能用 cover 填滿直式框，
-        否則左右的人會被中央裁切。改成完整保留影像寬度並貼底，
-        讓左、右兩側的人都能留在畫面中。 */
-     const videoWidth = els.video?.videoWidth || els.video?.width || 0;
-     const videoHeight = els.video?.videoHeight || els.video?.height || 0;
-     if (height > width && videoWidth > 0 && videoHeight > 0){
-       const sourceRatio = videoWidth / videoHeight;
-       const frameRatio = frame.width / frame.height;
-       if (sourceRatio > frameRatio){
-         frame.height = frame.width / sourceRatio;
-         frame.y = height - frame.height;
-       }
-     }
-     return frame;
+      /* 豎屏不要把鏡頭畫面強行填滿框，否則人物可能被邊緣裁切。
+         先依來源比例把畫面縮進安全框，並貼齊底部；左右或上方的留白
+         由安全框保留，確保整個人都能留在畫面中。 */
+      const source = imageSize(sourceImage, 0, 0);
+      if (height > width && source.width > 0 && source.height > 0){
+        const sourceRatio = source.width / source.height;
+        const frameRatio = frame.width / frame.height;
+        if (sourceRatio > frameRatio){
+          frame.height = frame.width / sourceRatio;
+          frame.y = height - frame.height;
+        } else if (sourceRatio < frameRatio){
+          frame.width = frame.height * sourceRatio;
+          frame.x = (width - frame.width) / 2;
+        }
+      }
+      return frame;
    }
 
    /* 去背人物使用畫布中央的縮小區域繪製；座標提示也必須使用同一個
@@ -101,27 +103,32 @@
      };
    }
 
-   /* Canvas 的 CSS object-fit 不會替 canvas 內部的 bitmap 保持比例；
-      drawImage 若直接塞滿豎屏畫布，來源是橫屏時仍會被拉伸。因此這裡
-      先用 object-fit: cover 的規則計算來源裁切區，再繪製到人物縮小區域。 */
-   function drawCover(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
-     const source = imageSize(image, fallbackWidth, fallbackHeight);
-     const targetRatio = dw / dh;
-     const sourceRatio = source.width / source.height;
-     let sx = 0;
-     let sy = 0;
-     let sw = source.width;
-     let sh = source.height;
-     if (sourceRatio > targetRatio){
-       sw = source.height * targetRatio;
-       sx = (source.width - sw) / 2;
-     } else if (sourceRatio < targetRatio){
-       sh = source.width / targetRatio;
-       sy = (source.height - sh) / 2;
-     }
-     // 呼叫端已將 canvas 水平翻轉，所以 destination x 必須從右側起算。
-     ctx.drawImage(image, sx, sy, sw, sh, -(dx + dw), dy, dw, dh);
-   }
+    /* Canvas 的 CSS object-fit 不會替 canvas 內部的 bitmap 保持比例；
+       這裡只把完整來源影像繪製到 personFrame，不做 source crop，
+       讓鏡頭與去背遮罩使用完全相同的 contain 範圍。 */
+    function drawContained(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
+      const source = imageSize(image, fallbackWidth, fallbackHeight);
+      // 呼叫端已將 canvas 水平翻轉，所以 destination x 必須從右側起算。
+      ctx.drawImage(image, 0, 0, source.width, source.height, -(dx + dw), dy, dw, dh);
+    }
+    function drawCover(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
+      const source = imageSize(image, fallbackWidth, fallbackHeight);
+      const targetRatio = dw / dh;
+      const sourceRatio = source.width / source.height;
+      let sx = 0;
+      let sy = 0;
+      let sw = source.width;
+      let sh = source.height;
+      if (sourceRatio > targetRatio){
+        sw = source.height * targetRatio;
+        sx = (source.width - sw) / 2;
+      } else if (sourceRatio < targetRatio){
+        sh = source.width / targetRatio;
+        sy = (source.height - sh) / 2;
+      }
+      // 橫屏維持原本的滿版構圖；只有豎屏使用 contain，避免裁切人物。
+      ctx.drawImage(image, sx, sy, sw, sh, -(dx + dw), dy, dw, dh);
+    }
    function onResults(results){
     // 過場影片播放中：整格跳過，MediaPipe 的繪製與判斷都是重負載
     if (state.transitionActive) return;
@@ -135,19 +142,20 @@
       outCtx.restore();
       return;
     }
-     const frame = personFrame(cw, ch);
+      const frame = personFrame(cw, ch, results.image);
      const drawW = frame.width;
      const drawH = frame.height;
-     const drawX = frame.x;
-     const drawY = frame.y;
-     outCtx.scale(-1,1);
+      const drawX = frame.x;
+      const drawY = frame.y;
+      const drawFrame = ch > cw ? drawContained : drawCover;
+      outCtx.scale(-1,1);
      if (state.segmentationMask){
        /* 先畫鏡像鏡頭，再用 destination-in 套上人像遮罩；這個合成順序
           在不同瀏覽器的 Canvas 實作上比 source-in 更穩定。遮罩外部保持透明，
           底下的神明實景就能透出來。 */
-        drawCover(outCtx, results.image, drawX, drawY, drawW, drawH, cw, ch);
-        outCtx.globalCompositeOperation = 'destination-in';
-        drawCover(outCtx, state.segmentationMask, drawX, drawY, drawW, drawH, cw, ch);
+         drawFrame(outCtx, results.image, drawX, drawY, drawW, drawH, cw, ch);
+         outCtx.globalCompositeOperation = 'destination-in';
+         drawFrame(outCtx, state.segmentationMask, drawX, drawY, drawW, drawH, cw, ch);
       outCtx.globalCompositeOperation = 'source-over';
     }
     outCtx.restore();
