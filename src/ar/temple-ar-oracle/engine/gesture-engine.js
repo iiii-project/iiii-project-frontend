@@ -17,9 +17,11 @@
    ========================================================================= */
  import { getPerformanceProfile } from '@/utils/performance';
 
-  export function createGestureEngine({ els, state, config: CONFIG, rootEl, callbacks }) {
-   const outCtx = els.outputCanvas.getContext('2d');
-   const profile = getPerformanceProfile();
+   export function createGestureEngine({ els, state, config: CONFIG, rootEl, callbacks }) {
+    const outCtx = els.outputCanvas.getContext('2d');
+    const profile = getPerformanceProfile();
+    let personLayerCanvas = null;
+    let personLayerCtx = null;
 
    const shake = { completed:false, active:false, startedAt:0 };
 
@@ -37,11 +39,20 @@
      再被 CSS 拉到滿螢幕（還要乘上 devicePixelRatio），畫面自然糊掉。
      這裡讓後備緩衝區跟著實際顯示尺寸走；只在尺寸真的變了才重設，
      因為指定 width/height 會清空畫布內容。 */
+   function viewportSize(){
+     const canvas = els.outputCanvas;
+     return {
+       width: canvas.clientWidth || window.innerWidth,
+       height: canvas.clientHeight || window.innerHeight,
+     };
+   }
+
    function syncCanvasSize(){
-    const canvas = els.outputCanvas;
-     const dpr = profile.canvasPixelRatio;
-    const w = Math.round((canvas.clientWidth || window.innerWidth) * dpr);
-    const h = Math.round((canvas.clientHeight || window.innerHeight) * dpr);
+     const canvas = els.outputCanvas;
+      const dpr = profile.canvasPixelRatio;
+     const viewport = viewportSize();
+     const w = Math.round(viewport.width * dpr);
+     const h = Math.round(viewport.height * dpr);
     if (!w || !h) return;
      if (canvas.width !== w || canvas.height !== h){
        canvas.width = w;
@@ -64,10 +75,21 @@
       return frame;
     }
 
-    /* 座標提示使用完整鏡頭框；鏡頭框含來源比例造成的 contain 留白，
-       因此手部位置與實際去背人物保持一致。 */
+    function personFrame(width, height, sourceImage = els.video){
+      const camera = cameraFrame(width, height, sourceImage);
+      const scale = CONFIG.PERSON_SCALE;
+      return {
+        x: camera.x + (camera.width - camera.width * scale) / 2,
+        y: camera.y + camera.height - camera.height * scale,
+        width: camera.width * scale,
+        height: camera.height * scale,
+      };
+    }
+
+    /* 座標提示使用縮小後的去背人物框，確保標記與人物保持一致。 */
     function toDisplayPoint(point, alreadyMirrored = false){
-      const frame = cameraFrame(window.innerWidth, window.innerHeight);
+      const viewport = viewportSize();
+      const frame = personFrame(viewport.width, viewport.height);
      const x = alreadyMirrored ? point.x : 1 - point.x;
      return {
        x: frame.x + x * frame.width,
@@ -75,12 +97,24 @@
      };
    }
 
-   function imageSize(image, fallbackWidth, fallbackHeight){
-     return {
-       width: image?.videoWidth || image?.naturalWidth || image?.width || fallbackWidth,
-       height: image?.videoHeight || image?.naturalHeight || image?.height || fallbackHeight,
-     };
-   }
+    function imageSize(image, fallbackWidth, fallbackHeight){
+      return {
+        width: image?.videoWidth || image?.naturalWidth || image?.width || fallbackWidth,
+        height: image?.videoHeight || image?.naturalHeight || image?.height || fallbackHeight,
+      };
+    }
+
+    function ensurePersonLayer(width, height){
+      if (!personLayerCanvas){
+        personLayerCanvas = document.createElement('canvas');
+        personLayerCtx = personLayerCanvas.getContext('2d');
+      }
+      if (personLayerCanvas.width !== width || personLayerCanvas.height !== height){
+        personLayerCanvas.width = width;
+        personLayerCanvas.height = height;
+      }
+      return personLayerCtx;
+    }
 
      /* Canvas 的 CSS object-fit 不會替 canvas 內部的 bitmap 保持比例；
         這裡把完整來源影像 contain 到全螢幕鏡頭框，不做 source crop，
@@ -103,23 +137,21 @@
       outCtx.restore();
       return;
     }
-       const frame = cameraFrame(cw, ch, results.image);
-     const drawW = frame.width;
-     const drawH = frame.height;
-      const drawX = frame.x;
-      const drawY = frame.y;
-      const drawFrame = drawContained;
-      outCtx.scale(-1,1);
-     if (state.segmentationMask){
-       /* 先畫鏡像鏡頭，再用 destination-in 套上人像遮罩；這個合成順序
-          在不同瀏覽器的 Canvas 實作上比 source-in 更穩定。遮罩外部保持透明，
-          底下的神明實景就能透出來。 */
-         drawFrame(outCtx, results.image, drawX, drawY, drawW, drawH, cw, ch);
-         outCtx.globalCompositeOperation = 'destination-in';
-         drawFrame(outCtx, state.segmentationMask, drawX, drawY, drawW, drawH, cw, ch);
-      outCtx.globalCompositeOperation = 'source-over';
-    }
-    outCtx.restore();
+       const camera = cameraFrame(cw, ch, results.image);
+       const person = personFrame(cw, ch, results.image);
+       const layerCtx = ensurePersonLayer(cw, ch);
+       layerCtx.clearRect(0, 0, cw, ch);
+       layerCtx.save();
+       layerCtx.scale(-1, 1);
+       /* 先在全螢幕鏡頭層完成去背，再把已去背的人物層縮小。
+          不讓小人物框先限制來源影像，避免頭部與左右身體被框邊截掉。 */
+       drawContained(layerCtx, results.image, camera.x, camera.y, camera.width, camera.height, cw, ch);
+       layerCtx.globalCompositeOperation = 'destination-in';
+       drawContained(layerCtx, state.segmentationMask, camera.x, camera.y, camera.width, camera.height, cw, ch);
+       layerCtx.restore();
+       layerCtx.globalCompositeOperation = 'source-over';
+       outCtx.drawImage(personLayerCanvas, 0, 0, cw, ch, person.x, person.y, person.width, person.height);
+     outCtx.restore();
 
     const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
 
@@ -179,8 +211,9 @@
   function updateIncenseFollow(point){
     // MediaPipe coordinates are unmirrored; match the mirrored camera canvas for the AR object.
      const displayPoint = toDisplayPoint(point);
-     const targetX = displayPoint.x / window.innerWidth;
-     const targetY = Math.min(0.82, Math.max(0.28, displayPoint.y / window.innerHeight + CONFIG.INCENSE_FOLLOW_Y_OFFSET));
+     const viewport = viewportSize();
+     const targetX = displayPoint.x / viewport.width;
+     const targetY = Math.min(0.82, Math.max(0.28, displayPoint.y / viewport.height + CONFIG.INCENSE_FOLLOW_Y_OFFSET));
     const ease = CONFIG.INCENSE_FOLLOW_EASE;
     const dx = targetX - incense.visualX;
     incense.visualX += dx * ease;
