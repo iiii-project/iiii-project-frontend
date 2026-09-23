@@ -6,10 +6,7 @@
    已移除，改由外部（新前端）透過 attribute 傳入 question/category。
    ========================================================================= */
 export const CONFIG = {
-   // 透明相機框永遠使用整個 viewport；原始鏡頭不會直接覆蓋神明背景。
-   CAMERA_FRAME_SCALE: 1.0,
-   // 去背人物在透明全螢幕畫布內維持固定小尺寸。
-   PERSON_SCALE: 0.48,
+   // 鏡頭來源以完整比例放入全螢幕透明畫布，再套用人物去背遮罩。
   DRAW_REQUIRED_HANDS: 2,
   DRAW_HAND_HOLD_MS: 2000,
 

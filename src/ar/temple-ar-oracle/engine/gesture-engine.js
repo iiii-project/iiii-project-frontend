@@ -49,52 +49,25 @@
      }
    }
 
-   function personScale(){
-      return CONFIG.PERSON_SCALE;
-   }
-
-   function cameraFrame(width, height){
-     return {
-       x: 0,
-       y: 0,
-       width: width * CONFIG.CAMERA_FRAME_SCALE,
-       height: height * CONFIG.CAMERA_FRAME_SCALE,
-     };
-   }
-
-    function personFrame(width, height, sourceImage = els.video){
-      const camera = cameraFrame(width, height);
-      const scale = personScale();
-      const frame = {
-        scale,
-        x: camera.x + ((1 - scale) / 2) * camera.width,
-        y: camera.y + (1 - scale) * camera.height,
-        width: scale * camera.width,
-        height: scale * camera.height,
-      };
-
-       /* 鏡頭畫布本身永遠是全螢幕；人物只使用畫布內的縮小安全框。
-          不論橫屏或豎屏，都依來源比例 contain 到安全框並貼齊底部，
-          讓整個人保留在畫面內，不因填滿而被裁切。 */
-      const source = imageSize(sourceImage, 0, 0);
-      if (source.width > 0 && source.height > 0){
-        const sourceRatio = source.width / source.height;
-        const frameRatio = frame.width / frame.height;
-        if (sourceRatio > frameRatio){
-          frame.height = frame.width / sourceRatio;
-           frame.y = camera.y + camera.height - frame.height;
-        } else if (sourceRatio < frameRatio){
-          frame.width = frame.height * sourceRatio;
-           frame.x = camera.x + (camera.width - frame.width) / 2;
-        }
+    function cameraFrame(width, height, sourceImage = els.video){
+      const frame = { x: 0, y: 0, width, height };
+      const source = imageSize(sourceImage, width, height);
+      const sourceRatio = source.width / source.height;
+      const frameRatio = frame.width / frame.height;
+      if (sourceRatio > frameRatio){
+        frame.height = frame.width / sourceRatio;
+        frame.y = (height - frame.height) / 2;
+      } else if (sourceRatio < frameRatio){
+        frame.width = frame.height * sourceRatio;
+        frame.x = (width - frame.width) / 2;
       }
       return frame;
-   }
+    }
 
-   /* 去背人物使用畫布中央的縮小區域繪製；座標提示也必須使用同一個
-      inset/scale，否則縮小人物後提示點會留在原本的全螢幕位置。 */
-   function toDisplayPoint(point, alreadyMirrored = false){
-     const frame = personFrame(window.innerWidth, window.innerHeight);
+    /* 座標提示使用完整鏡頭框；鏡頭框含來源比例造成的 contain 留白，
+       因此手部位置與實際去背人物保持一致。 */
+    function toDisplayPoint(point, alreadyMirrored = false){
+      const frame = cameraFrame(window.innerWidth, window.innerHeight);
      const x = alreadyMirrored ? point.x : 1 - point.x;
      return {
        x: frame.x + x * frame.width,
@@ -110,8 +83,8 @@
    }
 
      /* Canvas 的 CSS object-fit 不會替 canvas 內部的 bitmap 保持比例；
-        這裡只把完整來源影像繪製到人物安全框，不做 source crop，
-        讓鏡頭與去背遮罩使用完全相同的 contain 範圍。 */
+        這裡把完整來源影像 contain 到全螢幕鏡頭框，不做 source crop，
+        讓鏡頭與去背遮罩使用完全相同的範圍。 */
     function drawContained(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
       const source = imageSize(image, fallbackWidth, fallbackHeight);
       // 呼叫端已將 canvas 水平翻轉，所以 destination x 必須從右側起算。
@@ -130,7 +103,7 @@
       outCtx.restore();
       return;
     }
-      const frame = personFrame(cw, ch, results.image);
+       const frame = cameraFrame(cw, ch, results.image);
      const drawW = frame.width;
      const drawH = frame.height;
       const drawX = frame.x;
