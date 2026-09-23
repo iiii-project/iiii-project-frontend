@@ -60,19 +60,9 @@
      }
    }
 
-    function cameraFrame(width, height, sourceImage = els.video){
-      const frame = { x: 0, y: 0, width, height };
-      const source = imageSize(sourceImage, width, height);
-      const sourceRatio = source.width / source.height;
-      const frameRatio = frame.width / frame.height;
-      if (sourceRatio > frameRatio){
-        frame.height = frame.width / sourceRatio;
-        frame.y = (height - frame.height) / 2;
-      } else if (sourceRatio < frameRatio){
-        frame.width = frame.height * sourceRatio;
-        frame.x = (width - frame.width) / 2;
-      }
-      return frame;
+     function cameraFrame(width, height){
+       // 相機／MediaPipe 座標系固定使用完整輸出畫布，不因來源影像比例產生留白。
+       return { x: 0, y: 0, width, height };
     }
 
     function personFrame(width, height){
@@ -140,7 +130,7 @@
       outCtx.restore();
       return;
     }
-       const camera = cameraFrame(cw, ch, results.image);
+        const camera = cameraFrame(cw, ch);
         const person = personFrame(cw, ch);
        const layerCtx = ensurePersonLayer(cw, ch);
        layerCtx.clearRect(0, 0, cw, ch);
