@@ -15,17 +15,17 @@ export function createMobileShake({ els, state, callbacks }) {
   let active = false;
   let sawMotion = false;
   let watchdog = 0;
-  let lastMagnitude = null;
+   let lastVector = null;
   let lastHitAt = 0;
   let hits = 0;
-  const requiredHits = 3;
+   const requiredHits = 5;
 
   async function requestAccess(){ return requestMotionAccess(); }
 
   function stop(){
     active = false;
     if (watchdog) { clearTimeout(watchdog); watchdog = 0; }
-    lastMagnitude = null;
+     lastVector = null;
     lastHitAt = 0;
     hits = 0;
     els.qianTongZone.classList.remove('shaking');
@@ -57,9 +57,19 @@ export function createMobileShake({ els, state, callbacks }) {
       .some(value => Number.isFinite(value));
     const acceleration = hasRawAcceleration ? rawAcceleration : event.accelerationIncludingGravity;
     if (!acceleration) return;
-    const magnitude = Math.hypot(acceleration.x || 0, acceleration.y || 0, acceleration.z || 0);
+     const vector = {
+       x: Number.isFinite(acceleration.x) ? acceleration.x : 0,
+       y: Number.isFinite(acceleration.y) ? acceleration.y : 0,
+       z: Number.isFinite(acceleration.z) ? acceleration.z : 0,
+     };
+     // 不使用加速度總量差：直式／橫式握持會改變重力落在哪一軸，
+     // 只看總量容易在直式時完全沒有命中。三軸向量的變化量對裝置方向不敏感，
+     // raw acceleration 與 accelerationIncludingGravity 兩種資料都能使用。
+     const delta = lastVector
+       ? Math.hypot(vector.x - lastVector.x, vector.y - lastVector.y, vector.z - lastVector.z)
+       : 0;
     const now = performance.now();
-    if (lastMagnitude !== null && Math.abs(magnitude - lastMagnitude) > 4.5 && now - lastHitAt > 280){
+    if (lastVector && delta > 2.8 && now - lastHitAt > 220){
       hits += 1;
       lastHitAt = now;
       els.qianTongZone.classList.remove('shaking');
@@ -68,7 +78,7 @@ export function createMobileShake({ els, state, callbacks }) {
       els.drawHint.textContent = `感應到搖動 ${hits} / ${requiredHits}`;
       if (hits >= requiredHits) complete();
     }
-    lastMagnitude = magnitude;
+     lastVector = vector;
   }
 
   /* 看門狗：有些裝置（桌機瀏覽器、沒有加速度計的平板）即使拿得到權限，

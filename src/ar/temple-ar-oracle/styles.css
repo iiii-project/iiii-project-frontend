@@ -300,6 +300,12 @@
 /* 直式螢幕（手機）比例本來就吻合，讓它鋪滿裁掉極少的邊 */
 @media (max-aspect-ratio: 3/4){
   #oracle-transition-video{ object-fit:cover; }
+
+  /* 直式畫面保留足夠寬度給籤筒與手部動作，避免 24vw 在手機上縮成
+     只有八、九十像素，使用者看得到但不好對準。 */
+  #qian-tong-zone{ width:min(48vw, 210px); height:min(42vh, 360px); }
+  .ritual-card{ max-width:calc(100vw - 28px); padding:0.9rem 1.25rem; }
+  .ritual-title{ font-size:1.8rem; }
 }
 
 /* 换成非預設影片時（見 index.js 的 transition-src / data-fill），不受上面

@@ -268,6 +268,12 @@ class TempleArOracle extends HTMLElement {
         let inferenceEnabledAt = Number.POSITIVE_INFINITY;
         let hasSegmentationMask = false;
 
+       // Camera Utils 的 width/height 會影響手機實際送進 MediaPipe 的影像方向。
+       // 直式時交換尺寸，避免瀏覽器以橫式影像裁切後再交給模型，造成上下
+       // 搖動在畫面座標裡被壓縮，尤其低階 Android 更明顯。
+       const portrait = window.innerHeight > window.innerWidth;
+       const cameraWidth = portrait ? profile.arCameraHeight : profile.arCameraWidth;
+       const cameraHeight = portrait ? profile.arCameraWidth : profile.arCameraHeight;
        const camera = new Camera(this._els.video, {
           onFrame: async () => {
             const now = performance.now();
@@ -299,8 +305,8 @@ class TempleArOracle extends HTMLElement {
               inferenceBusy = false;
             }
          },
-         width: profile.arCameraWidth,
-         height: profile.arCameraHeight,
+          width: cameraWidth,
+          height: cameraHeight,
       });
       this._camera = camera;
 

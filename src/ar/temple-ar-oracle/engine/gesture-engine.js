@@ -38,9 +38,9 @@
 
   function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
 
-  function smoothLandmarks(landmarks){
+   function smoothLandmarks(landmarks, smoothing = CONFIG.SMOOTHING){
     if (!smoothed){ smoothed = landmarks.map(p=>({...p})); return smoothed; }
-    const s = CONFIG.SMOOTHING;
+    const s = smoothing;
     smoothed = landmarks.map((p,i)=>({ x: smoothed[i].x*s + p.x*(1-s), y: smoothed[i].y*s + p.y*(1-s), z:p.z }));
     return smoothed;
   }
@@ -126,7 +126,7 @@
 
      if (state.current === 'draw'){
        if (state.drawSubState === 'shake'){
-         const lm = smoothLandmarks(rawLm);
+          const lm = smoothLandmarks(rawLm, CONFIG.SHAKE_SMOOTHING);
          const wrist = lm[0];
          updateFistIndicator(wrist, isFist(lm)); hideFingertipUI();
          handleShakeGesture(wrist, isFist(lm));
@@ -261,10 +261,19 @@
       els.qianTongZone.classList.add('shaking'); els.sticksGroup.classList.add('is-shaking'); els.shakeRing.classList.add('on');
       return;
     }
+    // MediaPipe 的 y 軸永遠沿著「影像」垂直方向；相機在直式裝置使用直式
+    // constraint 後，仍直接使用正規化 y，不把螢幕寬高混進來，避免直式時
+    // 以錯誤比例換算而吃掉小幅度的上下動作。
     const velocity = wrist.y - shake.lastY;
     let sign = 0;
     if (velocity > CONFIG.SHAKE_VELOCITY_DEADZONE) sign = 1; else if (velocity < -CONFIG.SHAKE_VELOCITY_DEADZONE) sign = -1;
-    if (sign !== 0){ if (shake.lastVelocitySign !== 0 && sign !== shake.lastVelocitySign) shake.oscillations++; shake.lastVelocitySign = sign; }
+    if (sign !== 0){
+      // 第一次有效移動也算一下；之後每次換向再加一，使用者實際搖五下
+      // 就會得到五次進度，不再需要額外做第六個反向動作。
+      if (shake.lastVelocitySign === 0) shake.oscillations = 1;
+      else if (sign !== shake.lastVelocitySign) shake.oscillations++;
+      shake.lastVelocitySign = sign;
+    }
     shake.lastY = wrist.y;
     const elapsed = now - shake.startTime;
     const progress = Math.min(1, Math.max(elapsed/CONFIG.SHAKE_TARGET_DURATION_MS, shake.oscillations/CONFIG.SHAKE_REQUIRED_OSCILLATIONS));

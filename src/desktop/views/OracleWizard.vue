@@ -1555,6 +1555,38 @@ body.ar-ritual-open { overflow: hidden; }
   .btn:active, .choice-row:active { transform: scale(0.99); }
 }
 
+/* 1920×1080 是桌面展示的基準尺寸：縮小外框與文字的留白，讓分類、
+   問題與確認內容在一次視窗內完整看見，不必依賴瀏覽器縮放。 */
+@media (min-width: 1440px) and (min-height: 800px) {
+  .oracle-page { padding: 0 24px 28px; }
+  .oracle-bar { max-width: 1120px; padding: 16px 0 6px; }
+  .link-btn { font-size: 16px; }
+  .steps { gap: 6px 18px; }
+  .steps li { font-size: 15px; gap: 7px; }
+  .steps i { width: 26px; height: 26px; font-size: 13px; }
+  .oracle-main { max-width: 780px; }
+  .oracle-main.wide { max-width: 1160px; }
+  .panel { padding: 28px 32px 26px; border-radius: 18px; }
+  .kicker { margin-bottom: 8px; font-size: 13px; }
+  .panel h2 { margin-bottom: 7px; font-size: clamp(21px, 2.2vw, 27px); }
+  .lede { margin-bottom: 18px; font-size: 13px; line-height: 1.75; }
+  .choice-list { gap: 9px; }
+  .choice-row { min-height: 68px; gap: 11px; padding: 0.25rem 0.9rem; border-radius: 12px; }
+  .choice-row.selected { padding: calc(0.7rem - 1px) calc(0.9rem - 1px); }
+  .choice-icon { width: 54px; height: 54px; }
+  .choice-label { font-size: 16px; }
+  .choice-desc { margin-top: 1px; font-size: 12px; }
+  .choice-check { width: 24px; height: 24px; font-size: 13px; }
+  .ask { min-height: 118px; padding: 13px 16px; font-size: 15px; line-height: 1.7; }
+  .ask-tools { margin-top: 8px; }
+  .mic { padding: 8px 18px 8px 13px; }
+  .row { gap: 10px; margin-top: 18px; }
+  .btn { padding: 13px 32px; font-size: 15px; }
+  .summary > div { padding: 0.55rem 0.2rem; }
+  .summary dt { font-size: 13px; }
+  .summary dd { font-size: 15px; line-height: 1.65; }
+}
+
 @media (max-width: 640px) {
   /* 手機只留一層 14px 的邊界，內容才不會被三層 padding 擠成細長條 */
   .oracle-page {
