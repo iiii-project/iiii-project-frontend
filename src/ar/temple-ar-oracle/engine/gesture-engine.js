@@ -75,15 +75,24 @@
        : CONFIG.PERSON_SCALE;
    }
 
+   function personLayout(){
+     const scale = personScale();
+     return {
+       scale,
+       // 水平置中，垂直貼齊底部，不再上下留出同樣的空白。
+       insetX: (1 - scale) / 2,
+       insetY: 1 - scale,
+     };
+   }
+
    /* 去背人物使用畫布中央的縮小區域繪製；座標提示也必須使用同一個
       inset/scale，否則縮小人物後提示點會留在原本的全螢幕位置。 */
    function toDisplayPoint(point, alreadyMirrored = false){
-     const scale = personScale();
-     const inset = (1 - scale) / 2;
+     const { scale, insetX, insetY } = personLayout();
      const x = alreadyMirrored ? point.x : 1 - point.x;
      return {
-       x: (inset + x * scale) * window.innerWidth,
-       y: (inset + point.y * scale) * window.innerHeight,
+       x: (insetX + x * scale) * window.innerWidth,
+       y: (insetY + point.y * scale) * window.innerHeight,
      };
    }
 
@@ -128,12 +137,11 @@
       outCtx.restore();
       return;
     }
-     const scale = personScale();
-     const inset = (1 - scale) / 2;
+     const { scale, insetX, insetY } = personLayout();
      const drawW = cw * scale;
      const drawH = ch * scale;
-     const drawX = inset * cw;
-     const drawY = inset * ch;
+     const drawX = insetX * cw;
+     const drawY = insetY * ch;
      outCtx.scale(-1,1);
      if (state.segmentationMask){
        /* 先畫鏡像鏡頭，再用 destination-in 套上人像遮罩；這個合成順序
