@@ -75,24 +75,40 @@
        : CONFIG.PERSON_SCALE;
    }
 
-   function personLayout(){
+   function personFrame(width, height){
      const scale = personScale();
-     return {
+     const frame = {
        scale,
-       // 水平置中，垂直貼齊底部，不再上下留出同樣的空白。
-       insetX: (1 - scale) / 2,
-       insetY: 1 - scale,
+       x: ((1 - scale) / 2) * width,
+       y: (1 - scale) * height,
+       width: scale * width,
+       height: scale * height,
      };
+
+     /* 豎屏相機若實際回傳橫向影像，不能用 cover 填滿直式框，
+        否則左右的人會被中央裁切。改成完整保留影像寬度並貼底，
+        讓左、右兩側的人都能留在畫面中。 */
+     const videoWidth = els.video?.videoWidth || els.video?.width || 0;
+     const videoHeight = els.video?.videoHeight || els.video?.height || 0;
+     if (height > width && videoWidth > 0 && videoHeight > 0){
+       const sourceRatio = videoWidth / videoHeight;
+       const frameRatio = frame.width / frame.height;
+       if (sourceRatio > frameRatio){
+         frame.height = frame.width / sourceRatio;
+         frame.y = height - frame.height;
+       }
+     }
+     return frame;
    }
 
    /* 去背人物使用畫布中央的縮小區域繪製；座標提示也必須使用同一個
       inset/scale，否則縮小人物後提示點會留在原本的全螢幕位置。 */
    function toDisplayPoint(point, alreadyMirrored = false){
-     const { scale, insetX, insetY } = personLayout();
+     const frame = personFrame(window.innerWidth, window.innerHeight);
      const x = alreadyMirrored ? point.x : 1 - point.x;
      return {
-       x: (insetX + x * scale) * window.innerWidth,
-       y: (insetY + point.y * scale) * window.innerHeight,
+       x: frame.x + x * frame.width,
+       y: frame.y + point.y * frame.height,
      };
    }
 
@@ -137,11 +153,11 @@
       outCtx.restore();
       return;
     }
-     const { scale, insetX, insetY } = personLayout();
-     const drawW = cw * scale;
-     const drawH = ch * scale;
-     const drawX = insetX * cw;
-     const drawY = insetY * ch;
+     const frame = personFrame(cw, ch);
+     const drawW = frame.width;
+     const drawH = frame.height;
+     const drawX = frame.x;
+     const drawY = frame.y;
      outCtx.scale(-1,1);
      if (state.segmentationMask){
        /* 先畫鏡像鏡頭，再用 destination-in 套上人像遮罩；這個合成順序
