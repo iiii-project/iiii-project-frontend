@@ -6,10 +6,10 @@
    已移除，改由外部（新前端）透過 attribute 傳入 question/category。
    ========================================================================= */
 export const CONFIG = {
-   // 橫屏去背人物只佔畫面中央一部分，讓神明實景保留足夠可見範圍。
+   // 透明相機框永遠使用整個 viewport；原始鏡頭不會直接覆蓋神明背景。
+   CAMERA_FRAME_SCALE: 1.0,
+   // 去背人物在透明全螢幕畫布內維持固定小尺寸。
    PERSON_SCALE: 0.48,
-  // 豎屏將整個鏡頭畫面縮小並保留安全邊界，避免人物被畫面邊緣裁切。
-  PERSON_SCALE_PORTRAIT: 0.82,
   DRAW_REQUIRED_HANDS: 2,
   DRAW_HAND_HOLD_MS: 2000,
 

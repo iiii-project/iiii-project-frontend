@@ -50,20 +50,28 @@
    }
 
    function personScale(){
-     return window.innerHeight > window.innerWidth
-       ? CONFIG.PERSON_SCALE_PORTRAIT
-       : CONFIG.PERSON_SCALE;
+      return CONFIG.PERSON_SCALE;
+   }
+
+   function cameraFrame(width, height){
+     return {
+       x: 0,
+       y: 0,
+       width: width * CONFIG.CAMERA_FRAME_SCALE,
+       height: height * CONFIG.CAMERA_FRAME_SCALE,
+     };
    }
 
     function personFrame(width, height, sourceImage = els.video){
-     const scale = personScale();
-     const frame = {
-       scale,
-       x: ((1 - scale) / 2) * width,
-       y: (1 - scale) * height,
-       width: scale * width,
-       height: scale * height,
-     };
+      const camera = cameraFrame(width, height);
+      const scale = personScale();
+      const frame = {
+        scale,
+        x: camera.x + ((1 - scale) / 2) * camera.width,
+        y: camera.y + (1 - scale) * camera.height,
+        width: scale * camera.width,
+        height: scale * camera.height,
+      };
 
        /* 鏡頭畫布本身永遠是全螢幕；人物只使用畫布內的縮小安全框。
           不論橫屏或豎屏，都依來源比例 contain 到安全框並貼齊底部，
@@ -74,10 +82,10 @@
         const frameRatio = frame.width / frame.height;
         if (sourceRatio > frameRatio){
           frame.height = frame.width / sourceRatio;
-          frame.y = height - frame.height;
+           frame.y = camera.y + camera.height - frame.height;
         } else if (sourceRatio < frameRatio){
           frame.width = frame.height * sourceRatio;
-          frame.x = (width - frame.width) / 2;
+           frame.x = camera.x + (camera.width - frame.width) / 2;
         }
       }
       return frame;
