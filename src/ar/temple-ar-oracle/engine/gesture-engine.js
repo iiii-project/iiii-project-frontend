@@ -80,7 +80,8 @@
       const scale = CONFIG.PERSON_SCALE;
       return {
         x: camera.x + (camera.width - camera.width * scale) / 2,
-        y: camera.y + camera.height - camera.height * scale,
+        // 人物底部固定貼齊整個 viewport，不受來源影像 contain 留白影響。
+        y: height - camera.height * scale,
         width: camera.width * scale,
         height: camera.height * scale,
       };
@@ -150,7 +151,13 @@
        drawContained(layerCtx, state.segmentationMask, camera.x, camera.y, camera.width, camera.height, cw, ch);
        layerCtx.restore();
        layerCtx.globalCompositeOperation = 'source-over';
-       outCtx.drawImage(personLayerCanvas, 0, 0, cw, ch, person.x, person.y, person.width, person.height);
+       // 只縮放實際的鏡頭來源框，不把全螢幕透明留白一起縮放，
+       // 否則人物會發生位置偏移與橫豎比例扭曲。
+       outCtx.drawImage(
+         personLayerCanvas,
+         camera.x, camera.y, camera.width, camera.height,
+         person.x, person.y, person.width, person.height
+       );
      outCtx.restore();
 
     const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
