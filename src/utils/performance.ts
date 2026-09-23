@@ -18,7 +18,7 @@ interface ExtendedNavigator extends Navigator {
 
 export function getPerformanceProfile(): PerformanceProfile {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-    return { isLowEnd: false, canvasPixelRatio: 1.5, live2dFps: 45, arInferenceFps: 12, arCameraWidth: 640, arCameraHeight: 480, particleFps: 30, threeFps: 45, threePixelRatio: 1.5 }
+    return { isLowEnd: false, canvasPixelRatio: 1.25, live2dFps: 30, arInferenceFps: 12, arCameraWidth: 640, arCameraHeight: 480, particleFps: 30, threeFps: 45, threePixelRatio: 1.5 }
   }
 
   const nav = navigator as ExtendedNavigator
@@ -39,7 +39,7 @@ export function getPerformanceProfile(): PerformanceProfile {
     return { isLowEnd: true, canvasPixelRatio: 1, live2dFps: 30, arInferenceFps: 8, arCameraWidth: 480, arCameraHeight: 360, particleFps: 20, threeFps: 30, threePixelRatio: 1 }
   }
 
-  return { isLowEnd: false, canvasPixelRatio: isMobile ? 1.25 : 1.5, live2dFps: isMobile ? 45 : 60, arInferenceFps: 12, arCameraWidth: 640, arCameraHeight: 480, particleFps: 30, threeFps: 45, threePixelRatio: isMobile ? 1.25 : 1.5 }
+  return { isLowEnd: false, canvasPixelRatio: isMobile ? 1 : 1.25, live2dFps: 30, arInferenceFps: 12, arCameraWidth: 640, arCameraHeight: 480, particleFps: 30, threeFps: 45, threePixelRatio: isMobile ? 1.25 : 1.5 }
 }
 
 export function getCappedDevicePixelRatio(): number {

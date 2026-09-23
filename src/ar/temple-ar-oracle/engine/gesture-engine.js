@@ -1,7 +1,7 @@
 /* =========================================================================
    GestureEngine — MediaPipe 手部座標處理與狀態判定
    來源：temple_oracle_v17.html 2118–2543行。所有手勢判定的數學/邏輯
-   （isFist、合十雙路徑判定、搖籤震盪計數、捏取上抽判定、
+   （合十雙路徑判定、偵測手部開始抽籤、
     雙手擲筊判定……）逐行原封不動搬遷，完全沒有調整。
 
    【封裝調整說明（只有下面4處「取得外部資源的方式」不同，其餘皆逐行相同）】
@@ -23,8 +23,7 @@
    const outCtx = els.outputCanvas.getContext('2d');
    const profile = getPerformanceProfile();
 
-  let smoothed = null;
-  const shake = { active:false, completed:false, startTime:0, lastY:0, lastVelocitySign:0, oscillations:0, lastFistTime:0 };
+   const shake = { completed:false };
 
   // ---- 合十默念狀態 ----
   // pausedAt：合十判定短暫失敗時的暫停起點（見 handleIncenseGesture 的寬限期機制），
@@ -35,23 +34,6 @@
   const cup = {
     twoHandsSeen: false, // 本輪是否已偵測到兩隻手，避免同一輪重複觸發
   };
-
-  function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
-
-   function smoothLandmarks(landmarks, smoothing = CONFIG.SMOOTHING){
-    if (!smoothed){ smoothed = landmarks.map(p=>({...p})); return smoothed; }
-    const s = smoothing;
-    smoothed = landmarks.map((p,i)=>({ x: smoothed[i].x*s + p.x*(1-s), y: smoothed[i].y*s + p.y*(1-s), z:p.z }));
-    return smoothed;
-  }
-
-  function isFist(lm){
-    const wrist = lm[0];
-    const fingers = [ {tip:lm[8],mcp:lm[5]}, {tip:lm[12],mcp:lm[9]}, {tip:lm[16],mcp:lm[13]}, {tip:lm[20],mcp:lm[17]} ];
-    let curled = 0;
-    fingers.forEach(f => { if (dist(f.tip,wrist) < dist(f.mcp,wrist) * CONFIG.FIST_CURL_RATIO) curled++; });
-    return curled >= CONFIG.FIST_MIN_CURLED;
-  }
 
   /* 畫布的 width/height 屬性從來沒被設定過，一直是 HTML 預設的 300x150，
      再被 CSS 拉到滿螢幕（還要乘上 devicePixelRatio），畫面自然糊掉。
@@ -178,8 +160,7 @@
     }
 
     if (!hasHand){
-       smoothed = null;
-      hideFingertipUI(); hideFistIndicator();
+       hideFingertipUI(); hideFistIndicator();
       if (state.current === 'bwa') cup.twoHandsSeen = false;
       return;
     }
@@ -201,13 +182,12 @@
     }
 
      if (state.current === 'draw'){
-       if (state.drawSubState === 'shake'){
-          const lm = smoothLandmarks(rawLm, CONFIG.SHAKE_SMOOTHING);
-         const wrist = lm[0];
-         updateFistIndicator(wrist, isFist(lm)); hideFingertipUI();
-         handleShakeGesture(wrist, isFist(lm));
+        if (state.drawSubState === 'shake'){
+          // 攝影機模式只要看見一隻手就開始抽籤，不再要求握拳或搖擺。
+          updateFistIndicatorRaw(rawLm[0]); hideFingertipUI();
+          handleHandDetected();
        }
-       // 搖籤完成後由程式自動演出抽籤，不再等待捏取／上抽手勢。
+        // 偵測到手後由程式自動演出抽籤，不再等待搖擺或握拳。
        return;
      } else {
        hideFingertipUI(); hideFistIndicator();
@@ -323,49 +303,17 @@
     els.incenseHint.classList.remove('sensing'); els.incenseStick.classList.remove('sensing');
   }
 
-  function handleShakeGesture(wrist, fistNow){
-    const now = performance.now();
-    if (!fistNow){
-      if (shake.active && now - shake.lastFistTime > CONFIG.SHAKE_RESET_GRACE_MS){
-        resetShakeProgress(); els.drawHint.textContent = '請搖晃籤筒，籤條會自動抽出';
-      }
-      return;
-    }
-    shake.lastFistTime = now;
-    if (!shake.active){
-      shake.active = true; shake.startTime = now; shake.lastY = wrist.y;
-      shake.lastVelocitySign = 0; shake.oscillations = 0;
-      els.qianTongZone.classList.add('shaking'); els.sticksGroup.classList.add('is-shaking'); els.shakeRing.classList.add('on');
-      return;
-    }
-    // MediaPipe 的 y 軸永遠沿著「影像」垂直方向；相機在直式裝置使用直式
-    // constraint 後，仍直接使用正規化 y，不把螢幕寬高混進來，避免直式時
-    // 以錯誤比例換算而吃掉小幅度的上下動作。
-    const velocity = wrist.y - shake.lastY;
-    let sign = 0;
-    if (velocity > CONFIG.SHAKE_VELOCITY_DEADZONE) sign = 1; else if (velocity < -CONFIG.SHAKE_VELOCITY_DEADZONE) sign = -1;
-    if (sign !== 0){
-      // 第一次有效移動也算一下；之後每次換向再加一，使用者實際搖五下
-      // 就會得到五次進度，不再需要額外做第六個反向動作。
-      if (shake.lastVelocitySign === 0) shake.oscillations = 1;
-      else if (sign !== shake.lastVelocitySign) shake.oscillations++;
-      shake.lastVelocitySign = sign;
-    }
-    shake.lastY = wrist.y;
-    const elapsed = now - shake.startTime;
-    const progress = Math.min(1, Math.max(elapsed/CONFIG.SHAKE_TARGET_DURATION_MS, shake.oscillations/CONFIG.SHAKE_REQUIRED_OSCILLATIONS));
-    els.shakeRing.style.setProperty('--p', Math.round(progress*100));
-    els.drawHint.textContent = `求籤中… ${Math.round(progress*100)}%`;
-    if (!shake.completed && shake.oscillations >= CONFIG.SHAKE_REQUIRED_OSCILLATIONS && elapsed >= CONFIG.SHAKE_MIN_DURATION_MS){ completeShakeStage(); }
+  function handleHandDetected(){
+    if (shake.completed) return;
+    completeShakeStage();
   }
   function resetShakeProgress(){
-    shake.active = false; shake.completed = false; shake.oscillations = 0;
+    shake.completed = false;
     els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
     els.shakeRing.style.setProperty('--p', 0);
   }
   function completeShakeStage(){
     shake.completed = true;
-    shake.active = false;
     els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
     const stickEls = Array.from(els.sticksGroup.querySelectorAll('.stick'));
     const idx = Math.floor(Math.random()*stickEls.length);
@@ -389,7 +337,7 @@
     els.qianStick.classList.add('hidden');
     els.qianStick.classList.remove('auto-draw', 'punch');
     els.qianStick.style.transform = 'translate(-50%, 0)';
-    els.drawHint.textContent = '請搖晃籤筒，籤條會自動抽出';
+    els.drawHint.textContent = '請將手伸到籤筒前，籤條會自動抽出';
   }
 
   // ============================================================

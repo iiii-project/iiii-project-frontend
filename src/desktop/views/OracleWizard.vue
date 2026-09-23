@@ -39,6 +39,15 @@ const CATEGORIES: { value: Category; label: string; icon: string; hint: string; 
   { value: 'other', label: '其他心事', icon: godOfWealthIcon, hint: '任何想問的事', arLabel: '綜合運勢' }
 ]
 
+/* 使用 divination-api.js 的分類名稱作為 key，讓問題提示與實際送出的分類保持一致。 */
+const QUESTION_PLACEHOLDERS: Record<string, string> = {
+  '健康平安': '例：最近身體健康需要注意什麼？',
+  '家庭生活': '例：今年家人相處和家庭運勢如何？',
+  '工作事業': '例：今年工作事業發展如何？',
+  '感情婚姻': '例：我的感情姻緣今年會有什麼發展？',
+  '綜合運勢': '例：今年整體運勢如何？'
+}
+
 const STEPS = ['選方向', '說心事', '確認送出']
 const QUESTION_MAX = 200
 
@@ -77,6 +86,9 @@ const companionStore = useLive2DCompanionStore()
 
 const isBusy = computed(() => loadingLabel.value !== '')
 const chosen = computed(() => CATEGORIES.find((item) => item.value === category.value) ?? null)
+const questionPlaceholder = computed(
+  () => QUESTION_PLACEHOLDERS[chosen.value?.arLabel ?? ''] ?? '例：今年整體運勢如何？'
+)
 
 /* ── 入場雲霧：承接首頁捲起的那團霧，在這裡向外飄散 ── */
 const enterWisps = Array.from({ length: 12 }, (_, index) => {
@@ -308,7 +320,7 @@ function guideRitualStage(text: string) {
 function drawInstruction(mode: ArInputMode | null): string {
   return mode === 'motion'
     ? '接下來搖一搖手機，就可以抽籤囉。'
-    : '搖一搖籤筒，或是直接點擊籤條，就可以抽出籤囉。'
+    : '把手伸到籤筒前，或是直接點擊籤筒，就可以抽出籤囉。'
 }
 
 function bwaInstruction(mode: ArInputMode | null): string {
@@ -560,7 +572,7 @@ function restart() {
             class="ask"
             rows="5"
             :maxlength="QUESTION_MAX"
-            placeholder="例：今年運勢如何？"
+            :placeholder="questionPlaceholder"
           ></textarea>
         </div>
         <div class="ask-tools">

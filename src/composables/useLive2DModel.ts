@@ -58,6 +58,8 @@ export function useLive2DModel(
   const mouseDownTime = { current: 0 }
   const mouseDownPos = { x: 0, y: 0 }
   let isPotentialTap = false
+  let hoverFrame: number | null = null
+  let pendingHoverPoint: { x: number; y: number } | null = null
 
   function getModelPosition(): Position {
     const adapter = (window as any).getLAppAdapter?.()
@@ -256,13 +258,22 @@ export function useLive2DModel(
   }
 
   function handleWindowMouseMove(e: MouseEvent) {
-    // 拖曳中途游標本來就可能滑出角色不透明的範圍，這時不能把 pointer-events 收回去，
-    // 不然拖到一半滑鼠事件會被畫布放掉，角色卡在半路動不了。
-    if (isDragging.value) {
-      isHovering.value = true
-      return
-    }
-    isHovering.value = computeHitOnCanvas(e.clientX, e.clientY)
+    pendingHoverPoint = { x: e.clientX, y: e.clientY }
+    // window mousemove 可能每秒觸發數百次；命中模型只需要每個畫面更新一次，
+    // 避免一般頁面移動滑鼠時反覆執行 Cubism hit-test 搶走 UI 主執行緒。
+    if (hoverFrame !== null) return
+    hoverFrame = requestAnimationFrame(() => {
+      hoverFrame = null
+      const point = pendingHoverPoint
+      if (!point) return
+      // 拖曳中途游標本來就可能滑出角色不透明的範圍，這時不能把 pointer-events 收回去，
+      // 不然拖到一半滑鼠事件會被畫布放掉，角色卡在半路動不了。
+      if (isDragging.value) {
+        isHovering.value = true
+        return
+      }
+      isHovering.value = computeHitOnCanvas(point.x, point.y)
+    })
   }
 
   function exposeDebugHelpers() {
@@ -319,6 +330,9 @@ export function useLive2DModel(
   onBeforeUnmount(() => {
     delete (window as any).Live2DDebug
     window.removeEventListener('mousemove', handleWindowMouseMove)
+    if (hoverFrame !== null) cancelAnimationFrame(hoverFrame)
+    hoverFrame = null
+    pendingHoverPoint = null
   })
 
   return {

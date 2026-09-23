@@ -6,25 +6,10 @@
    已移除，改由外部（新前端）透過 attribute 傳入 question/category。
    ========================================================================= */
 export const CONFIG = {
-  FIST_CURL_RATIO: 1.15,
-  FIST_MIN_CURLED: 3,
-   // 搖籤以五次明確的上下換向完成；門檻不能綁死 1.4 秒，
-   // 否則使用者已經搖滿五下仍要停在原地等倒數。
-   SHAKE_VELOCITY_DEADZONE: 0.0035,
-   SHAKE_REQUIRED_OSCILLATIONS: 5,
-   SHAKE_MIN_DURATION_MS: 450,
-  SHAKE_TARGET_DURATION_MS: 2400,
-   SHAKE_RESET_GRACE_MS: 500,
-
    // 橫屏去背人物只佔畫面中央一部分，讓神明實景保留足夠可見範圍。
    PERSON_SCALE: 0.48,
    // 豎屏鏡頭框左右貼齊螢幕；實際高度由相機原始比例計算。
    PERSON_SCALE_PORTRAIT: 1.0,
-
-   SMOOTHING: 0.5,
-   // 搖籤在低階裝置可能只有 8 FPS，降低專用平滑量才能保留快速換向；
-   // 其他手勢仍使用上面的通用平滑量。
-   SHAKE_SMOOTHING: 0.28,
 
   // ---- 誠心機制：雙手合十 ----
   // 判定改用「雙手掌心中心點距離」並依手掌尺度正規化，較單純比較手腕座標更貼近「合十」的實際動作，
