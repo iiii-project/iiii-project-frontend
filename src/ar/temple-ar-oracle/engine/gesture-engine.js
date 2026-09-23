@@ -63,9 +63,10 @@
     const w = Math.round((canvas.clientWidth || window.innerWidth) * dpr);
     const h = Math.round((canvas.clientHeight || window.innerHeight) * dpr);
     if (!w || !h) return;
-    if (canvas.width !== w || canvas.height !== h){
-      canvas.width = w;
-      canvas.height = h;
+     if (canvas.width !== w || canvas.height !== h){
+       canvas.width = w;
+       canvas.height = h;
+     }
    }
 
    function personScale(){
@@ -114,9 +115,7 @@
      // 呼叫端已將 canvas 水平翻轉，所以 destination x 必須從右側起算。
      ctx.drawImage(image, sx, sy, sw, sh, -(dx + dw), dy, dw, dh);
    }
-  }
-
-  function onResults(results){
+   function onResults(results){
     // 過場影片播放中：整格跳過，MediaPipe 的繪製與判斷都是重負載
     if (state.transitionActive) return;
     syncCanvasSize();
@@ -137,13 +136,12 @@
      const drawY = inset * ch;
      outCtx.scale(-1,1);
      if (state.segmentationMask){
-      /* 人像去背：先把分割遮罩畫上去（人像=不透明、其餘=透明），source-in 疊圖模式
-         會讓下一筆 drawImage 只保留跟遮罩重疊、不透明的範圍，其餘鏤空——鏤空的地方
-         會露出下方 z-index 比 #output_canvas 低的 #ritual-overlay（神明實景疊加層），
-         人像本身則維持鏡頭原始畫質，不受神明實景疊加層淡化影響。 */
-       drawCover(outCtx, state.segmentationMask, drawX, drawY, drawW, drawH, cw, ch);
-       outCtx.globalCompositeOperation = 'source-in';
-       drawCover(outCtx, results.image, drawX, drawY, drawW, drawH, cw, ch);
+       /* 先畫鏡像鏡頭，再用 destination-in 套上人像遮罩；這個合成順序
+          在不同瀏覽器的 Canvas 實作上比 source-in 更穩定。遮罩外部保持透明，
+          底下的神明實景就能透出來。 */
+        drawCover(outCtx, results.image, drawX, drawY, drawW, drawH, cw, ch);
+        outCtx.globalCompositeOperation = 'destination-in';
+        drawCover(outCtx, state.segmentationMask, drawX, drawY, drawW, drawH, cw, ch);
       outCtx.globalCompositeOperation = 'source-over';
     }
     outCtx.restore();
