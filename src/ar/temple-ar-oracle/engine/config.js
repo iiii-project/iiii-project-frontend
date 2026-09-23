@@ -17,8 +17,8 @@ export const CONFIG = {
    SHAKE_RESET_GRACE_MS: 500,
 
    // 去背人物只佔畫面中央一部分，讓神明實景保留足夠可見範圍。
-   PERSON_SCALE: 0.72,
-   PERSON_SCALE_PORTRAIT: 0.66,
+   PERSON_SCALE: 0.48,
+   PERSON_SCALE_PORTRAIT: 0.44,
 
    SMOOTHING: 0.5,
    // 搖籤在低階裝置可能只有 8 FPS，降低專用平滑量才能保留快速換向；
