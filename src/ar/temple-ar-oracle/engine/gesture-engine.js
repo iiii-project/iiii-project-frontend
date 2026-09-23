@@ -75,15 +75,17 @@
       return frame;
     }
 
-    function personFrame(width, height, sourceImage = els.video){
-      const camera = cameraFrame(width, height, sourceImage);
+    function personFrame(width, height){
       const scale = CONFIG.PERSON_SCALE;
+      const personWidth = width * scale;
+      const personHeight = height * scale;
+
       return {
-        x: camera.x + (camera.width - camera.width * scale) / 2,
-        // 人物底部固定貼齊整個 viewport，不受來源影像 contain 留白影響。
-        y: height - camera.height * scale,
-        width: camera.width * scale,
-        height: camera.height * scale,
+        // 人物顯示框獨立於 camera frame；PERSON_SCALE 只影響最後顯示大小。
+        x: (width - personWidth) / 2,
+        y: height - personHeight,
+        width: personWidth,
+        height: personHeight,
       };
     }
 
@@ -139,7 +141,7 @@
       return;
     }
        const camera = cameraFrame(cw, ch, results.image);
-       const person = personFrame(cw, ch, results.image);
+        const person = personFrame(cw, ch);
        const layerCtx = ensurePersonLayer(cw, ch);
        layerCtx.clearRect(0, 0, cw, ch);
        layerCtx.save();
@@ -151,13 +153,12 @@
        drawContained(layerCtx, state.segmentationMask, camera.x, camera.y, camera.width, camera.height, cw, ch);
        layerCtx.restore();
        layerCtx.globalCompositeOperation = 'source-over';
-       // 只縮放實際的鏡頭來源框，不把全螢幕透明留白一起縮放，
-       // 否則人物會發生位置偏移與橫豎比例扭曲。
-       outCtx.drawImage(
-         personLayerCanvas,
-         camera.x, camera.y, camera.width, camera.height,
-         person.x, person.y, person.width, person.height
-       );
+        // source 使用完整的全螢幕去背結果；人物大小只由 destination 控制。
+        outCtx.drawImage(
+          personLayerCanvas,
+          0, 0, cw, ch,
+          person.x, person.y, person.width, person.height
+        );
      outCtx.restore();
 
     const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
