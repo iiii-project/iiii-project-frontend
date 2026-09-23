@@ -65,11 +65,11 @@
        height: scale * height,
      };
 
-      /* 豎屏不要把鏡頭畫面強行填滿框，否則人物可能被邊緣裁切。
-         先依來源比例把畫面縮進安全框，並貼齊底部；左右或上方的留白
-         由安全框保留，確保整個人都能留在畫面中。 */
+       /* 鏡頭畫布本身永遠是全螢幕；人物只使用畫布內的縮小安全框。
+          不論橫屏或豎屏，都依來源比例 contain 到安全框並貼齊底部，
+          讓整個人保留在畫面內，不因填滿而被裁切。 */
       const source = imageSize(sourceImage, 0, 0);
-      if (height > width && source.width > 0 && source.height > 0){
+      if (source.width > 0 && source.height > 0){
         const sourceRatio = source.width / source.height;
         const frameRatio = frame.width / frame.height;
         if (sourceRatio > frameRatio){
@@ -101,31 +101,13 @@
      };
    }
 
-    /* Canvas 的 CSS object-fit 不會替 canvas 內部的 bitmap 保持比例；
-       這裡只把完整來源影像繪製到 personFrame，不做 source crop，
-       讓鏡頭與去背遮罩使用完全相同的 contain 範圍。 */
+     /* Canvas 的 CSS object-fit 不會替 canvas 內部的 bitmap 保持比例；
+        這裡只把完整來源影像繪製到人物安全框，不做 source crop，
+        讓鏡頭與去背遮罩使用完全相同的 contain 範圍。 */
     function drawContained(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
       const source = imageSize(image, fallbackWidth, fallbackHeight);
       // 呼叫端已將 canvas 水平翻轉，所以 destination x 必須從右側起算。
       ctx.drawImage(image, 0, 0, source.width, source.height, -(dx + dw), dy, dw, dh);
-    }
-    function drawCover(ctx, image, dx, dy, dw, dh, fallbackWidth, fallbackHeight){
-      const source = imageSize(image, fallbackWidth, fallbackHeight);
-      const targetRatio = dw / dh;
-      const sourceRatio = source.width / source.height;
-      let sx = 0;
-      let sy = 0;
-      let sw = source.width;
-      let sh = source.height;
-      if (sourceRatio > targetRatio){
-        sw = source.height * targetRatio;
-        sx = (source.width - sw) / 2;
-      } else if (sourceRatio < targetRatio){
-        sh = source.width / targetRatio;
-        sy = (source.height - sh) / 2;
-      }
-      // 橫屏維持原本的滿版構圖；只有豎屏使用 contain，避免裁切人物。
-      ctx.drawImage(image, sx, sy, sw, sh, -(dx + dw), dy, dw, dh);
     }
    function onResults(results){
     // 過場影片播放中：整格跳過，MediaPipe 的繪製與判斷都是重負載
@@ -145,7 +127,7 @@
      const drawH = frame.height;
       const drawX = frame.x;
       const drawY = frame.y;
-      const drawFrame = ch > cw ? drawContained : drawCover;
+      const drawFrame = drawContained;
       outCtx.scale(-1,1);
      if (state.segmentationMask){
        /* 先畫鏡像鏡頭，再用 destination-in 套上人像遮罩；這個合成順序
