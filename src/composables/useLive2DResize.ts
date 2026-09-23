@@ -17,7 +17,7 @@ const WHEEL_SCALE_STEP = 0.03
 const DEFAULT_SCALE = 1.0
 // 豎屏可視高度較長，角色維持橫屏比例會佔住太多神明與內容區域。
 // 這是相對於模型原本 kScale 的倍率，不會改動後端模型設定。
-const PORTRAIT_SCALE_FACTOR = 0.68
+const PORTRAIT_SCALE_FACTOR = 0.45
 
 // 角色預設站在畫面右下角一帶（畫面寬度 84%、高度 76% 處）。
 // 故意不去用 CubismModelMatrix.right()/bottom()/centerX() 這組 layout 輔助方法直接算——
