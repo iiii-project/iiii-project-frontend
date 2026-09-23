@@ -1,7 +1,7 @@
 /* =========================================================================
    GestureEngine — MediaPipe 手部座標處理與狀態判定
    來源：temple_oracle_v17.html 2118–2543行。所有手勢判定的數學/邏輯
-   （合十雙路徑判定、偵測手部開始抽籤、
+   （合十雙路徑判定、雙手持續偵測開始抽籤、
     雙手擲筊判定……）逐行原封不動搬遷，完全沒有調整。
 
    【封裝調整說明（只有下面4處「取得外部資源的方式」不同，其餘皆逐行相同）】
@@ -11,19 +11,17 @@
       `UIActions.tossBwa()`，改為呼叫注入進來的 `callbacks.completeIncense()` /
       `callbacks.completeDraw()` / `callbacks.tossBwa()`——這三個callback由
       flow-controller.js提供，呼叫時機與傳入參數完全相同。
-   3. 原本直接呼叫全域 `ParticleSystem.repel/converge`，改為呼叫注入進來的
-      `particleSystem` 實例。
-   4. `ensureMarkers()` 原本把手指標記點 `document.body.appendChild(...)`，
-      改為 append 到注入進來的 `rootEl`（元件自己的容器），避免手勢標記點
+    3. `ensureMarkers()` 原本把手指標記點 `document.body.appendChild(...)`，
+       改為 append 到注入進來的 `rootEl`（元件自己的容器），避免手勢標記點
       跑到 Shadow DOM 外面、脫離元件管理範圍。
    ========================================================================= */
  import { getPerformanceProfile } from '@/utils/performance';
 
-  export function createGestureEngine({ els, state, config: CONFIG, particleSystem, rootEl, callbacks }) {
+  export function createGestureEngine({ els, state, config: CONFIG, rootEl, callbacks }) {
    const outCtx = els.outputCanvas.getContext('2d');
    const profile = getPerformanceProfile();
 
-   const shake = { completed:false };
+   const shake = { completed:false, active:false, startedAt:0 };
 
   // ---- 合十默念狀態 ----
   // pausedAt：合十判定短暫失敗時的暫停起點（見 handleIncenseGesture 的寬限期機制），
@@ -167,20 +165,17 @@
       return;
     }
 
-    if (!hasHand){
+     if (!hasHand){
        hideFingertipUI(); hideFistIndicator();
-      if (state.current === 'bwa') cup.twoHandsSeen = false;
-      return;
+       if (state.current === 'draw' && state.drawSubState === 'shake') resetShakeProgress();
+       if (state.current === 'bwa') cup.twoHandsSeen = false;
+       return;
     }
 
     const handLandmarks = results.multiHandLandmarks.map((landmarks) =>
       landmarks.map(p => ({ x: 1-p.x, y: p.y, z: p.z }))
     );
     const rawLm = handLandmarks[0];
-
-    // 金色香灰粒子會被移動中的手輕輕撥開，增加畫面互動感
-     const handPoint = toDisplayPoint(rawLm[0], true);
-     particleSystem.repel(handPoint.x, handPoint.y, CONFIG.PARTICLE_REPEL_RADIUS);
 
     if (state.current === 'bwa'){
       // 捧筊／拋擲階段使用未經重度平滑的座標，確保「張手瞬間」判定即時
@@ -190,13 +185,17 @@
     }
 
      if (state.current === 'draw'){
-        if (state.drawSubState === 'shake'){
-          // 攝影機模式只要看見一隻手就開始抽籤，不再要求握拳或搖擺。
-          updateFistIndicatorRaw(rawLm[0]); hideFingertipUI();
-          handleHandDetected();
-       }
-        // 偵測到手後由程式自動演出抽籤，不再等待搖擺或握拳。
-       return;
+         if (state.drawSubState === 'shake'){
+           hideFingertipUI();
+           if (handLandmarks.length >= CONFIG.DRAW_REQUIRED_HANDS){
+             handleTwoHandsDetected();
+           } else {
+             resetShakeProgress();
+             els.drawHint.textContent = '請讓雙手同時進入畫面，開始搖籤';
+           }
+        }
+         // 偵測到雙手後持續 2 秒搖籤，完成後由程式自動抽出籤條。
+        return;
      } else {
        hideFingertipUI(); hideFistIndicator();
      }
@@ -268,7 +267,7 @@
       hideDualHandUI(); hideFistIndicator();
     }
 
-    const visualCenter = centerPt ? updateIncenseFollow(centerPt) : null;
+     if (centerPt) updateIncenseFollow(centerPt);
 
     if (isClose){
       // 只要重新判定為合十，就取消任何還在倒數的寬限期，視為進度沒中斷過。
@@ -279,11 +278,7 @@
       els.incenseRing.style.setProperty('--p', Math.round(progress*100));
       els.incenseHint.textContent = `${statusText} ${Math.round(progress*100)}%`;
       els.incenseHint.classList.add('sensing'); els.incenseStick.classList.add('sensing');
-      // 誠心凝聚的即時回饋：附近的金色香灰粒子緩緩向雙手中心匯聚，進度越高匯聚力道越強
-      if (visualCenter){
-       particleSystem.converge(visualCenter.x*window.innerWidth, visualCenter.y*window.innerHeight, 260, 2 + progress*5);
-      }
-      if (progress >= 1){ callbacks.completeIncense(); }
+       if (progress >= 1){ callbacks.completeIncense(); }
       return;
     }
 
@@ -311,14 +306,31 @@
     els.incenseHint.classList.remove('sensing'); els.incenseStick.classList.remove('sensing');
   }
 
-  function handleHandDetected(){
+  function handleTwoHandsDetected(){
     if (shake.completed) return;
-    completeShakeStage();
+    const now = performance.now();
+    if (!shake.active){
+      shake.active = true;
+      shake.startedAt = now;
+      els.qianTongZone.classList.add('shaking');
+      els.sticksGroup.classList.add('is-shaking');
+      els.shakeRing.classList.add('on');
+      els.shakeRing.style.setProperty('--p', 0);
+    }
+
+    const elapsed = now - shake.startedAt;
+    const progress = Math.min(1, elapsed / CONFIG.DRAW_HAND_HOLD_MS);
+    els.shakeRing.style.setProperty('--p', Math.round(progress * 100));
+    els.drawHint.textContent = `搖籤中… ${Math.ceil((CONFIG.DRAW_HAND_HOLD_MS - elapsed) / 1000)} 秒`;
+    if (elapsed >= CONFIG.DRAW_HAND_HOLD_MS) completeShakeStage();
   }
   function resetShakeProgress(){
     shake.completed = false;
+    shake.active = false;
+    shake.startedAt = 0;
     els.qianTongZone.classList.remove('shaking'); els.sticksGroup.classList.remove('is-shaking'); els.shakeRing.classList.remove('on');
     els.shakeRing.style.setProperty('--p', 0);
+    els.drawHint.textContent = '請讓雙手同時進入畫面，開始搖籤';
   }
   function completeShakeStage(){
     shake.completed = true;
@@ -345,7 +357,7 @@
     els.qianStick.classList.add('hidden');
     els.qianStick.classList.remove('auto-draw', 'punch');
     els.qianStick.style.transform = 'translate(-50%, 0)';
-    els.drawHint.textContent = '請將手伸到籤筒前，籤條會自動抽出';
+    els.drawHint.textContent = '請讓雙手同時進入畫面，開始搖籤';
   }
 
   // ============================================================

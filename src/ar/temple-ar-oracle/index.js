@@ -23,7 +23,6 @@ import { Camera } from '@mediapipe/camera_utils';
 
 import { CONFIG } from './engine/config.js';
 import { createArState } from './engine/state.js';
-import { createParticleSystem } from './engine/particle-system.js';
 import { AudioEngine } from './engine/audio-engine.js';
 import { createBwaScene } from './engine/bwa-scene.js';
 import { createGestureEngine } from './engine/gesture-engine.js';
@@ -79,7 +78,6 @@ class TempleArOracle extends HTMLElement {
     this._els = {
       video: root.querySelector('#input_video'),
       outputCanvas: $('output_canvas'),
-      particleCanvas: $('particle_canvas'),
       arDecoration: $('ar-decoration'),
       ritualOverlay: $('ritual-overlay'),
       flash: $('flash'),
@@ -110,7 +108,6 @@ class TempleArOracle extends HTMLElement {
     // 前面已經直接取得模板產生的 <video id="input_video"> 節點，不需要額外處理。
 
     this._state = createArState();
-    this._particleSystem = createParticleSystem(this._els.particleCanvas);
     this._bwaScene = createBwaScene(this._state);
     // 後端連不上時，divination-api 會自動切到本地備援資料把儀式跑完，
     // 並透過這個 callback 通知宿主頁面（讓外面有機會顯示「目前離線」的提示）。
@@ -125,7 +122,6 @@ class TempleArOracle extends HTMLElement {
       els: this._els,
       state: this._state,
       config: CONFIG,
-      particleSystem: this._particleSystem,
       rootEl: root,
       callbacks: {
         completeIncense: () => this._flow.completeIncense(),
@@ -175,10 +171,8 @@ class TempleArOracle extends HTMLElement {
       api: this._api,
       gestureEngine: this._gestureEngine,
       bwaScene: this._bwaScene,
-      particleSystem: this._particleSystem,
       audioEngine: AudioEngine,
       mobileShake: this._mobileShake,
-      rootEl: root,
       emit: (name, detail) => this._emit(name, detail),
       transitionSrc,
     });
@@ -231,8 +225,8 @@ class TempleArOracle extends HTMLElement {
 
     this._cameraPromise = new Promise((resolve, reject) => {
       const profile = getPerformanceProfile();
-      // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑；開鏡先用單手模式，
-      // 進入擲筊場景時才切換兩手，避免把不必要的負載集中在開鏡瞬間。
+       // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑；開鏡先用單手模式，
+       // 進入搖籤／擲筊場景時才切換兩手，避免把不必要的負載集中在開鏡瞬間。
       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
       const handOptions = { modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 };
       let activeMaxHands = 1;
@@ -284,7 +278,7 @@ class TempleArOracle extends HTMLElement {
             lastInferenceTime = now;
             inferenceBusy = true;
             try {
-              const wantedMaxHands = this._state.current === 'bwa' ? 2 : 1;
+               const wantedMaxHands = this._state.current === 'draw' || this._state.current === 'bwa' ? 2 : 1;
               if (wantedMaxHands !== activeMaxHands) {
                 activeMaxHands = wantedMaxHands;
                 hands.setOptions({ ...handOptions, maxNumHands: activeMaxHands });
@@ -374,7 +368,6 @@ class TempleArOracle extends HTMLElement {
       if (stream && stream.getTracks) stream.getTracks().forEach(t => t.stop());
     } catch (e) {}
     this._bwaScene?.destroy?.();
-    this._particleSystem?.destroy?.();
     this._gestureEngine?.destroy?.();
     this._mobileShake?.stop?.();
   }

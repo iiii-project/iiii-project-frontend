@@ -34,7 +34,6 @@
        這一段在前面討論就已經先跟你確認過）。
    ========================================================================= */
 import { isMobileDevice } from "./mobile-shake.js";
-import { spawnLightBurst, screenShakeOnce } from "./particle-system.js";
 
 /* 領籤過場：播放自製的 5.12 秒動畫（龍銜籤送到眼前）。
    影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
@@ -195,11 +194,9 @@ export function createFlowController({
   api,
   gestureEngine,
   bwaScene,
-  particleSystem,
-  audioEngine,
+   audioEngine,
   mobileShake,
-  rootEl,
-  emit,
+   emit,
   transitionSrc,
 }) {
   /* 解籤（AI 生成）通常是整段流程裡最慢的一步。原本是「先等 interpret 回來，
@@ -335,20 +332,17 @@ export function createFlowController({
     };
   }
 
-  /* 過場影片播放時，AR 這邊的 MediaPipe 推論、攝影機畫布重繪、
-     粒子與 three.js 迴圈全都還在滿載跑，會跟影片解碼搶資源造成掉格。
-     這裡在過場期間把它們停掉，結束再放回去。 */
+   /* 過場影片播放時，AR 這邊的 MediaPipe 推論、攝影機畫布重繪與 three.js
+      迴圈會跟影片解碼搶資源；這裡在過場期間把它們停掉，結束再放回去。 */
   const transitionLoadHooks = {
     src: transitionSrc,
     onStart() {
       state.transitionActive = true;
-      if (particleSystem.pause) particleSystem.pause();
-      if (bwaScene.pause) bwaScene.pause();
+       if (bwaScene.pause) bwaScene.pause();
     },
     onEnd() {
       state.transitionActive = false;
-      if (particleSystem.resume) particleSystem.resume();
-      if (bwaScene.resume) bwaScene.resume();
+       if (bwaScene.resume) bwaScene.resume();
     },
   };
 
@@ -411,7 +405,7 @@ export function createFlowController({
              ? "拿起手機，上下搖動三次即可抽籤"
              : useMobileShake
                ? "未開啟動作感測，可直接抽籤。"
-               : "請將手伸到籤筒前，籤條會自動抽出";
+               : "請讓雙手同時進入畫面，開始搖籤";
       // 手機正常流程只透過搖動抽籤；僅在感測器不可用時才顯示直接抽籤備援。
       els.btnManualDraw.classList.toggle(
         "hidden",
@@ -499,10 +493,7 @@ export function createFlowController({
     const cx = rect.left + rect.width / 2,
       cy = rect.top;
     els.qianStick.classList.add("punch");
-    spawnLightBurst(rootEl, cx, cy);
-    screenShakeOnce(rootEl);
-    particleSystem.burst(cx, cy, 26);
-    flashOnce();
+     flashOnce();
     try {
       state.currentFortune = await api.draw(state.sessionId);
       emit("draw-complete", { fortune: state.currentFortune });
@@ -691,9 +682,7 @@ export function createFlowController({
 
     if (result?.confirmed) {
       const pos = bwaScene.getScreenPos();
-      particleSystem.burst(pos.x, pos.y);
-      spawnLightBurst(rootEl, pos.x, pos.y);
-      flashOnce();
+       flashOnce();
       els.bwaResultTitle.textContent = "聖筊 ";
       els.bwaResultDesc.textContent = "聖筊";
       emit("bwa-result", { tier: "sacred" });

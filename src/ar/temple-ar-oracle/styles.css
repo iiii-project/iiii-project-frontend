@@ -40,13 +40,6 @@
 
 .ar-oracle-root{ position:fixed; inset:0; }
 
-@keyframes screenShake{
-  0%{ transform:translate(0,0); } 20%{ transform:translate(-7px,4px) rotate(-0.3deg); }
-  40%{ transform:translate(6px,-5px) rotate(0.3deg); } 60%{ transform:translate(-5px,3px) rotate(-0.2deg); }
-  80%{ transform:translate(3px,-2px) rotate(0.15deg); } 100%{ transform:translate(0,0); }
-}
-.ar-oracle-root.screen-shake{ animation: screenShake 0.45s ease; }
-
 /* ---------- 2. 原始自訂 class / id（逐一核對複製）---------- */
 /* opacity 預設0（進場veil期間人像圖層先隱藏，只留#ritual-overlay的神明實景），
    加上 .blended 後淡入到1——跟 #ritual-overlay 的淡出時機由 showScene() 同步觸發，
@@ -70,7 +63,6 @@
 @keyframes arDrift{ 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(14px);} }
 #ar-decoration.dof-blur, #output_canvas.dof-blur{ filter: blur(7px) brightness(0.85) saturate(0.6); }
 
-#particle_canvas{ position:fixed; inset:0; z-index:4; pointer-events:none; width:100vw; height:100vh; }
 
 /* 神明實景疊加層：z-index 0，疊在 #output_canvas（z-index 1）下方——人像去背後
    #output_canvas 只剩人像範圍不透明、其餘鏤空，鏤空處會直接透出這層神明實景，
@@ -181,9 +173,6 @@
 .qian-stick.punch{ animation: punchScale 0.25s ease-out; }
 @keyframes punchScale{ 0%{ filter:brightness(1);} 40%{ filter:brightness(1.8) drop-shadow(0 0 20px #fff4dc);} 100%{ filter:brightness(1);} }
 
-.light-burst{ position:absolute; width:240px; height:240px; transform:translate(-50%,-50%) scale(0.2); opacity:0; pointer-events:none; z-index:60; }
-.light-burst.play{ animation: burstRay 0.75s cubic-bezier(.2,.8,.3,1) forwards; }
-@keyframes burstRay{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(0.2) rotate(0deg);} 22%{ opacity:1;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(2) rotate(20deg);} }
 
 .fingertip-marker{
   position:absolute; z-index:15; width:14px; height:14px; border-radius:50%;

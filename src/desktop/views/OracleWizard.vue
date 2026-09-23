@@ -320,7 +320,7 @@ function guideRitualStage(text: string) {
 function drawInstruction(mode: ArInputMode | null): string {
   return mode === 'motion'
     ? '接下來搖一搖手機，就可以抽籤囉。'
-    : '把手伸到籤筒前，或是直接點擊籤筒，就可以抽出籤囉。'
+    : '讓雙手進入鏡頭，持續 2 秒就可以抽出籤囉。'
 }
 
 function bwaInstruction(mode: ArInputMode | null): string {

@@ -10,6 +10,8 @@ export const CONFIG = {
    PERSON_SCALE: 0.48,
   // 豎屏將整個鏡頭畫面縮小並保留安全邊界，避免人物被畫面邊緣裁切。
   PERSON_SCALE_PORTRAIT: 0.82,
+  DRAW_REQUIRED_HANDS: 2,
+  DRAW_HAND_HOLD_MS: 2000,
 
   // ---- 誠心機制：雙手合十 ----
   // 判定改用「雙手掌心中心點距離」並依手掌尺度正規化，較單純比較手腕座標更貼近「合十」的實際動作，
@@ -28,5 +30,4 @@ export const CONFIG = {
 
   // ---- 環境光連動 / 粒子互動 ----
   AMBIENT_SAMPLE_MS: 300,      // 環境亮度取樣間隔
-  PARTICLE_REPEL_RADIUS: 90,   // 手部撥動金色香灰粒子的作用半徑（px）
 };

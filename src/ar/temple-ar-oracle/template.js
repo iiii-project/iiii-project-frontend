@@ -48,7 +48,6 @@ export function renderTemplate() {
     </svg>
   </div>
 
-  <canvas id="particle_canvas"></canvas>
   <div class="flash-white" id="flash"></div>
   <div class="screen-darken" id="darken"></div>
 
@@ -82,7 +81,7 @@ export function renderTemplate() {
     <div class="glass-card ritual-card text-center fade-in">
       <h1 class="ritual-title">祈　願　抽　籤</h1>
       <div class="hairline mt-4"></div>
-       <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請將手伸到籤筒前，籤條會自動抽出</p>
+       <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請讓雙手同時進入畫面，開始搖籤</p>
       <button id="btn-manual-draw" class="btn-line mt-4 hidden" type="button">點 擊 抽 籤</button>
     </div>
 

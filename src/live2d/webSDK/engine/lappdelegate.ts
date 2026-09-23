@@ -89,22 +89,26 @@ export class LAppDelegate {
     // 透明设置
     gl!.enable(gl!.BLEND);
     gl!.blendFunc(gl!.SRC_ALPHA, gl!.ONE_MINUS_SRC_ALPHA);
+    gl!.enable(gl!.DEPTH_TEST);
+    gl!.depthFunc(gl!.LEQUAL);
+    gl!.clearDepth(1.0);
+    gl!.clearColor(0.0, 0.0, 0.0, 1.0);
 
-    const supportTouch: boolean = 'ontouchend' in canvas!;
-
-    if (supportTouch) {
-      // タッチ関連コールバック関数登録
-      // 注册触摸相关回调函数
-      canvas!.addEventListener('touchstart', onTouchBegan, { passive: true });
-      canvas!.addEventListener('touchmove', onTouchMoved, { passive: true });
-      canvas!.addEventListener('touchend', onTouchEnded, { passive: true });
-      canvas!.addEventListener('touchcancel', onTouchCancel, { passive: true });
-    } else {
-      // マウス関連コールバック関数登録
-      // 注册鼠标相关回调函数
-      canvas!.addEventListener('mousedown', onClickBegan, { passive: true });
-      canvas!.addEventListener('mousemove', onMouseMoved, { passive: true });
-      canvas!.addEventListener('mouseup', onClickEnded, { passive: true });
+    // 模型切換會重新初始化 manager，但 canvas / delegate 仍然存在。
+    // 事件只綁一次，避免每換一次模型就多一組 handler。
+    if (!this._inputEventsBound) {
+      const supportTouch: boolean = 'ontouchend' in canvas!;
+      if (supportTouch) {
+        canvas!.addEventListener('touchstart', onTouchBegan, { passive: true });
+        canvas!.addEventListener('touchmove', onTouchMoved, { passive: true });
+        canvas!.addEventListener('touchend', onTouchEnded, { passive: true });
+        canvas!.addEventListener('touchcancel', onTouchCancel, { passive: true });
+      } else {
+        canvas!.addEventListener('mousedown', onClickBegan, { passive: true });
+        canvas!.addEventListener('mousemove', onMouseMoved, { passive: true });
+        canvas!.addEventListener('mouseup', onClickEnded, { passive: true });
+      }
+      this._inputEventsBound = true;
     }
 
     // AppViewの初期化
@@ -151,6 +155,31 @@ export class LAppDelegate {
    * 解放する。
    */
   public release(): void {
+    this._isEnd = true;
+    this._isRunning = false;
+    if (this._animationFrame !== null) {
+      cancelAnimationFrame(this._animationFrame);
+      this._animationFrame = null;
+    }
+    if (this._visibilityHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
+
+    if (this._inputEventsBound && canvas) {
+      if ('ontouchend' in canvas) {
+        canvas.removeEventListener('touchstart', onTouchBegan);
+        canvas.removeEventListener('touchmove', onTouchMoved);
+        canvas.removeEventListener('touchend', onTouchEnded);
+        canvas.removeEventListener('touchcancel', onTouchCancel);
+      } else {
+        canvas.removeEventListener('mousedown', onClickBegan);
+        canvas.removeEventListener('mousemove', onMouseMoved);
+        canvas.removeEventListener('mouseup', onClickEnded);
+      }
+      this._inputEventsBound = false;
+    }
+
     this._textureManager!.release();
     this._textureManager = null;
 
@@ -169,64 +198,59 @@ export class LAppDelegate {
    * 执行处理。
    */
   public run(): void {
+    if (this._isRunning) return;
+    this._isRunning = true;
     const targetFrameRate = getPerformanceProfile().live2dFps;
     // メインループ
     // 主循环
     const loop = (): void => {
+      this._animationFrame = null;
       // インスタンスの有無の確認
       // 检查实例是否存在
       if (s_instance == null) {
         return;
       }
 
-      if (document.visibilityState === 'hidden') {
-        requestAnimationFrame(loop);
-        return;
-      }
+      // 分頁隱藏時不要讓 rAF 持續自我排程。部分舊瀏覽器雖然會節流 rAF，
+      // 仍會保留 callback 與 JS 喚醒成本；回到前景時由 visibility handler 重啟。
+      if (document.visibilityState === 'hidden') return;
 
       // 時間更新
        if (LAppDefine.ENABLE_LIMITED_FRAME_RATE) {
          LAppPal.updateTime(false);
          if (LAppPal.getDeltaTime() < 1 / targetFrameRate) {
-           requestAnimationFrame(loop);
-           return;
+            this._animationFrame = requestAnimationFrame(loop);
+            return;
          }
        }
 
       LAppPal.updateTime(true);
 
 
-      // 画面の初期化
-      // 屏幕初始化
-      gl!.clearColor(0.0, 0.0, 0.0, 1.0);
-
-      // 深度テストを有効化
-      // 启用深度测试
-      gl!.enable(gl!.DEPTH_TEST);
-
-      // 近くにある物体は、遠くにある物体を覆い隠す
-      // 近距离的物体会遮挡远距离的物体
-      gl!.depthFunc(gl!.LEQUAL);
-
-      // カラーバッファや深度バッファをクリアする
+        // カラーバッファや深度バッファをクリアする
       // 清除颜色缓冲区和深度缓冲区
       // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl!.clear(gl!.DEPTH_BUFFER_BIT);
 
-      gl!.clearDepth(1.0);
-
-      // 透過設定
-      gl!.enable(gl!.BLEND);
-      gl!.blendFunc(gl!.SRC_ALPHA, gl!.ONE_MINUS_SRC_ALPHA);
-
-      // 描画更新
-      this._view!.render();
+       // 描画更新
+       this._view!.render();
 
       // ループのために再帰呼び出し
       // 递归调用以进行循环
-      requestAnimationFrame(loop);
+       this._animationFrame = requestAnimationFrame(loop);
     };
-    loop();
+    this._visibilityHandler = () => {
+      if (document.visibilityState === 'hidden') {
+        if (this._animationFrame !== null) {
+          cancelAnimationFrame(this._animationFrame);
+          this._animationFrame = null;
+        }
+      } else if (this._animationFrame === null && s_instance === this && !this._isEnd) {
+        this._animationFrame = requestAnimationFrame(loop);
+      }
+    };
+    document.addEventListener('visibilitychange', this._visibilityHandler, { passive: true });
+    this._animationFrame = requestAnimationFrame(loop);
   }
 
   /**
@@ -315,6 +339,10 @@ export class LAppDelegate {
     this._mouseX = 0.0;
     this._mouseY = 0.0;
     this._isEnd = false;
+    this._inputEventsBound = false;
+    this._animationFrame = null;
+    this._visibilityHandler = null;
+    this._isRunning = false;
 
     this._cubismOption = new Option();
     this._view = new LAppView();
@@ -364,6 +392,10 @@ export class LAppDelegate {
   _mouseY: number; // マウスY座標 // 鼠标Y坐标
   _isEnd: boolean; // APP終了しているか // APP是否已结束
   _textureManager: LAppTextureManager | null; // テクスチャマネージャー // 纹理管理器
+  _inputEventsBound: boolean;
+  _animationFrame: number | null;
+  _visibilityHandler: (() => void) | null;
+  _isRunning: boolean;
 }
 
 /**

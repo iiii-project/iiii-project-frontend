@@ -7,8 +7,8 @@
 
 **包含（原封不動搬遷，籤筒/筊杯視覺一筆一劃未更動）：**
 - 插香/合十手勢偵測（偵測到手部後持續 10 秒即可完成）
-- 抽籤：攝影機模式偵測到手即可觸發；手機可使用 DeviceMotion；另有純點擊模式
-- 攝影機偵測到手後自動播放抽籤動畫，不需要握拳、搖擺或捏取籤條
+- 抽籤：攝影機模式偵測到雙手並持續 2 秒；手機可使用 DeviceMotion；另有純點擊模式
+- 攝影機偵測到雙手後持續 2 秒播放搖籤動畫，不需要握拳或捏取籤條
 - 擲筊：攝影機模式偵測到雙手同時入鏡即可觸發、Three.js 3D 筊杯渲染與動畫，
   並在完成後鎖定，雙手離開畫面後才可再次觸發
 - 香灰粒子特效、木質敲擊音效（WebAudio即時合成）、墨染金線過場動畫
@@ -139,7 +139,6 @@ return <temple-ar-oracle ref={ref} />;
 |---|---|---|
 | `engine/config.js` | 47 | 1275–1317 |
 | `engine/state.js` | 42 | 2650（AppState定義，抽取AR相關欄位） |
-| `engine/particle-system.js` | 104 | 1637–1717 |
 | `engine/audio-engine.js` | 69 | 1719–1784（完全原封不動） |
 | `engine/bwa-scene.js` | 346 | 1808–2116 |
 | `engine/gesture-engine.js` | 448 | 2118–2543 |
@@ -150,10 +149,8 @@ return <temple-ar-oracle ref={ref} />;
 | `styles.css` | 278 | 17–717（CSS子集 + Tailwind等價換算） |
 | `index.js` | 238 | 新增（Web Component組裝邏輯 + 4108–4126的camera bootstrap） |
 
-**總計約 2260 行（原始單檔4129行），分成12個檔案，最大單檔448行（gesture-engine.js）。**
-跟先前分析階段預估的「9個檔案、約2000行」相比，實際做下來多了3個檔案（state.js、
-divination-api.js是分析時沒完全預估到、額外拆出來的）、行數也略高於預估
-（主要是每個檔案都補上了完整的中文說明註解，交代原始行號/調整原因，方便你之後核對）。
+**粒子特效已移除；目前分成11個檔案，最大單檔448行（gesture-engine.js）。**
+相較原始單檔版本，AR 核心已拆分成較容易維護的模組；粒子 Canvas、光爆與畫面震動不再建立。
 
 ## 已知的行為調整（不是原封不動，這裡列出全部）
 
@@ -162,11 +159,9 @@ divination-api.js是分析時沒完全預估到、額外拆出來的）、行數
    `input-mode-resolved` 事件（`reason: 'permission-denied'`）通知宿主頁面，不做任何頁面跳轉。
 2. **手勢視覺標記點（fingertip-marker等）** 原本 `document.body.appendChild(...)`，
    改為 append 到元件自己的 Shadow DOM 容器，避免跳出封裝邊界。
-3. **`screenShakeOnce`/`spawnLightBurst`** 原本對 `document.body` 動手，改為對元件自己的
-   容器動手，效果相同，只是作用範圍從「整個網頁」限縮成「元件自己」。
-4. **`goHome()`** 原本會一併關閉 profile/vow/history/chat 等周邊 modal，這裡改名
+3. **`goHome()`** 原本會一併關閉 profile/vow/history/chat 等周邊 modal，這裡改名
    `reset()` 且只保留AR核心場景的重置，周邊 modal 交還給新前端自己管理。
-5. **`castClickBwa()` 內原本判斷 `AppState.isFortuneLookup`** 導向 `castLookupBwa()` 的分支
+4. **`castClickBwa()` 內原本判斷 `AppState.isFortuneLookup`** 導向 `castLookupBwa()` 的分支
    已移除（因為「已知籤號查詢」模式本身沒有搬過來，屬於周邊功能）。
 
 ## 尚未驗證的部分（建議實際掛載到瀏覽器後測試）

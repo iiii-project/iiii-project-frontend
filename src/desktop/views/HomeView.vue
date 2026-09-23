@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
           src="/videos/tutorial.mp4"
           controls
           playsinline
-          preload="metadata"
+          preload="auto"
           @ended="closeTutorial"
         ></video>
       </div>
