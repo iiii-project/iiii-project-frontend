@@ -125,6 +125,9 @@ const {
 onMounted(() => {
   // 求籤頁從輸入問題開始就不與 Live2D 同時執行；結果頁才重新掛載角色。
   companionStore.beginRitual()
+  // 一進入求籤頁就開始載入 AR、筊杯 GLB、Three.js shader、MediaPipe 與過場
+  // 影片；不要等使用者選完分類，否則前面的表單時間沒有被利用。
+  void warmupCamera()
 
   // 雲霧散盡後把整層移除，之後就不再佔用繪圖資源
   mistTimer = window.setTimeout(() => (showEnterMist.value = false), 900)
@@ -146,7 +149,6 @@ function goStep(next: number) {
 function chooseCategory(value: Category) {
   errorMessage.value = ''
   category.value = value
-  warmupCamera()
 }
 
 async function warmupCamera() {
