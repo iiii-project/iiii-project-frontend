@@ -348,6 +348,8 @@ const REST_Y = -0.2;
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }
     }
+    // GLTFLoader 的模組級快取也要清掉；下一輪儀式會重新載入模型與 shader。
+    jiaoTemplatesPromise = null;
   }
 
   /* 點擊命中測試：把畫面座標轉成 NDC 後對兩只筊杯發射線。

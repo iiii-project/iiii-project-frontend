@@ -88,6 +88,18 @@ export function preloadVideoAsset(src) {
   return promise;
 }
 
+/** 完成一輪儀式後釋放 detached video 的來源與 preload cache。 */
+export function releasePreloadedVideoAssets() {
+  for (const { video } of preloadedVideos.values()) {
+    try {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    } catch (_) {}
+  }
+  preloadedVideos.clear();
+}
+
 export function preloadOracleTransition(els, options = {}) {
   const video = els.transitionVideo;
   if (!video || video.dataset.ready === "1" || video.dataset.failed === "1")

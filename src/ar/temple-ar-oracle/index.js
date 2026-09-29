@@ -24,7 +24,11 @@ import { createArState } from './engine/state.js';
 import { AudioEngine } from './engine/audio-engine.js';
 import { createGestureEngine } from './engine/gesture-engine.js';
 import { createDivinationApi } from './engine/divination-api.js';
-import { createFlowController, preloadOracleTransition } from './engine/flow-controller.js';
+import {
+  createFlowController,
+  preloadOracleTransition,
+  releasePreloadedVideoAssets,
+} from './engine/flow-controller.js';
 import { renderTemplate } from './template.js';
 import { getPerformanceProfile } from '@/utils/performance';
 
@@ -448,6 +452,9 @@ class TempleArOracle extends HTMLElement {
     if (this._destroyed) return;
     this._destroyed = true;
     this._cameraInferenceEnabled = false;
+    // 流程完成後不只隱藏 host，而是先取消影片／倒數／AR 場景，
+    // 再釋放 camera、去背模型、Three.js 與 detached preload video。
+    try { this._flow?.reset?.(); } catch (e) {}
     if (this._onViewportResize){
       window.removeEventListener('resize', this._onViewportResize);
       window.removeEventListener('orientationchange', this._onViewportResize);
@@ -462,6 +469,19 @@ class TempleArOracle extends HTMLElement {
     } catch (e) {}
     this._bwaScene?.destroy?.();
     this._gestureEngine?.destroy?.();
+    try {
+      const transitionVideo = this._els?.transitionVideo;
+      transitionVideo?.pause?.();
+      transitionVideo?.removeAttribute('src');
+      transitionVideo?.load?.();
+    } catch (e) {}
+    this._camera = null;
+    this._selfieSegmentation = null;
+    this._modelWarmupPromise = null;
+    this._modelsWarmed = false;
+    releasePreloadedVideoAssets();
+    if (persistentOracle === this) persistentOracle = null;
+    if (this.parentNode) this.parentNode.removeChild(this);
   }
 }
 
@@ -470,10 +490,9 @@ if (!customElements.get('temple-ar-oracle')) {
 }
 
 /*
- * One persistent AR host for the whole app.  Route components are short-lived,
- * but disposing this element would also dispose the Three.js context and force
- * shader compilation again on every visit to /oracle.  Keep it outside Vue's
- * route tree; callers only hide/reset it between rituals.
+ * AR host is kept outside Vue's route tree while one ritual is active, so route
+ * rendering does not interrupt the flow.  It is destroyed after sequence-complete
+ * and recreated for the next ritual to release camera/WebGL/video resources.
  */
 let persistentOracle = null;
 

@@ -69,6 +69,7 @@ interface TempleArOracleEl extends HTMLElement {
   prepareCamera(): Promise<void>
   prepareBwa(): Promise<void>
   reset(): void
+  destroy(): void
 }
 
 const arEl = ref<TempleArOracleEl | null>(null)
@@ -318,15 +319,14 @@ function unbindAr() {
     el.removeEventListener('offline', onArOffline)
     el.removeEventListener('sequence-complete', onArComplete)
     el.removeEventListener('interpretation-ready', onArInterpretation)
-    // AR host is intentionally persistent. Reset the ritual but keep the
-    // warmed Three.js context, GLB meshes, shaders, camera and MediaPipe.
-    // Hide the host before resetting the video so its final frame can never
-    // be composited into the result page.
+    // 每輪 AR 結束都完整釋放 host；下一輪重新建立並 preload，避免影片最後一幀、
+    // camera、去背模型或 Three.js 資源殘留到結果頁。
     el.style.display = 'none'
     el.style.visibility = 'hidden'
     el.style.pointerEvents = 'none'
     el.style.zIndex = '-1'
-    try { el.reset() } catch { /* host may not have finished building */ }
+    try { el.destroy() } catch { /* host may not have finished building */ }
+    arEl.value = null
   }
   cameraWarmupStarted.value = false
 }
@@ -345,8 +345,8 @@ async function submit(requestedMode: 'camera' | 'manual' = 'camera') {
     errorMessage.value = ''
     arNotice.value = ''
     companionStore.beginRitual()
-    // AR Web Component 與資源已在進入本頁時開始預熱；這裡只切換顯示狀態
-    // 並重用 persistent host，不重新載入或建立 Three.js context。
+    // AR host 與資源會在進入本頁／上一輪結果後重新建立並預熱；
+    // 這裡只負責切換顯示狀態與啟動本輪流程。
     // @ts-ignore -- AR Web Component is a JavaScript module without declarations.
     const arModule = await import('@/ar/temple-ar-oracle/index.js')
     /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
@@ -406,6 +406,8 @@ function restart() {
   category.value = null
   question.value = ''
   errorMessage.value = ''
+  // 結果頁釋放上一輪 AR 後，下一題重新建立並預載整套資源。
+  void warmupCamera()
 }
 </script>
 
