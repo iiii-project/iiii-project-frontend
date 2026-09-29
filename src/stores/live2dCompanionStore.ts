@@ -34,6 +34,13 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
     endRitual() {
       this.isRitualActive = false
     },
+    showResult() {
+      // 結果頁切換是單一狀態操作，避免 endRitual/open 之間的渲染間隙
+      // 讓 Widget 沒有重新掛載 Live2D。
+      this.isRitualActive = false
+      this.isVisible = true
+      this.hasOpenedOnce = true
+    },
     /* 自我介紹跟「開不開」分開處理：open() 在頁面一載入就會呼叫（見
        Live2DCompanionWidget.vue），那個當下沒有使用者手勢，瀏覽器 autoplay
        政策會擋掉這時候播放的語音。真正會出聲的 greet()，只在使用者點角色

@@ -281,8 +281,7 @@ function onArComplete(event: Event) {
   if (detail?.interpretation?.offline) isOffline.value = true
   unbindAr()
   setBodyLock(false)
-  companionStore.endRitual()
-  companionStore.open()
+  companionStore.showResult()
   step.value = 5
   void buildShareQr(detail?.sessionId ?? '')
 
@@ -696,6 +695,11 @@ body.ar-ritual-open { overflow: hidden; }
   visibility: hidden;
   pointer-events: none;
   overflow: hidden;
+}
+.ar-prewarm temple-ar-oracle {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .ar-fullscreen temple-ar-oracle {

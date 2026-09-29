@@ -4,6 +4,7 @@ import { updateModelConfig } from '@/live2d/webSDK/engine/lappdefine'
 import { LAppDelegate } from '@/live2d/webSDK/engine/lappdelegate'
 import { LAppLive2DManager } from '@/live2d/webSDK/engine/lapplive2dmanager'
 import { initializeLive2D } from '@/live2d/webSDK/engine/entry'
+import { loadCubismCore } from '@/live2d/loadCubismCore'
 
 // 移植自 use-live2d-model.ts。修正原始碼裡兩個死路徑：window.LAppDefine / window.LAppLive2DManager
 // 從未真的被賦值到 window，原本靠它們判斷的分支永遠不會執行——這裡改成直接 import class 呼叫。
@@ -83,15 +84,22 @@ export function useLive2DModel(
         const { baseUrl, modelDir, modelFileName } = parseModelUrl(currentUrl!)
         if (baseUrl && modelDir) {
           updateModelConfig(baseUrl, modelDir, modelFileName, Number(modelInfo.value?.kScale))
-          setTimeout(() => {
-            if (LAppLive2DManager.getInstance()) {
-              LAppLive2DManager.releaseInstance()
-            }
-            initializeLive2D()
+          // 結果頁重新掛載時，modelInfo 可能已存在；確保 Cubism Core
+          // 先載入完成，避免 watcher 比 Live2DCompanion.vue 的 onMounted 更早
+          // 執行 initializeLive2D，導致角色只有容器沒有畫面。
+          void loadCubismCore().then(() => {
             setTimeout(() => {
-              position.value = getModelPosition()
+              if (LAppLive2DManager.getInstance()) {
+                LAppLive2DManager.releaseInstance()
+              }
+              initializeLive2D()
+              setTimeout(() => {
+                position.value = getModelPosition()
+              }, 500)
             }, 500)
-          }, 500)
+          }).catch((error) => {
+            console.error('Live2D Cubism Core 載入失敗:', error)
+          })
         }
       } catch (error) {
         console.error('Error processing model URL:', error)

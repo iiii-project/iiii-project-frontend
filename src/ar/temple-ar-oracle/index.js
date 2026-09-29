@@ -49,8 +49,7 @@ function createLazyBwaScene(state) {
       loading = import('./engine/bwa-scene.js').then(({ createBwaScene }) => {
         if (destroyed) return null;
         scene = createBwaScene(state);
-        if (container) scene.init(container);
-        return scene;
+        return Promise.resolve(container ? scene.init(container) : undefined).then(() => scene);
       });
     }
     return loading;
@@ -58,6 +57,10 @@ function createLazyBwaScene(state) {
 
   return {
     init(el) {
+      container = el;
+      return ensure();
+    },
+    prepare(el) {
       container = el;
       return ensure();
     },

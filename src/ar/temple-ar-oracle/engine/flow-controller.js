@@ -511,6 +511,13 @@ export function createFlowController({
     try {
       state.currentFortune = await api.draw(state.sessionId);
       emit("draw-complete", { fortune: state.currentFortune });
+      // 抽籤完成後立刻建立 Three.js renderer 並確認筊杯已可用；
+      // 這段等待發生在抽籤畫面，避免過場後才看到空白／白色畫面。
+      try {
+        await bwaScene.prepare?.(els.bwaThreeContainer);
+      } catch (error) {
+        console.warn("[temple-ar-oracle] 筊杯場景預載失敗，進入擲筊時再試", error);
+      }
       setTimeout(() => playInkTransition(els, () => showScene("bwa")), 700);
     } catch (error) {
       state.current = "draw";

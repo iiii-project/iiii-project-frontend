@@ -70,6 +70,7 @@ const REST_Y = -0.2;
   let loopRafId = null;
   let lastRenderTime = 0;
   let modelLoadStarted = false;
+  let modelReadyPromise = null;
   let initialized = false;
   let tossAnimation = null;
 
@@ -150,16 +151,16 @@ const REST_Y = -0.2;
     }
 
     // 場景建立時就開始準備模型，不等到抽籤完成、第一次進入擲筊畫面才載入。
-    ensureModelLoaded();
+    return ensureModelLoaded();
 
   }
 
   function ensureModelLoaded() {
-    if (modelLoadStarted) return;
+    if (modelReadyPromise) return modelReadyPromise;
     modelLoadStarted = true;
     // 模型通常已在 AR 場景初始化時開始下載；這裡只負責在 Three.js 場景
     // 已經存在後建立筊杯實例。
-    loadJiaoTemplates().then(({ jiaoOne, jiaoTwo }) => {
+    modelReadyPromise = loadJiaoTemplates().then(({ jiaoOne, jiaoTwo }) => {
       if (destroyed) return;
       cupA = makeCup(jiaoOne);
       cupB = makeCup(jiaoTwo);
@@ -168,8 +169,11 @@ const REST_Y = -0.2;
       scene.add(cupB);
     }).catch((error) => {
       modelLoadStarted = false;
+      modelReadyPromise = null;
       console.error('[BwaScene] 筊杯模型載入失敗', error);
+      throw error;
     });
+    return modelReadyPromise;
   }
 
   function loop(now) {
