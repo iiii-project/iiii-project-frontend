@@ -325,11 +325,14 @@ export function createFlowController({
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
   let pendingPrayer = null; // 拜拜 API 與墨染轉場並行，抽籤時再確認已完成
 
-  // 暫停手勢偵測期間，三個需要動作的階段改成固定倒數自動前進。
+  // 暫停手勢偵測期間，三個需要動作的階段改成「進場偵測感 → 動畫進度 → 自動前進」。
   // 相機與人像去背仍持續運作，只有 Hands/WASM 手勢推論被移除。
   const AUTO_ADVANCE = true;
-  const AUTO_COUNTDOWN_SECONDS = 3;
+  const AUTO_ENTRY_DELAY_MS = 1500;
+  const AUTO_INCENSE_MS = 10000;
+  const AUTO_DRAW_MS = 5000;
   let autoAdvanceTimer = null;
+  let autoAdvanceInterval = null;
   let autoAdvanceGeneration = 0;
 
   function cancelAutoAdvance() {
@@ -338,26 +341,61 @@ export function createFlowController({
       clearTimeout(autoAdvanceTimer);
       autoAdvanceTimer = null;
     }
+    if (autoAdvanceInterval !== null) {
+      clearInterval(autoAdvanceInterval);
+      autoAdvanceInterval = null;
+    }
   }
 
-  function startAutoCountdown(sceneName, getHint, onComplete) {
+  function startAutoStage(sceneName, durationMs, { onEnter, onProgress, onComplete }) {
     if (!AUTO_ADVANCE) return;
     cancelAutoAdvance();
     const generation = autoAdvanceGeneration;
-    let remaining = AUTO_COUNTDOWN_SECONDS;
-    const tick = () => {
-      if (generation !== autoAdvanceGeneration || state.current !== sceneName) return;
-      if (remaining <= 0) {
-        autoAdvanceTimer = null;
+    const isActive = () =>
+      generation === autoAdvanceGeneration && state.current === sceneName;
+
+    onEnter?.();
+
+    autoAdvanceTimer = setTimeout(() => {
+      if (!isActive()) return;
+      autoAdvanceTimer = null;
+      if (durationMs <= 0) {
         onComplete();
         return;
       }
-      getHint(remaining);
-      remaining -= 1;
-      autoAdvanceTimer = setTimeout(tick, 1000);
-    };
-    tick();
+      const startedAt = performance.now();
+      const tick = () => {
+        if (!isActive()) return;
+        const progress = Math.min(1, (performance.now() - startedAt) / durationMs);
+        onProgress?.(progress);
+        if (progress >= 1) {
+          clearInterval(autoAdvanceInterval);
+          autoAdvanceInterval = null;
+          onComplete();
+        }
+      };
+      tick();
+      autoAdvanceInterval = setInterval(tick, 100);
+    }, AUTO_ENTRY_DELAY_MS);
   }
+
+  function startAutoBwaStage() {
+    startAutoStage("bwa", 0, {
+      onEnter: () => {
+        els.bwaHint.textContent = "筊杯準備中…";
+      },
+      onComplete: () => tossBwa(window.innerWidth / 2, window.innerHeight / 2, 0, 0),
+    });
+  }
+
+  function stopAutoVisualStage() {
+    els.incenseRing.classList.remove("on");
+    els.incenseStick.classList.remove("sensing");
+    els.shakeRing.classList.remove("on");
+    els.qianTongZone.classList.remove("shaking");
+    els.sticksGroup.classList.remove("is-shaking");
+  }
+
   let transitionGeneration = 0;
 
   /* 神明實景疊加：鏡頭模式等第一張去背遮罩完成就顯示人物，
@@ -558,29 +596,40 @@ export function createFlowController({
     }
 
     if (name === "incense") {
-      startAutoCountdown(
-        "incense",
-        (seconds) => {
-          els.incenseHint.textContent = `請誠心默念，${seconds} 秒後進入抽籤`;
+      startAutoStage("incense", AUTO_INCENSE_MS, {
+        onEnter: () => {
+          els.incenseRing.classList.add("on");
+          els.incenseRing.style.setProperty("--p", 0);
+          els.incenseStick.classList.add("sensing");
+          els.incenseHint.textContent = "誠心默念中…";
         },
-        () => completeIncense(),
-      );
+        onProgress: (progress) => {
+          els.incenseRing.style.setProperty("--p", Math.round(progress * 100));
+        },
+        onComplete: () => {
+          stopAutoVisualStage();
+          completeIncense();
+        },
+      });
     } else if (name === "draw") {
-      startAutoCountdown(
-        "draw",
-        (seconds) => {
-          els.drawHint.textContent = `準備抽籤，${seconds} 秒後自動抽籤`;
+      startAutoStage("draw", AUTO_DRAW_MS, {
+        onEnter: () => {
+          els.shakeRing.classList.add("on");
+          els.shakeRing.style.setProperty("--p", 0);
+          els.qianTongZone.classList.add("shaking");
+          els.sticksGroup.classList.add("is-shaking");
+          els.drawHint.textContent = "搖籤中…";
         },
-        () => completeDraw(),
-      );
+        onProgress: (progress) => {
+          els.shakeRing.style.setProperty("--p", Math.round(progress * 100));
+        },
+        onComplete: () => {
+          stopAutoVisualStage();
+          completeDraw();
+        },
+      });
     } else if (name === "bwa") {
-      startAutoCountdown(
-        "bwa",
-        (seconds) => {
-          els.bwaHint.textContent = `準備擲筊，${seconds} 秒後自動擲筊`;
-        },
-        () => tossBwa(window.innerWidth / 2, window.innerHeight / 2, 0, 0),
-      );
+      startAutoBwaStage();
     }
   }
 
@@ -871,17 +920,8 @@ export function createFlowController({
         els.bwaResultPanel.classList.add("hidden");
         resetBwaVisual();
         gestureEngine.lockBwaUntilHandsLeave();
-        els.bwaHint.textContent = AUTO_ADVANCE
-          ? "準備再次擲筊"
-          : "請讓雙手同時進入畫面即可擲筊";
         state.bwaTossing = false;
-        startAutoCountdown(
-          "bwa",
-          (seconds) => {
-            els.bwaHint.textContent = `準備再次擲筊，${seconds} 秒後自動擲筊`;
-          },
-          () => tossBwa(window.innerWidth / 2, window.innerHeight / 2, 0, 0),
-        );
+        startAutoBwaStage();
       }, 2200);
     } else {
       els.bwaResultTitle.textContent = `${result?.result_name || "非聖筊"} · 重新抽籤`;
@@ -922,6 +962,7 @@ export function createFlowController({
   // 重置AR核心場景相關狀態（原始 goHome() 的AR部分；周邊 modal 的關閉交還給新前端自己處理）
   function reset() {
     cancelAutoAdvance();
+    stopAutoVisualStage();
     transitionGeneration += 1;
     cancelOracleTransition(els.transitionVideo);
     cancelInkTransition(els.transitionOverlay);
