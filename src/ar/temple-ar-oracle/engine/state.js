@@ -12,7 +12,6 @@
      drawSubState      'shake' | 'revealing'         搖籤／自動抽出動畫子階段
      bwaTossing        boolean                        擲筊拋擲動畫是否進行中（原欄位同名）
      selectedStickCx   number                          抽到的籤枝在籤筒SVG裡的x座標（原欄位同名）
-     mobileShakeReady  boolean                        手機是否已取得動作感測權限（原欄位同名）
      userQuery         { category, question }         使用者輸入的求籤問題/分類（原欄位同名，
                                                        原始碼裡由首頁表單寫入，這裡改由外部
                                                        attribute/property 於 start() 時寫入）
@@ -29,7 +28,6 @@ export function createArState() {
     drawSubState: 'shake',
     bwaTossing: false,
     selectedStickCx: 100,
-    mobileShakeReady: false,
     userQuery: { category: '綜合運勢', question: '' },
     // 以下欄位是flow-controller在串接後端API時需要的場次資料，
     // 原始碼裡也都在同一個AppState物件裡，語意相同
@@ -38,7 +36,7 @@ export function createArState() {
     currentFortune: null,
     interpretation: null,
     pendingBwaResult: null,
-    resolvedMode: null, // 'camera' | 'motion' | 'manual'，由 flow-controller.start() 解析後填入
+    resolvedMode: null, // 'camera' | 'manual'，由 flow-controller.start() 解析後填入
     segmentationMask: null, // SelfieSegmentation 每格畫面算出的人像遮罩，由 index.js 寫入、gesture-engine 讀取畫 #output_canvas 用
   };
 }

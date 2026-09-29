@@ -215,7 +215,7 @@ export function createDivinationApi(apiBase, options = {}) {
     };
   }
 
-  async function create(question, category, interactionMode = 'motion', fortuneNumber = null){
+  async function create(question, category, interactionMode = 'click', fortuneNumber = null){
     return request('/divinations/', {
       method: 'POST',
       body: JSON.stringify({
@@ -235,7 +235,7 @@ export function createDivinationApi(apiBase, options = {}) {
   return {
     isOffline: () => offline,
 
-    async create(question, category, interactionMode = 'motion', fortuneNumber = null) {
+    async create(question, category, interactionMode = 'click', fortuneNumber = null) {
       lastQuestion = question;
       lastCategory = category;
       if (shouldSkipNetwork()) return { session_id: `offline-${Date.now()}`, share_token: null, offline: true };

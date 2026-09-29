@@ -26,7 +26,6 @@ import { createArState } from './engine/state.js';
 import { AudioEngine } from './engine/audio-engine.js';
 import { createBwaScene } from './engine/bwa-scene.js';
 import { createGestureEngine } from './engine/gesture-engine.js';
-import { createMobileShake } from './engine/mobile-shake.js';
 import { createDivinationApi } from './engine/divination-api.js';
 import { createFlowController , preloadOracleTransition } from './engine/flow-controller.js';
 import { renderTemplate } from './template.js';
@@ -130,21 +129,6 @@ class TempleArOracle extends HTMLElement {
       },
     });
 
-    this._mobileShake = createMobileShake({
-      els: this._els,
-      state: this._state,
-      callbacks: {
-        completeDraw: () => this._flow.completeDraw(),
-        // 裝置拿得到權限但實際上沒有加速度計時，把「直接抽籤」按鈕放出來
-        onMotionUnavailable: () => {
-          this._els.btnManualDraw.classList.remove('hidden');
-          this._els.btnManualDraw.textContent = '直 接 抽 籤';
-          this._els.drawHint.textContent = '沒有偵測到搖動，可直接抽籤。';
-          this._emit('toast', { message: '沒有偵測到搖動，已提供直接抽籤。' });
-        },
-      },
-    });
-
     /* 領籤過場影片來源：預設吃引擎內建的 oracle-transition.mov，
        宿主頁面可用 transition-src attribute 覆蓋（例如桌機版換成 dragon.mp4）。
        只在建立當下讀一次，過場開始播放後才換片沒有意義，不需要做成響應式的。 */
@@ -172,7 +156,6 @@ class TempleArOracle extends HTMLElement {
       gestureEngine: this._gestureEngine,
       bwaScene: this._bwaScene,
       audioEngine: AudioEngine,
-      mobileShake: this._mobileShake,
       emit: (name, detail) => this._emit(name, detail),
       transitionSrc,
     });
@@ -326,14 +309,14 @@ class TempleArOracle extends HTMLElement {
 
   /**
    * 啟動整個插香→搖籤→擲筊儀式。
-   * @param {{question?: string, category?: string, inputMode?: 'auto'|'camera'|'motion'|'manual'}} [options]
+   * @param {{question?: string, category?: string, inputMode?: 'camera'|'manual'}} [options]
    */
   async start(options = {}){
     if (this._started) return;
     this._started = true;
     const question = options.question ?? this.getAttribute('question') ?? '';
     const category = options.category ?? this.getAttribute('category') ?? '綜合運勢';
-    const requestedMode = options.inputMode ?? this.getAttribute('input-mode') ?? 'auto';
+    const requestedMode = options.inputMode ?? this.getAttribute('input-mode') ?? 'camera';
 
     try {
       await this._flow.start({
@@ -341,7 +324,6 @@ class TempleArOracle extends HTMLElement {
         category,
         requestedMode,
         startCamera: () => this._startCamera(),
-        motionAccessGranted: options.motionAccessGranted,
       });
     } catch (error) {
       this._started = false;
@@ -369,7 +351,6 @@ class TempleArOracle extends HTMLElement {
     } catch (e) {}
     this._bwaScene?.destroy?.();
     this._gestureEngine?.destroy?.();
-    this._mobileShake?.stop?.();
   }
 }
 

@@ -4,18 +4,18 @@ import { sendWhenReady } from '@/live2d/websocketService'
 const GREETING_TEXT = '我是你的解籤助手金鶴，有任何問題都可以問我喔！'
 
 /**
- * 全站共用的小夥伴開合狀態（原本是 OracleWizard.vue 內的 companionOpened/
- * companionVisible/hasGreetedCompanion 這幾個頁面局部 ref，現在小夥伴變成
- * 全站浮動元件後得升到這裡，才能在切頁後仍記得「開過一次」跟「打過招呼」）。
+ * 全站共用的小夥伴開合狀態與求籤儀式鎖定狀態。
  */
 export const useLive2DCompanionStore = defineStore('live2dCompanion', {
   state: () => ({
     isVisible: false,
     hasOpenedOnce: false,
-    hasGreeted: false
+    hasGreeted: false,
+    isRitualActive: false
   }),
   actions: {
     open() {
+      if (this.isRitualActive) return
       if (this.isVisible) return
       this.isVisible = true
       this.hasOpenedOnce = true
@@ -26,6 +26,13 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
         return
       }
       this.open()
+    },
+    beginRitual() {
+      this.isRitualActive = true
+      this.isVisible = false
+    },
+    endRitual() {
+      this.isRitualActive = false
     },
     /* 自我介紹跟「開不開」分開處理：open() 在頁面一載入就會呼叫（見
        Live2DCompanionWidget.vue），那個當下沒有使用者手勢，瀏覽器 autoplay

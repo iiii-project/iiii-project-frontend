@@ -4,9 +4,8 @@ import { LAppDelegate } from '@/live2d/webSDK/engine/lappdelegate'
 import { LAppLive2DManager } from '@/live2d/webSDK/engine/lapplive2dmanager'
 import { getCappedDevicePixelRatio } from '@/utils/device'
 
-// 這裡只服務單一使用場景（角色蓋滿全螢幕），所以拿掉了原本 React 版
-// window 模式/側邊欄相關的尺寸判斷分支，一律以容器實際尺寸（containerRef）為準——
-// 容器現在是鋪滿 viewport 的全螢幕層，所以這個尺寸本身就等同 window 尺寸。
+// 這裡只服務單一浮動角色場景，所以拿掉了原本 React 版 window 模式/側邊欄相關的
+// 尺寸判斷分支，一律以角色容器實際尺寸（containerRef）為準，不再假設容器等於 viewport。
 const MIN_SCALE = 0.1
 const MAX_SCALE = 5.0
 const EASING_FACTOR = 0.3
@@ -159,9 +158,8 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
 
     isResizing = true
     try {
-      // 用容器實際尺寸而非直接讀 window 尺寸：容器（見 Live2DCompanion.vue）本身
-      // 已經是 fixed inset:0 蓋滿全螢幕的層，兩者數值理論上會一致，但透過
-      // ResizeObserver 觀察容器仍比直接綁 window resize 更準確可靠。
+      // 用容器實際尺寸而非直接讀 window 尺寸：角色現在只佔固定浮動區域，
+      // 透過 ResizeObserver 觀察容器比假設 viewport 尺寸更準確可靠。
       const bounds = containerRef.value?.getBoundingClientRect()
       const width = bounds?.width || window.innerWidth
       const height = bounds?.height || window.innerHeight

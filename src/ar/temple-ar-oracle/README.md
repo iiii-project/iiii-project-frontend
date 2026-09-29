@@ -7,7 +7,7 @@
 
 **包含（原封不動搬遷，籤筒/筊杯視覺一筆一劃未更動）：**
 - 插香/合十手勢偵測（偵測到手部後持續 10 秒即可完成）
-- 抽籤：攝影機模式偵測到雙手並持續 2 秒；手機可使用 DeviceMotion；另有純點擊模式
+- 抽籤：攝影機模式偵測到雙手並持續 2 秒；另有純點擊模式
 - 攝影機偵測到雙手後持續 2 秒播放搖籤動畫，不需要握拳或捏取籤條
 - 擲筊：攝影機模式偵測到雙手同時入鏡即可觸發、Three.js 3D 筊杯渲染與動畫，
   並在完成後鎖定，雙手離開畫面後才可再次觸發
@@ -54,7 +54,7 @@ three
   const oracle = document.getElementById('oracle');
 
   oracle.addEventListener('input-mode-resolved', (e) => {
-    // e.detail = { mode: 'camera'|'motion'|'manual', reason?, motionGranted? }
+    // e.detail = { mode: 'camera'|'manual', reason? }
   });
   oracle.addEventListener('incense-complete', () => {});
   oracle.addEventListener('draw-complete', (e) => {
@@ -85,13 +85,11 @@ three
 |---|---|
 | `question` | 使用者輸入的問題（字串） |
 | `category` | 分類，預設 `'綜合運勢'` |
-| `inputMode` | `'auto'`、`'camera'`、`'motion'` 或 `'manual'`；目前 Vue 頁面使用 `'camera'` 與 `'motion'` |
+| `inputMode` | `'camera'` 或 `'manual'` |
 
 目前模式行為如下：
-- `'manual'`：一律走純點擊路徑，略過鏡頭與動作感測。
-- `'camera'`：所有裝置優先啟動攝影機；手機啟動失敗時降級為 motion，其他裝置降級為 manual。
-- `'motion'`：使用 DeviceMotion；無法取得權限或沒有感測器時提供直接抽籤按鈕。
-- `'auto'`：依裝置自動選擇 camera 或 motion。
+- `'manual'`：一律走純點擊路徑，略過鏡頭。
+- `'camera'`：所有裝置優先啟動攝影機；啟動失敗時降級為 manual。
 
 也可以改用 HTML attribute 傳入（`question`/`category`/`input-mode`），效果相同。
 
@@ -142,7 +140,6 @@ return <temple-ar-oracle ref={ref} />;
 | `engine/audio-engine.js` | 69 | 1719–1784（完全原封不動） |
 | `engine/bwa-scene.js` | 346 | 1808–2116 |
 | `engine/gesture-engine.js` | 448 | 2118–2543 |
-| `engine/mobile-shake.js` | 97 | 2648–2728 |
 | `engine/divination-api.js` | 87 | 2560–2646（僅AR核心用到的5支API） |
 | `engine/flow-controller.js` | 358 | 2749–3361（UIActions，精選AR核心部分） |
 | `template.js` | 149 | 1004–1150（HTML markup） |
@@ -169,7 +166,7 @@ return <temple-ar-oracle ref={ref} />;
 這份抽取是逐行核對原始碼完成的靜態程式碼重組，但**還沒有在真實瀏覽器環境跑過**。
 建議在真正整合進新專案前，至少驗證：
 - 桌機鏡頭手勢三個階段（合十/搖籤/擲筊）是否正常觸發
-- 手機 devicemotion 搖晃是否正常觸發、iOS 權限請求彈窗是否正常顯示
+- 手機鏡頭權限被拒絕時，是否正確降級為手動點擊模式
 - 鏡頭權限被拒絕時，是否正確降級為手動點擊模式
 - Three.js 筊杯的落地判定與視覺是否與原版一致
 - 各 Tailwind class 換算後的視覺呈現，建議在多種螢幕寬度下截圖比對

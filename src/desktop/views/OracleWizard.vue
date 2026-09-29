@@ -72,7 +72,7 @@ interface ArInterpretation {
   offline?: boolean
 }
 interface TempleArOracleEl extends HTMLElement {
-  start(options: { question?: string; category?: string; inputMode?: string; motionAccessGranted?: boolean }): Promise<void>
+  start(options: { question?: string; category?: string; inputMode?: 'camera' | 'manual' }): Promise<void>
   prepareCamera(): Promise<void>
   destroy(): void
 }
@@ -129,6 +129,8 @@ const {
 })
 
 onMounted(() => {
+  // 求籤頁從輸入問題開始就不與 Live2D 同時執行；結果頁才重新掛載角色。
+  companionStore.beginRitual()
   // 儀式頁一進入就先準備後面會用到的筊杯模型與影片，避免抽籤完成後
   // 才第一次下載／解析資源，造成切到擲筊場景時卡頓。
   void preloadBwaModel().catch((error: unknown) => {
@@ -145,6 +147,8 @@ onBeforeUnmount(() => {
   if (mistTimer) window.clearTimeout(mistTimer)
   setBodyLock(false)
   unbindAr()
+  companionStore.endRitual()
+  companionStore.open()
 })
 
 function goStep(next: number) {
@@ -184,20 +188,6 @@ const askedQuestion = computed(() => {
   return `想請示關於${chosen.value?.label ?? '心中'}的事`
 })
 const hasTypedQuestion = computed(() => question.value.trim().length > 0)
-
-async function requestMotionAccess(): Promise<boolean> {
-  if (!('DeviceMotionEvent' in window)) return false
-  const MotionEvent = window.DeviceMotionEvent as typeof DeviceMotionEvent & {
-    requestPermission?: () => Promise<'granted' | 'denied'>
-  }
-  try {
-    return typeof MotionEvent.requestPermission === 'function'
-      ? await MotionEvent.requestPermission() === 'granted'
-      : true
-  } catch {
-    return false
-  }
-}
 
 function confirmQuestion() {
   if (isRecording.value) stopRecording()
@@ -296,6 +286,8 @@ function onArComplete(event: Event) {
   if (detail?.interpretation?.offline) isOffline.value = true
   unbindAr()
   setBodyLock(false)
+  companionStore.endRitual()
+  companionStore.open()
   step.value = 5
   void buildShareQr(detail?.sessionId ?? '')
 
@@ -306,70 +298,13 @@ function onArComplete(event: Event) {
   }
 }
 
-/* ── 儀式進行中，小夥伴主動彈出來講解每個階段 ──
-   <temple-ar-oracle> 其實會發 8 種事件，這裡另外接的 3 個（input-mode-resolved／
-   incense-complete／draw-complete）原本沒人在聽，正好是「進燒香」「進抽籤」
-   「進擲筊」這三個階段轉換點。文案依 input-mode-resolved 給的模式分桌面／手機：
-   camera 會經過燒香，motion（使用者手動選擇）與 manual（鏡頭失敗備援）
-   都直接跳過燒香、從抽籤開始。 */
-type ArInputMode = 'camera' | 'motion' | 'manual'
-type RequestedInputMode = 'camera' | 'motion'
-let resolvedInputMode: ArInputMode | null = null
-let ritualDismissed = false
-
-watch(
-  () => companionStore.isVisible,
-  (visible, wasVisible) => {
-    if (!visible && wasVisible) ritualDismissed = true
-  }
-)
-
-function guideRitualStage(text: string) {
-  if (ritualDismissed) return
-  companionStore.open()
-  sendWhenReady({ type: 'speak-text', text })
-}
-
-function drawInstruction(mode: ArInputMode | null): string {
-  return mode === 'motion'
-    ? '接下來搖一搖手機，就可以抽籤囉。'
-    : '讓雙手進入鏡頭，持續 2 秒就可以抽出籤囉。'
-}
-
-function bwaInstruction(mode: ArInputMode | null): string {
-  return mode === 'motion'
-    ? '接下來點擊螢幕，就可以擲筊囉。'
-    : '把雙手捧著筊杯，然後向上拋出去。'
-}
-
-function onArInputModeResolved(event: Event) {
-  const mode = (event as CustomEvent<{ mode?: ArInputMode }>).detail?.mode ?? null
-  resolvedInputMode = mode
-  if (mode === 'camera') {
-    guideRitualStage('接下來要把雙手合十，誠心地說出你是誰，然後在心裡祈福拜拜。')
-  } else {
-    // motion／manual 都會跳過燒香，直接進抽籤
-    guideRitualStage(drawInstruction(mode))
-  }
-}
-
-function onArIncenseComplete() {
-  guideRitualStage(drawInstruction('camera'))
-}
-
-function onArDrawComplete() {
-  guideRitualStage(bwaInstruction(resolvedInputMode))
-}
-
+/* 儀式期間不掛載 Live2D；角色只在結果頁重新出現。 */
 function bindAr(el: TempleArOracleEl) {
   el.addEventListener('toast', onArToast)
   el.addEventListener('offline', onArOffline)
   el.addEventListener('sequence-complete', onArComplete)
   // 解籤晚於過場才回來，補發的事件也要接
   el.addEventListener('interpretation-ready', onArInterpretation)
-  el.addEventListener('input-mode-resolved', onArInputModeResolved)
-  el.addEventListener('incense-complete', onArIncenseComplete)
-  el.addEventListener('draw-complete', onArDrawComplete)
 }
 
 function unbindAr() {
@@ -379,9 +314,6 @@ function unbindAr() {
     el.removeEventListener('offline', onArOffline)
     el.removeEventListener('sequence-complete', onArComplete)
     el.removeEventListener('interpretation-ready', onArInterpretation)
-    el.removeEventListener('input-mode-resolved', onArInputModeResolved)
-    el.removeEventListener('incense-complete', onArIncenseComplete)
-    el.removeEventListener('draw-complete', onArDrawComplete)
     try { el.destroy() } catch { /* 元件可能已卸載 */ }
   }
   cameraWarmup.value = false
@@ -391,7 +323,7 @@ function unbindAr() {
 // 收集完成 → 進入 AR 儀式
 let isSubmitting = false
 
-async function submit(requestedMode: RequestedInputMode = 'camera') {
+async function submit(requestedMode: 'camera' | 'manual' = 'camera') {
   /* isBusy 目前恆為 false（loadingLabel 從未被賦值，見上面 99 行），單靠它擋不住
      連點——button 從 DOM 移除是等 Vue 下一輪渲染，兩次 click 事件仍可能在那之前
      都進到這裡，各自呼叫一次 api.create()。isSubmitting 是同步旗標，在事件迴圈
@@ -399,15 +331,9 @@ async function submit(requestedMode: RequestedInputMode = 'camera') {
   if (isSubmitting || isBusy.value) return
   isSubmitting = true
   try {
-    // motion 模式需要在這個按鈕事件裡先取得 iOS 動作感測權限；結果會
-    // 傳給 AR 引擎，避免切換畫面或等待 API 後失去使用者手勢資格。
-    const motionAccessGranted = requestedMode === 'motion'
-      ? await requestMotionAccess()
-      : undefined
     errorMessage.value = ''
     arNotice.value = ''
-    resolvedInputMode = null
-    ritualDismissed = false
+    companionStore.beginRitual()
     /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
        一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
     step.value = 4
@@ -415,6 +341,7 @@ async function submit(requestedMode: RequestedInputMode = 'camera') {
     const el = arEl.value
     if (!el) {
       errorMessage.value = '無法載入求籤場景，請重新整理頁面再試一次。'
+      companionStore.endRitual()
       return
     }
     bindAr(el)
@@ -426,14 +353,15 @@ async function submit(requestedMode: RequestedInputMode = 'camera') {
          void el.prepareCamera().catch(() => undefined)
        }
        await el.start({
-         question: askedQuestion.value,
-         category: chosen.value?.arLabel ?? '綜合運勢',
-         inputMode: requestedMode,
-         motionAccessGranted
-       })
+          question: askedQuestion.value,
+          category: chosen.value?.arLabel ?? '綜合運勢',
+          inputMode: requestedMode
+        })
     } catch (error) {
       // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況
       errorMessage.value = error instanceof Error ? error.message : '無法開始求籤，請稍後再試。'
+      companionStore.endRitual()
+      companionStore.open()
     }
   } finally {
     isSubmitting = false
@@ -640,9 +568,6 @@ function restart() {
         </dl>
         <div class="row">
           <button class="btn ghost" type="button" @click="goStep(2)">回去修改</button>
-          <button class="btn ghost motion-choice" type="button" @click="submit('motion')">
-            啟 用 搖 手 機 模 式
-          </button>
           <button class="btn primary" type="button" @click="submit('camera')">誠 心 送 出</button>
         </div>
       </section>

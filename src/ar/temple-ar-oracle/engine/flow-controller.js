@@ -26,14 +26,9 @@
    【行為調整（不是原封不動，這裡明確列出）】
      - 原始 goHome() 會一併關掉 profile/vow/history/chat 等周邊 modal，
        這裡的 reset() 只保留AR核心場景相關的重置，周邊 modal 由新前端自己管理。
-     - 原本用 `window.location.search` 的 mode（manual/lookup/interpret）與
-       `isMobileDevice` 全域變數做流程分支，這裡改成呼叫 start() 時由外部明確
-       傳入 requestedMode（'auto' | 'camera' | 'motion' | 'manual'），內部再依
-       裝置能力/鏡頭權限解析出最終 resolvedMode，透過 'input-mode-resolved'
-       事件回報給宿主頁面（取代原本壞掉的 window.parent.location.assign 寫法，
-       這一段在前面討論就已經先跟你確認過）。
+      - start() 只接受 camera/manual；鏡頭失敗時由同一元件降級為手動點擊，
+        不再使用 DeviceMotion 搖手機模式。
    ========================================================================= */
-import { isMobileDevice } from "./mobile-shake.js";
 
 /* 領籤過場：播放自製的 5.12 秒動畫（龍銜籤送到眼前）。
    影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
@@ -209,8 +204,7 @@ export function createFlowController({
   api,
   gestureEngine,
   bwaScene,
-   audioEngine,
-  mobileShake,
+  audioEngine,
    emit,
   transitionSrc,
 }) {
@@ -369,7 +363,6 @@ export function createFlowController({
     // 讓 Three.js 佔用 GPU；上香與抽籤期間完全停止渲染。
     if (name === "bwa") bwaScene.resume();
     else bwaScene.pause();
-    if (name !== "draw") mobileShake.stop();
     state.current = name;
 
     /* 神明實景疊加：鏡頭模式等去背遮罩完成，人物才淡入；沒有鏡頭的模式直接顯示。 */
@@ -411,28 +404,15 @@ export function createFlowController({
       );
       gestureEngine.resetShakeProgress();
        gestureEngine.resetDrawReveal();
-      const useMobileShake =
-        state.resolvedMode === "motion";
        els.drawHint.textContent =
          state.resolvedMode === "manual"
            ? "準備好後，點擊籤筒即可自動抽籤。"
-           : useMobileShake && state.mobileShakeReady
-             ? "拿起手機，上下搖動三次即可抽籤"
-             : useMobileShake
-               ? "未開啟動作感測，可直接抽籤。"
-               : "請讓雙手同時進入畫面，開始搖籤";
-      // 手機正常流程只透過搖動抽籤；僅在感測器不可用時才顯示直接抽籤備援。
+           : "請讓雙手同時進入畫面，開始搖籤";
       els.btnManualDraw.classList.toggle(
         "hidden",
-        !(
-          state.resolvedMode === "manual" ||
-          (useMobileShake && !state.mobileShakeReady)
-        ),
+        state.resolvedMode !== "manual",
       );
-      els.btnManualDraw.textContent = useMobileShake
-        ? "直 接 抽 籤"
-        : "手 動 抽 籤";
-      if (useMobileShake && state.mobileShakeReady) mobileShake.start();
+      els.btnManualDraw.textContent = "手 動 抽 籤";
     }
     if (name === "bwa") {
       els.sceneBwa.classList.remove("hidden");
@@ -443,8 +423,7 @@ export function createFlowController({
       /* 手動模式改成「直接點筊杯」：不再另外給一顆擲筊按鈕，
          筊杯容器打開 pointer-events，由 index.js 的 pointerdown 做命中判定。 */
       const isClickBwaMode =
-        state.resolvedMode === "manual" ||
-        state.resolvedMode === "motion";
+        state.resolvedMode === "manual";
       state.clickBwaMode = isClickBwaMode;
       els.btnClickBwa.classList.add("hidden");
       els.bwaThreeContainer.classList.toggle("tossable", isClickBwaMode);
@@ -774,7 +753,6 @@ export function createFlowController({
     gestureEngine.resetShakeProgress();
     gestureEngine.resetDrawReveal();
     gestureEngine.resetBwaTracking();
-    mobileShake.stop();
     // 離開儀式：預取的擲筊結果與解籤請求都不再屬於任何一場
     resetCastPrefetch();
   }
@@ -784,19 +762,14 @@ export function createFlowController({
   // 這裡是新增的整合邏輯（原始碼裡這段散落在 btnHomeStart 的點擊事件、
   // 以及檔案最尾端的 Camera/Hands bootstrap 兩處，這裡合併成一個函式，
   // 方便Web Component呼叫），內部判斷順序與原始碼行為一致：
-  //   requestedMode === 'manual' → 一律走純點擊路徑，略過插香手勢偵測（優先權最高，
-  //                                 即使同時在手機上也以此為準）
-  //   requestedMode === 'camera' → 所有裝置都走攝影機手勢路徑，若手機鏡頭失敗
-  //                                 再降級到 motion，桌機則降級到 manual。
-  //   手機裝置（且非manual/camera） → 走 devicemotion 搖晃路徑
-  //   其餘（桌機） → 走攝影機手勢路徑（含插香偵測）
+  //   requestedMode === 'manual' → 一律走純點擊路徑
+  //   requestedMode === 'camera' → 優先走攝影機手勢，失敗時降級到 manual。
   // ============================================================
   async function start({
     question,
     category,
-    requestedMode = "auto",
+    requestedMode = "camera",
     startCamera,
-    motionAccessGranted,
   }) {
     state.userQuery = { question, category };
     state.current = "creating";
@@ -807,26 +780,6 @@ export function createFlowController({
     state.interpretation = null;
     resetCastPrefetch();
 
-    const mobile = isMobileDevice();
-
-    /* 'motion'：不看 User-Agent，強制走搖晃路徑。
-       原始碼只用 UA 判斷裝置、無法覆蓋（README 有記錄這個限制），
-       這裡補上，讓宿主可以依畫面寬度（而非 UA）決定手機版就用搖的。 */
-    if (requestedMode === "motion") {
-      state.resolvedMode = "motion";
-      state.mobileShakeReady = motionAccessGranted ?? await mobileShake.requestAccess();
-      emit("input-mode-resolved", {
-        mode: "motion",
-        motionGranted: state.mobileShakeReady,
-        forced: true,
-      });
-      await api.prayer(state.sessionId);
-      showScene("draw");
-      if (!state.mobileShakeReady)
-        emit("toast", { message: "這個裝置沒有動作感測，已提供直接抽籤。" });
-      return;
-    }
-
     if (requestedMode === "manual") {
       state.resolvedMode = "manual";
       emit("input-mode-resolved", { mode: "manual" });
@@ -835,52 +788,7 @@ export function createFlowController({
       return;
     }
 
-    if (requestedMode === "camera") {
-      try {
-        await startCamera();
-        state.resolvedMode = "camera";
-        emit("input-mode-resolved", { mode: "camera" });
-        showScene("incense");
-        return;
-      } catch (error) {
-        if (mobile) {
-          // 手機鏡頭被拒絕或不支援時，保留原本的搖手機備援流程。
-          state.resolvedMode = "motion";
-          state.mobileShakeReady = await mobileShake.requestAccess();
-          emit("input-mode-resolved", {
-            mode: "motion",
-            motionGranted: state.mobileShakeReady,
-            fallbackFrom: "camera",
-          });
-          await api.prayer(state.sessionId);
-          showScene("draw");
-          emit("toast", {
-            message: state.mobileShakeReady
-              ? "鏡頭無法啟動，已改用搖動手機抽籤。"
-              : "鏡頭無法啟動，已提供直接抽籤。",
-          });
-          return;
-        }
-        // 桌機繼續走下方的手動備援提示。
-        emit("toast", { message: error?.message || "無法啟動鏡頭，已切換為手動抽籤。" });
-      }
-    }
-
-    if (mobile) {
-      state.resolvedMode = "motion";
-      state.mobileShakeReady = await mobileShake.requestAccess();
-      emit("input-mode-resolved", {
-        mode: "motion",
-        motionGranted: state.mobileShakeReady,
-      });
-      await api.prayer(state.sessionId);
-      showScene("draw");
-      if (!state.mobileShakeReady)
-        emit("toast", { message: "未開啟動作感測，已提供直接抽籤。" });
-      return;
-    }
-
-    // 桌機 auto：嘗試攝影機手勢路徑，交由外部（index.js）啟動 MediaPipe camera
+    // 攝影機模式啟動失敗時一律改用手動點擊，不再使用 DeviceMotion。
     try {
       await startCamera();
       state.resolvedMode = "camera";

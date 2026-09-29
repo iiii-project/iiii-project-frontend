@@ -1,4 +1,4 @@
-export type InteractionMode = 'click' | 'motion'
+export type InteractionMode = 'click'
 export type DivinationStatus =
   | 'created'
   | 'praying'
