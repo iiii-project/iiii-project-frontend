@@ -98,6 +98,8 @@ class TempleArOracle extends HTMLElement {
     this._started = false;
     this._cameraPromise = null;
     this._cameraInferenceEnabled = false;
+    this._modelsWarmed = false;
+    this._modelWarmupPromise = null;
   }
 
   connectedCallback(){
@@ -364,9 +366,37 @@ class TempleArOracle extends HTMLElement {
     return this._cameraPromise;
   }
 
+  async _warmupInferenceModels() {
+    if (this._modelsWarmed) return;
+    if (this._modelWarmupPromise) return this._modelWarmupPromise;
+
+    this._modelWarmupPromise = (async () => {
+      const video = this._els?.video;
+      if (!video || !this._hands) return;
+
+      // 只送一格影像讓 WASM/model 完成下載與編譯；此時不開啟流程判定。
+      await this._hands.send({ image: video });
+      if (this._selfieSegmentation) {
+        await this._selfieSegmentation.send({ image: video });
+      }
+      this._modelsWarmed = true;
+    })().catch((error) => {
+      this._modelWarmupPromise = null;
+      throw error;
+    });
+
+    return this._modelWarmupPromise;
+  }
+
   /** 在開始求籤的使用者手勢中先開啟鏡頭並預熱模型；真正顯示場景仍由 start() 控制。 */
-  prepareCamera(){
-    return this._startCamera();
+  async prepareCamera(){
+    await this._startCamera();
+    try {
+      await this._warmupInferenceModels();
+    } catch (error) {
+      // 相機已經成功時，模型預熱失敗不阻擋正式流程；開始儀式後會再嘗試。
+      console.warn('[temple-ar-oracle] 模型預熱失敗，將在儀式開始後重試', error);
+    }
   }
 
   /**

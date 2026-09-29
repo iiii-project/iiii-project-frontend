@@ -44,6 +44,11 @@ function loadJiaoTemplates() {
   return jiaoTemplatesPromise;
 }
 
+// 選定分類後先下載並解析筊杯模型，正式進入擲筊畫面時直接使用快取。
+export function preloadBwaModel() {
+  return loadJiaoTemplates();
+}
+
 const IDLE_SPREAD = 0.5;       // 閒置時兩杯的中心間距（半距）
 
 // 筊杯落地後的最終高度：跟鏡頭視線焦點（camera.lookAt 的 y）對齊，

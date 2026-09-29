@@ -40,6 +40,37 @@ export const ORACLE_TRANSITION_SRC = "/videos/oracle-transition.mov";
 const ORACLE_TRANSITION_MS = 5120; // 素材長度（拿不到 metadata 時的備用值）
 const REVEAL_LEAD_MS = 350; // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
 const HARD_CAP_EXTRA_MS = 2500; // 影片真的卡死時的保險
+const preloadedVideos = new Map();
+
+/* 選定分類後預載入流程會用到的影片；正式播放時直接使用瀏覽器快取。
+   失敗只代表播放時走既有 fallback，不阻擋求籤流程。 */
+export function preloadVideoAsset(src) {
+  if (typeof document === "undefined" || !src) return Promise.resolve();
+  const existing = preloadedVideos.get(src);
+  if (existing) return existing.promise;
+
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  video.setAttribute("aria-hidden", "true");
+  const promise = new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    video.addEventListener("loadeddata", finish, { once: true });
+    video.addEventListener("error", finish, { once: true });
+    setTimeout(finish, 10000);
+  });
+  video.src = src;
+  video.load();
+  preloadedVideos.set(src, { video, promise });
+  return promise;
+}
+
 export function preloadOracleTransition(els, options = {}) {
   const video = els.transitionVideo;
   if (!video || video.dataset.ready === "1" || video.dataset.failed === "1")

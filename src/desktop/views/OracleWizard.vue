@@ -153,10 +153,21 @@ async function warmupCamera() {
   cameraWarmupStarted.value = true
   cameraWarmup.value = true
   try {
-    // 分類一選定就建立相機串流，但 AR 元件會等正式開始求籤才開啟
-    // Hands/Segmentation 推論，避免表單階段持續消耗 CPU。
+    // 分類一選定就建立相機串流，並同步預載後續所有模型與媒體資源。
     // @ts-ignore -- AR Web Component is a JavaScript module without declarations.
     await import('@/ar/temple-ar-oracle/index.js')
+    const [bwaModule, flowModule] = await Promise.all([
+      // @ts-ignore -- JavaScript AR module has no declaration file.
+      import('@/ar/temple-ar-oracle/engine/bwa-scene.js'),
+      // @ts-ignore -- JavaScript AR module has no declaration file.
+      import('@/ar/temple-ar-oracle/engine/flow-controller.js')
+    ])
+    await Promise.allSettled([
+      (bwaModule as any).preloadBwaModel(),
+      (flowModule as any).preloadVideoAsset('/videos/dragon.mp4'),
+      (flowModule as any).preloadVideoAsset('/videos/oracle-transition.mov'),
+      (flowModule as any).preloadVideoAsset('/videos/tutorial.mp4')
+    ])
     await nextTick()
     await arEl.value?.prepareCamera()
   } catch {
