@@ -97,6 +97,7 @@ class TempleArOracle extends HTMLElement {
     this._destroyed = false;
     this._started = false;
     this._cameraPromise = null;
+    this._cameraInferenceEnabled = false;
   }
 
   connectedCallback(){
@@ -310,8 +311,10 @@ class TempleArOracle extends HTMLElement {
        const cameraWidth = portrait ? profile.arCameraHeight : profile.arCameraWidth;
        const cameraHeight = portrait ? profile.arCameraWidth : profile.arCameraHeight;
        const camera = new Camera(this._els.video, {
-          onFrame: async () => {
-            const now = performance.now();
+           onFrame: async () => {
+             // 分類選定時可以先開啟相機串流；真正開始儀式前不跑模型推論。
+             if (!this._cameraInferenceEnabled) return;
+             const now = performance.now();
             // 先讓 camera/video、AR 畫面與頁面完成第一輪繪製，再啟動兩個
             // MediaPipe WASM 模型，避免使用者按下開始後立刻被模型編譯卡住。
             if (now < inferenceEnabledAt) return;
@@ -376,6 +379,7 @@ class TempleArOracle extends HTMLElement {
     const question = options.question ?? this.getAttribute('question') ?? '';
     const category = options.category ?? this.getAttribute('category') ?? '綜合運勢';
     const requestedMode = options.inputMode ?? this.getAttribute('input-mode') ?? 'camera';
+    this._cameraInferenceEnabled = requestedMode === 'camera';
 
     try {
       await this._flow.start({
@@ -385,6 +389,7 @@ class TempleArOracle extends HTMLElement {
         startCamera: () => this._startCamera(),
       });
     } catch (error) {
+      this._cameraInferenceEnabled = false;
       this._started = false;
       this._emit('toast', { message: error?.message || '無法開始求籤，請稍後再試' });
       throw error;
@@ -395,6 +400,7 @@ class TempleArOracle extends HTMLElement {
   destroy(){
     if (this._destroyed) return;
     this._destroyed = true;
+    this._cameraInferenceEnabled = false;
     if (this._onViewportResize){
       window.removeEventListener('resize', this._onViewportResize);
       window.removeEventListener('orientationchange', this._onViewportResize);

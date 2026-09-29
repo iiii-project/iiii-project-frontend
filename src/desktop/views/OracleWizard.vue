@@ -71,6 +71,8 @@ interface TempleArOracleEl extends HTMLElement {
 }
 
 const arEl = ref<TempleArOracleEl | null>(null)
+const cameraWarmup = ref(false)
+const cameraWarmupStarted = ref(false)
 const arNotice = ref('')
 const isOffline = ref(false)
 const fortune = ref<ArFortune | null>(null)
@@ -143,6 +145,24 @@ function goStep(next: number) {
 function chooseCategory(value: Category) {
   errorMessage.value = ''
   category.value = value
+  warmupCamera()
+}
+
+async function warmupCamera() {
+  if (cameraWarmupStarted.value) return
+  cameraWarmupStarted.value = true
+  cameraWarmup.value = true
+  try {
+    // 分類一選定就建立相機串流，但 AR 元件會等正式開始求籤才開啟
+    // Hands/Segmentation 推論，避免表單階段持續消耗 CPU。
+    // @ts-ignore -- AR Web Component is a JavaScript module without declarations.
+    await import('@/ar/temple-ar-oracle/index.js')
+    await nextTick()
+    await arEl.value?.prepareCamera()
+  } catch {
+    // 正式開始時仍會再次嘗試，失敗後由 AR 引擎切換手動備援。
+    cameraWarmupStarted.value = false
+  }
 }
 
 // 不打字也能繼續：沒寫就以所選方向請示
@@ -280,6 +300,8 @@ function unbindAr() {
     el.removeEventListener('interpretation-ready', onArInterpretation)
     try { el.destroy() } catch { /* 元件可能已卸載 */ }
   }
+  cameraWarmup.value = false
+  cameraWarmupStarted.value = false
 }
 
 // 收集完成 → 進入 AR 儀式
@@ -632,7 +654,7 @@ function restart() {
 
     <!-- AR 儀式全螢幕層 -->
     <Teleport to="body">
-      <div v-if="step === 4" class="ar-fullscreen">
+      <div v-if="cameraWarmup" :class="step === 4 ? 'ar-fullscreen' : 'ar-prewarm'">
         <temple-ar-oracle ref="arEl" api-base="/api/v1" transition-src="/videos/dragon.mp4"></temple-ar-oracle>
         <p v-if="step === 4 && arNotice" class="ar-toast">{{ arNotice }}</p>
         <button v-if="step === 4" class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
@@ -651,6 +673,18 @@ body.ar-ritual-open { overflow: hidden; }
   inset: 0;
   z-index: 60;
   background: #120d0a;
+}
+
+/* 分類選定後只保留相機串流，不顯示 AR 畫面；正式開始求籤時改成
+   .ar-fullscreen，但不重新掛載 Web Component。 */
+.ar-prewarm {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 .ar-fullscreen temple-ar-oracle {
