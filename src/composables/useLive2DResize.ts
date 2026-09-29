@@ -49,7 +49,7 @@ export function applyScale(scale: number): boolean {
 function tryApplyDefaultPosition(canvas: HTMLCanvasElement): boolean {
   try {
     const adapter = (window as any).getLAppAdapter?.()
-    const view = LAppDelegate.getInstance()?.getView()
+    const view = LAppDelegate.getExistingInstance()?.getView()
     const model = adapter?.getModel()
     if (!adapter || !view || !model?._modelMatrix || !canvas.height) return false
 
@@ -183,7 +183,7 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
 
-      const delegate = LAppDelegate.getInstance()
+      const delegate = LAppDelegate.getExistingInstance()
       if (delegate) {
         delegate.onResize()
       } else {

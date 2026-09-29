@@ -120,7 +120,7 @@ export function useLive2DModel(
     if (!adapter || !canvasRef.value) return
 
     const model = adapter.getModel()
-    const view = LAppDelegate.getInstance()?.getView()
+    const view = LAppDelegate.getExistingInstance()?.getView()
     if (!view || !model) return
 
     const canvas = canvasRef.value
@@ -152,7 +152,7 @@ export function useLive2DModel(
 
   function handleMouseMove(e: MouseEvent) {
     const adapter = (window as any).getLAppAdapter?.()
-    const view = LAppDelegate.getInstance()?.getView()
+    const view = LAppDelegate.getExistingInstance()?.getView()
     const model = adapter?.getModel()
 
     if (isPotentialTap && adapter && view && model && canvasRef.value) {
@@ -202,7 +202,7 @@ export function useLive2DModel(
   function handleMouseUp(e: MouseEvent | null) {
     const adapter = (window as any).getLAppAdapter?.()
     const model = adapter?.getModel()
-    const view = LAppDelegate.getInstance()?.getView()
+    const view = LAppDelegate.getExistingInstance()?.getView()
 
     if (isDragging.value) {
       isDragging.value = false
@@ -256,7 +256,7 @@ export function useLive2DModel(
   function computeHitOnCanvas(clientX: number, clientY: number): boolean {
     const adapter = (window as any).getLAppAdapter?.()
     const canvas = canvasRef.value
-    const view = LAppDelegate.getInstance()?.getView()
+    const view = LAppDelegate.getExistingInstance()?.getView()
     const model = adapter?.getModel()
     if (!canvas || !view || !model) return false
 

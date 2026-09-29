@@ -49,6 +49,14 @@ export class LAppDelegate {
   }
 
   /**
+   * Return the current delegate without creating a half-initialized instance.
+   * Resize and hit-test helpers can run before Cubism has been initialized.
+   */
+  public static getExistingInstance(): LAppDelegate | null {
+    return s_instance;
+  }
+
+  /**
    * クラスのインスタンス（シングルトン）を解放する。
    * 
    * 释放类的实例（单例）。
@@ -180,11 +188,15 @@ export class LAppDelegate {
       this._inputEventsBound = false;
     }
 
-    this._textureManager!.release();
-    this._textureManager = null;
+    if (this._textureManager) {
+      this._textureManager.release();
+      this._textureManager = null;
+    }
 
-    this._view!.release();
-    this._view = null;
+    if (this._view) {
+      this._view.release();
+      this._view = null;
+    }
 
     // リソースを解放
     LAppLive2DManager.releaseInstance();

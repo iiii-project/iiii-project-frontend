@@ -62,7 +62,7 @@ export function initializeLive2D(): void {
 
     parent?.addEventListener("pointermove", (e) => {
       const model = LAppLive2DManager.getInstance().getModel(0);
-      const view = LAppDelegate.getInstance().getView();
+      const view = LAppDelegate.getExistingInstance()?.getView();
 
       // Transform screen coordinates to Live2D canvas coordinates
       const x = view?._deviceToScreen.transformX(e.x);
@@ -75,7 +75,7 @@ export function initializeLive2D(): void {
     // Add pointerdown event listener
     parent?.addEventListener("pointerdown", (e) => {
       const model = LAppLive2DManager.getInstance().getModel(0);
-      const view = LAppDelegate.getInstance().getView();
+      const view = LAppDelegate.getExistingInstance()?.getView();
 
       // Transform screen coordinates to Live2D canvas coordinates
       const x = view?._deviceToScreen.transformX(e.x);
@@ -120,7 +120,7 @@ window.addEventListener(
   "resize",
   () => {
     if (LAppDefine.CanvasSize === "auto") {
-      LAppDelegate.getInstance().onResize();
+      LAppDelegate.getExistingInstance()?.onResize();
     }
   },
   { passive: true }
