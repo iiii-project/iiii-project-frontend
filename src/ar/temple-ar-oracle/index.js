@@ -25,7 +25,7 @@ import { createArState } from './engine/state.js';
 import { AudioEngine } from './engine/audio-engine.js';
 import { createGestureEngine } from './engine/gesture-engine.js';
 import { createDivinationApi } from './engine/divination-api.js';
-import { createFlowController } from './engine/flow-controller.js';
+import { createFlowController, preloadOracleTransition } from './engine/flow-controller.js';
 import { renderTemplate } from './template.js';
 import { getPerformanceProfile } from '@/utils/performance';
 
@@ -197,6 +197,8 @@ class TempleArOracle extends HTMLElement {
        （見 styles.css 內的說明），所以預設保留 contain、兩側留白。
        換過影片（如 dragon.mp4）不受這個限制，交由 data-fill 讓 CSS 改用 cover 鋪滿。 */
     if (transitionSrc) this._els.transitionVideo.dataset.fill = '1';
+    // 使用實際播放用的 video 元素提前載入與解碼，避免切到擲筊時才初始化影片。
+    preloadOracleTransition(this._els, { src: transitionSrc });
 
     /* 攝影機畫布的後備緩衝區要在這裡就校正好。
        原本只在 MediaPipe 送影格時才校正，但搖籤模式不開鏡頭、
@@ -400,6 +402,11 @@ class TempleArOracle extends HTMLElement {
       // 相機已經成功時，模型預熱失敗不阻擋正式流程；開始儀式後會再嘗試。
       console.warn('[temple-ar-oracle] 模型預熱失敗，將在儀式開始後重試', error);
     }
+  }
+
+  /** 選分類時建立 Three.js renderer、shader 與筊杯 mesh，切換場景時不再臨時初始化。 */
+  prepareBwa(){
+    return this._bwaScene.prepare?.(this._els.bwaThreeContainer);
   }
 
   /**

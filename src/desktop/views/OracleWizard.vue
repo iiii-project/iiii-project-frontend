@@ -67,6 +67,7 @@ interface ArInterpretation {
 interface TempleArOracleEl extends HTMLElement {
   start(options: { question?: string; category?: string; inputMode?: 'camera' | 'manual' }): Promise<void>
   prepareCamera(): Promise<void>
+  prepareBwa(): Promise<void>
   destroy(): void
 }
 
@@ -170,6 +171,7 @@ async function warmupCamera() {
     ])
     await nextTick()
     await arEl.value?.prepareCamera()
+    await arEl.value?.prepareBwa()
   } catch {
     // 正式開始時仍會再次嘗試，失敗後由 AR 引擎切換手動備援。
     cameraWarmupStarted.value = false
