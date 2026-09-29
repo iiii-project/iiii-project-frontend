@@ -271,12 +271,11 @@ class TempleArOracle extends HTMLElement {
       : Promise.resolve(null);
 
     this._cameraPromise = segmentationClassPromise.then((SelfieSegmentationClass) => new Promise((resolve, reject) => {
-       // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑；開鏡先用單手模式，
-       // 進入搖籤／擲筊場景時才切換兩手，避免把不必要的負載集中在開鏡瞬間。
-      const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-      const handOptions = { modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 };
-      let activeMaxHands = 1;
-      hands.setOptions({ ...handOptions, maxNumHands: activeMaxHands });
+       // 各階段都會用到雙手判定；一開始就固定 maxNumHands=2，避免在抽籤／擲筊
+       // 第一個影格才重新設定 MediaPipe，將模型設定成本疊在場景切換上。
+       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+       const handOptions = { modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 };
+       hands.setOptions({ ...handOptions, maxNumHands: 2 });
       hands.onResults(this._gestureEngine.onResults);
       this._hands = hands;
 
@@ -320,7 +319,7 @@ class TempleArOracle extends HTMLElement {
        const camera = new Camera(this._els.video, {
            onFrame: async () => {
              // 分類選定時可以先開啟相機串流；真正開始儀式前不跑模型推論。
-             if (!this._cameraInferenceEnabled) return;
+              if (!this._cameraInferenceEnabled || this._state.current === 'transition') return;
              const now = performance.now();
             // 先讓 camera/video、AR 畫面與頁面完成第一輪繪製，再啟動兩個
             // MediaPipe WASM 模型，避免使用者按下開始後立刻被模型編譯卡住。
@@ -329,14 +328,7 @@ class TempleArOracle extends HTMLElement {
             lastInferenceTime = now;
             inferenceBusy = true;
             try {
-               const wantedMaxHands = this._state.current === 'draw' || this._state.current === 'bwa' ? 2 : 1;
-              if (wantedMaxHands !== activeMaxHands) {
-                activeMaxHands = wantedMaxHands;
-                hands.setOptions({ ...handOptions, maxNumHands: activeMaxHands });
-                 lastSegmentationTime = 0;
-              }
-
-              // 先做 Hands；去背模型延後到第二輪，避免開鏡第一幀同時初始化兩個模型。
+               // 先做 Hands；去背模型延後到第二輪，避免開鏡第一幀同時初始化兩個模型。
               await hands.send({ image: this._els.video });
 
                // 遮罩變化比手勢慢：依 profile 限制去背頻率，低階裝置不必每輪
