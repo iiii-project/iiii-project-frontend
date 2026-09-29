@@ -49,6 +49,7 @@ export function cancelOracleTransition(video) {
   if (!video) return;
   video.pause?.();
   video.classList.remove("show", "fade-out");
+  video.style.visibility = "hidden";
   try { video.currentTime = 0; } catch (_) {}
 }
 
@@ -124,7 +125,6 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
   let settled = false;
   let revealed = false;
   let capTimer = 0;
-  let fadeTimer = 0;
 
   const cancel = () => {
     if (settled) return;
@@ -132,6 +132,7 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
     cleanup();
     video.pause();
     video.classList.remove("show", "fade-out");
+    video.style.visibility = "hidden";
     try { video.currentTime = 0; } catch (_) {}
   };
 
@@ -146,7 +147,6 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
     video.removeEventListener("ended", onEnded);
     video.removeEventListener("error", bail);
     if (capTimer) clearTimeout(capTimer);
-    if (fadeTimer) clearTimeout(fadeTimer);
     if (activeVideoTransitionCancels.get(video) === cancel) {
       activeVideoTransitionCancels.delete(video);
     }
@@ -157,15 +157,14 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
   const finish = () => {
     if (settled) return;
     settled = true;
-    reveal();
     cleanup();
-    video.classList.remove("show");
-    video.classList.add("fade-out");
-    fadeTimer = setTimeout(() => {
-      video.classList.remove("fade-out");
-      video.pause();
-      video.currentTime = 0;
-    }, 720);
+    // Do not leave a final frame alive while the host changes to the result
+    // page. The old fade-out timer allowed the video to flash once at the end.
+    video.pause();
+    video.classList.remove("show", "fade-out");
+    video.style.visibility = "hidden";
+    try { video.currentTime = 0; } catch (_) {}
+    reveal();
   };
 
   const bail = () => {
@@ -173,6 +172,7 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
     settled = true;
     cleanup();
     video.classList.remove("show", "fade-out");
+    video.style.visibility = "hidden";
     playInkTransition(els, onCovered);
   };
 
@@ -224,6 +224,7 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
      改用強制重排（與 playInkTransition 同一個手法）同步把樣式沖出去，
      淡入照樣有，但不再依賴 rAF 會不會被呼叫。 */
   video.classList.remove("fade-out");
+  video.style.visibility = "visible";
   void video.offsetWidth;
   video.classList.add("show");
 
