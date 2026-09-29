@@ -14,6 +14,17 @@ import { LAppLive2DManager } from "./lapplive2dmanager";
 import { LAppAdapter } from "./lappadapter";
 
 /**
+ * 釋放目前的 Live2D 執行個體與 WebGL manager。
+ * Live2DCompanion 是依求籤流程動態掛載／卸載的，不能讓舊的 rAF loop
+ * 或舊 canvas 在儀式期間繼續佔用資源。
+ */
+export function releaseLive2D(): void {
+  LAppDelegate.releaseInstance();
+  LAppLive2DManager.releaseInstance();
+  LAppGlManager.releaseInstance();
+}
+
+/**
  * Initialize the Live2D application
  */
 export function initializeLive2D(): void {
@@ -23,21 +34,20 @@ export function initializeLive2D(): void {
   );
   console.log("Model directories:", LAppDefine.ModelDir);
 
-  // Clean up any existing instances first
-  if (LAppDelegate.getInstance()) {
-    // Release existing model resources
-    LAppLive2DManager.releaseInstance();
-  }
+  // Live2DCompanion 會在求籤儀式期間卸載，結果頁再掛載新的 canvas。
+  // 不能沿用舊的 delegate / WebGL manager，否則 renderer 仍會指向已卸載的
+  // canvas，畫面看起來就像模型沒有自動出現。每次初始化前完整釋放單例，
+  // 讓 LAppGlManager 的 constructor 重新抓取目前 DOM 裡的 #canvas。
+  releaseLive2D();
 
-  if (
-    !LAppGlManager.getInstance() ||
-    !LAppDelegate.getInstance().initialize()
-  ) {
+  const glManager = LAppGlManager.getInstance();
+  const delegate = LAppDelegate.getInstance();
+  if (!glManager || !delegate.initialize()) {
     console.error("Failed to initialize Live2D");
     return;
   }
 
-  LAppDelegate.getInstance().run();
+  delegate.run();
 
   (window as any).getLive2DManager = () => LAppLive2DManager.getInstance();
 

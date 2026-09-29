@@ -3,7 +3,7 @@ import type { ModelInfo } from '@/live2d/websocketService'
 import { updateModelConfig } from '@/live2d/webSDK/engine/lappdefine'
 import { LAppDelegate } from '@/live2d/webSDK/engine/lappdelegate'
 import { LAppLive2DManager } from '@/live2d/webSDK/engine/lapplive2dmanager'
-import { initializeLive2D } from '@/live2d/webSDK/engine/entry'
+import { initializeLive2D, releaseLive2D } from '@/live2d/webSDK/engine/entry'
 import { loadCubismCore } from '@/live2d/loadCubismCore'
 
 // 移植自 use-live2d-model.ts。修正原始碼裡兩個死路徑：window.LAppDefine / window.LAppLive2DManager
@@ -55,6 +55,8 @@ export function useLive2DModel(
   const dragStartPos = { x: 0, y: 0 }
   const modelStartPos = { x: 0, y: 0 }
   let prevModelUrl: string | null = null
+  let initializeTimer: number | null = null
+  let disposed = false
 
   const mouseDownTime = { current: 0 }
   const mouseDownPos = { x: 0, y: 0 }
@@ -88,13 +90,17 @@ export function useLive2DModel(
           // 先載入完成，避免 watcher 比 Live2DCompanion.vue 的 onMounted 更早
           // 執行 initializeLive2D，導致角色只有容器沒有畫面。
           void loadCubismCore().then(() => {
-            setTimeout(() => {
-              if (LAppLive2DManager.getInstance()) {
-                LAppLive2DManager.releaseInstance()
-              }
+            if (disposed) return
+            if (initializeTimer !== null) window.clearTimeout(initializeTimer)
+            initializeTimer = window.setTimeout(() => {
+              initializeTimer = null
+              // watcher 可能在元件尚未完成掛載時就收到設定；若 canvas 尚未
+              // 進入 DOM，延到下一次 model 設定更新會錯過初始化，因此這裡
+              // 直接安全退出，避免對不存在的 canvas 建立 renderer。
+              if (disposed || !canvasRef.value?.isConnected) return
               initializeLive2D()
               setTimeout(() => {
-                position.value = getModelPosition()
+                if (!disposed) position.value = getModelPosition()
               }, 500)
             }, 500)
           }).catch((error) => {
@@ -336,11 +342,17 @@ export function useLive2DModel(
     window.addEventListener('mousemove', handleWindowMouseMove)
   })
   onBeforeUnmount(() => {
+    disposed = true
+    if (initializeTimer !== null) {
+      window.clearTimeout(initializeTimer)
+      initializeTimer = null
+    }
     delete (window as any).Live2DDebug
     window.removeEventListener('mousemove', handleWindowMouseMove)
     if (hoverFrame !== null) cancelAnimationFrame(hoverFrame)
     hoverFrame = null
     pendingHoverPoint = null
+    releaseLive2D()
   })
 
   return {
