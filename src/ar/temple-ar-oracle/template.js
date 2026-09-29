@@ -60,7 +60,7 @@ export function renderTemplate() {
   </div>
 
   <!-- 墨染 / 金線 場景過場遮罩 -->
-  <video id="oracle-transition-video" muted playsinline preload="auto" aria-hidden="true"></video>
+  <video id="oracle-transition-video" muted playsinline preload="metadata" aria-hidden="true"></video>
   <div id="transition-overlay"><div class="ink-blot"></div><div class="gold-ring"></div></div>
 
   <!-- ============ 畫面零：誠心機制（插香 / 合十默念）============ -->

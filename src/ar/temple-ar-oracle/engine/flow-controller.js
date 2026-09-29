@@ -40,22 +40,6 @@ export const ORACLE_TRANSITION_SRC = "/videos/oracle-transition.mov";
 const ORACLE_TRANSITION_MS = 5120; // 素材長度（拿不到 metadata 時的備用值）
 const REVEAL_LEAD_MS = 350; // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
 const HARD_CAP_EXTRA_MS = 2500; // 影片真的卡死時的保險
-const preloadedVideos = new Map();
-
-/* 在儀式頁一載入就建立隱藏的 video loader，讓瀏覽器先把影片放進 HTTP
-   cache／解碼管線；真正播放時仍使用模板裡的 video 元素。 */
-export function preloadVideoAsset(src) {
-  if (typeof document === "undefined" || !src || preloadedVideos.has(src)) return;
-  const video = document.createElement("video");
-  video.preload = "auto";
-  video.muted = true;
-  video.playsInline = true;
-  video.setAttribute("aria-hidden", "true");
-  video.src = src;
-  video.load();
-  preloadedVideos.set(src, video);
-}
-
 export function preloadOracleTransition(els, options = {}) {
   const video = els.transitionVideo;
   if (!video || video.dataset.ready === "1" || video.dataset.failed === "1")
@@ -360,8 +344,12 @@ export function createFlowController({
     );
     // 筊杯場景在整個儀式建立時就已初始化，但只有真正顯示時才需要
     // 讓 Three.js 佔用 GPU；上香與抽籤期間完全停止渲染。
-    if (name === "bwa") bwaScene.resume();
-    else bwaScene.pause();
+    if (name === "bwa") {
+      // Three.js 與筊杯 GLB 延後到真正進入擲筊階段，避免在上香／抽籤時
+      // 先建立第二個 WebGL context 並與 MediaPipe 爭用 GPU/記憶體。
+      bwaScene.init?.(els.bwaThreeContainer);
+      bwaScene.resume();
+    } else bwaScene.pause();
     state.current = name;
 
     /* 神明實景疊加：鏡頭模式等去背遮罩完成，人物才淡入；沒有鏡頭的模式直接顯示。 */
@@ -379,7 +367,7 @@ export function createFlowController({
     } else {
       els.ritualOverlay.classList.remove("blended");
       els.outputCanvas.classList.remove("blended");
-      if (state.resolvedMode !== "camera" || state.segmentationMask) {
+      if (state.resolvedMode !== "camera" || state.segmentationMask || state.useSelfieSegmentation === false) {
         els.ritualOverlay.classList.add("blended");
         els.outputCanvas.classList.add("blended");
       }
@@ -437,6 +425,8 @@ export function createFlowController({
       /* 一進擲筊場景就把這一次的結果要回來放著，等使用者真的擲了就直接演，
          不必在那一刻等網路（見 prefetchCast）。 */
       prefetchCast();
+      // 只在即將需要時載入過場影片，不在 AR 元件建立時偷跑下載。
+      preloadOracleTransition(els, { src: transitionSrc });
     }
   }
 

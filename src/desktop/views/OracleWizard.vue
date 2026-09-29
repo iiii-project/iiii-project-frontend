@@ -9,13 +9,6 @@ import AmuletButton from '@/desktop/components/AmuletButton.vue'
 import FontScaleControl from '@/desktop/components/FontScaleControl.vue'
 import FortunePoem from '@/desktop/components/FortunePoem.vue'
 import FortuneReading from '@/desktop/components/FortuneReading.vue'
-// 註冊 <temple-ar-oracle>（插香 → 搖籤 → 擲筊 的 AR 引擎）
-import '@/ar/temple-ar-oracle/index.js'
-// AR 引擎目前維持 JavaScript 模組，這兩個匯出只負責啟動資源預載入。
-// @ts-ignore -- JavaScript AR 模組沒有另外維護 declaration file
-import { preloadBwaModel } from '@/ar/temple-ar-oracle/engine/bwa-scene.js'
-// @ts-ignore -- JavaScript AR 模組沒有另外維護 declaration file
-import { preloadVideoAsset } from '@/ar/temple-ar-oracle/engine/flow-controller.js'
 import { sendWhenReady } from '@/live2d/websocketService'
 import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 
@@ -78,8 +71,6 @@ interface TempleArOracleEl extends HTMLElement {
 }
 
 const arEl = ref<TempleArOracleEl | null>(null)
-const cameraWarmup = ref(false)
-const cameraWarmupStarted = ref(false)
 const arNotice = ref('')
 const isOffline = ref(false)
 const fortune = ref<ArFortune | null>(null)
@@ -131,13 +122,6 @@ const {
 onMounted(() => {
   // 求籤頁從輸入問題開始就不與 Live2D 同時執行；結果頁才重新掛載角色。
   companionStore.beginRitual()
-  // 儀式頁一進入就先準備後面會用到的筊杯模型與影片，避免抽籤完成後
-  // 才第一次下載／解析資源，造成切到擲筊場景時卡頓。
-  void preloadBwaModel().catch((error: unknown) => {
-    console.warn('[OracleWizard] 筊杯模型預載入失敗，稍後將再次嘗試', error)
-  })
-  ;['/videos/dragon.mp4', '/videos/oracle-transition.mov', '/videos/tutorial.mp4']
-    .forEach((src) => preloadVideoAsset(src))
 
   // 雲霧散盡後把整層移除，之後就不再佔用繪圖資源
   mistTimer = window.setTimeout(() => (showEnterMist.value = false), 900)
@@ -159,26 +143,6 @@ function goStep(next: number) {
 function chooseCategory(value: Category) {
   errorMessage.value = ''
   category.value = value
-  warmupCamera()
-}
-
-function warmupCamera() {
-  if (cameraWarmupStarted.value) return
-  cameraWarmupStarted.value = true
-  cameraWarmup.value = true
-  void nextTick().then(async () => {
-    const el = arEl.value
-    if (!el) {
-      cameraWarmupStarted.value = false
-      return
-    }
-    try {
-      await el.prepareCamera()
-    } catch {
-      // 真正開始求籤時仍會再次嘗試，失敗後由 AR 引擎提供備援模式。
-      cameraWarmupStarted.value = false
-    }
-  })
 }
 
 // 不打字也能繼續：沒寫就以所選方向請示
@@ -316,8 +280,6 @@ function unbindAr() {
     el.removeEventListener('interpretation-ready', onArInterpretation)
     try { el.destroy() } catch { /* 元件可能已卸載 */ }
   }
-  cameraWarmup.value = false
-  cameraWarmupStarted.value = false
 }
 
 // 收集完成 → 進入 AR 儀式
@@ -334,6 +296,10 @@ async function submit(requestedMode: 'camera' | 'manual' = 'camera') {
     errorMessage.value = ''
     arNotice.value = ''
     companionStore.beginRitual()
+    // MediaPipe / Three.js / AR Web Component 只在真正開始求籤時載入，
+    // 不讓使用者填寫分類與問題時就下載、解析大型引擎。
+    // @ts-ignore -- AR Web Component is a JavaScript module without declarations.
+    await import('@/ar/temple-ar-oracle/index.js')
     /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
        一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
     step.value = 4
@@ -666,7 +632,7 @@ function restart() {
 
     <!-- AR 儀式全螢幕層 -->
     <Teleport to="body">
-      <div v-if="cameraWarmup" :class="step === 4 ? 'ar-fullscreen' : 'ar-prewarm'">
+      <div v-if="step === 4" class="ar-fullscreen">
         <temple-ar-oracle ref="arEl" api-base="/api/v1" transition-src="/videos/dragon.mp4"></temple-ar-oracle>
         <p v-if="step === 4 && arNotice" class="ar-toast">{{ arNotice }}</p>
         <button v-if="step === 4" class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
@@ -687,17 +653,6 @@ body.ar-ritual-open { overflow: hidden; }
   background: #120d0a;
 }
 
-/* 分類選定後先預熱相機與 MediaPipe，但在正式進入儀式前完全不露出
-   AR 畫面與人物；這段隱藏層仍讓 video/WASM/去背模型持續準備。 */
-.ar-prewarm {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  overflow: hidden;
-}
 .ar-fullscreen temple-ar-oracle {
   display: block;
   width: 100%;

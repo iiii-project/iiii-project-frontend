@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { getPerformanceProfile } from '@/utils/performance'
 
 /* Live2D 小夥伴整套引擎（webSDK Framework 與音訊播放 composable）目前是
    全站最大的一塊前端程式碼。改成動態 import 讓它獨立成一個 chunk，
@@ -10,6 +11,12 @@ const Live2DCompanionWidget = defineAsyncComponent(() => import('@/live2d/Live2D
 
 const route = useRoute()
 const isImmersiveRoute = computed(() => route.meta.immersive === true)
+
+// 讓首頁與共用背景知道目前是低效能 Android/WebView，關閉大面積濾鏡與
+// 無限動畫；這只改渲染預算，不建立另一套手機 UI。
+if (typeof document !== 'undefined' && getPerformanceProfile().isLowEnd) {
+  document.documentElement.classList.add('constrained-android')
+}
 
 watch(
   isImmersiveRoute,

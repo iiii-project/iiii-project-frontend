@@ -79,6 +79,7 @@ const MUSIC_FADE_MS = 1800
 let templeMusic: HTMLAudioElement | null = null
 let musicFadeRaf = 0
 let musicFadingOut = false
+let musicInteractionHandler: (() => void) | null = null
 
 function fadeAudioVolume(audio: HTMLAudioElement, target: number, duration: number) {
   if (musicFadeRaf) cancelAnimationFrame(musicFadeRaf)
@@ -138,6 +139,15 @@ function startTempleMusic() {
   }
 }
 
+function startMusicAfterInteraction() {
+  startTempleMusic()
+  if (musicInteractionHandler) {
+    window.removeEventListener('pointerdown', musicInteractionHandler)
+    window.removeEventListener('keydown', musicInteractionHandler)
+    musicInteractionHandler = null
+  }
+}
+
 function stopTempleMusic() {
   if (musicFadeRaf) cancelAnimationFrame(musicFadeRaf)
   templeMusic?.pause()
@@ -177,7 +187,10 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => {
   document.body.classList.add('celestial-home-open')
   buildMotes()
-  startTempleMusic()
+  // 不在首頁 mounted 時下載 3.9 MB 音訊；使用者第一次互動後才啟動背景音樂。
+  musicInteractionHandler = startMusicAfterInteraction
+  window.addEventListener('pointerdown', musicInteractionHandler, { passive: true })
+  window.addEventListener('keydown', musicInteractionHandler, { passive: true })
   window.addEventListener('keydown', onKeydown)
   if (!prefersReducedMotion()) {
     window.addEventListener('pointermove', onPointerMove, { passive: true })
@@ -188,6 +201,11 @@ onBeforeUnmount(() => {
   document.body.classList.remove('celestial-home-open')
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('keydown', onKeydown)
+  if (musicInteractionHandler) {
+    window.removeEventListener('pointerdown', musicInteractionHandler)
+    window.removeEventListener('keydown', musicInteractionHandler)
+    musicInteractionHandler = null
+  }
   if (raf) cancelAnimationFrame(raf)
   stopTempleMusic()
   const root = document.documentElement
@@ -458,6 +476,21 @@ body.celestial-home-open {
   animation: rise var(--dur, 22s) linear infinite;
   animation-delay: var(--delay, 0s);
   will-change: transform, opacity;
+}
+
+/* Warpple JJ5：保留靜態主視覺，停用首頁長時間大面積濾鏡與無限動畫，
+   避免尚未進入求籤流程就讓 WebView 持續合成多個全螢幕圖層。 */
+html.constrained-android .halo-glow,
+html.constrained-android .sovereign,
+html.constrained-android .sovereign-float,
+html.constrained-android .mist,
+html.constrained-android .mote {
+  animation: none;
+}
+html.constrained-android .sovereign,
+html.constrained-android .mist {
+  filter: none;
+  will-change: auto;
 }
 
 .vignette {

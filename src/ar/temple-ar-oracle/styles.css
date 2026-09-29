@@ -190,6 +190,22 @@
 #bwa-three-container.tossable{ pointer-events:auto; cursor:pointer; }
 #bwa-three-container canvas{ display:block; width:100%; height:100%; }
 
+/* Warpple JJ5 / Android WebView：保留流程與主要畫面，但關閉會觸發大面積
+   GPU filter/backdrop 合成的裝飾效果，避免直式 1080×1920 畫面持續掉幀。 */
+.ar-low-end #output_canvas{ filter:none; }
+.ar-low-end #ar-decoration svg,
+.ar-low-end #ar-decoration img{ filter:none; }
+.ar-low-end #ar-decoration *{ animation:none !important; }
+.ar-low-end .ritual-overlay-bg,
+.ar-low-end .ritual-overlay-emperor{ filter:none; }
+.ar-low-end .ritual-overlay-glow{ filter:none; opacity:0.35; }
+.ar-low-end .glass-card,
+.ar-low-end #bwa-result-panel{ backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+.ar-low-end #qian-tong-zone{ filter:none; }
+.ar-low-end #qian-tong.aligned,
+.ar-low-end #incense-hint.sensing,
+.ar-low-end #incense-stick.sensing .stick-tip{ animation:none; }
+
 .fade-in{ animation: fadeIn 0.7s ease both; }
 @keyframes fadeIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
 

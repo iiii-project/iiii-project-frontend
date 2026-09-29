@@ -52,8 +52,9 @@
      const canvas = els.outputCanvas;
       const dpr = profile.canvasPixelRatio;
      const viewport = viewportSize();
-     const w = Math.round(viewport.width * dpr);
-     const h = Math.round(viewport.height * dpr);
+      const renderScale = profile.arCanvasScale;
+      const w = Math.round(viewport.width * dpr * renderScale);
+      const h = Math.round(viewport.height * dpr * renderScale);
     if (!w || !h) return;
      if (canvas.width !== w || canvas.height !== h){
        canvas.width = w;
@@ -158,39 +159,44 @@
     outCtx.clearRect(0,0,cw,ch);
     // 去背遮罩尚未準備好時不要先畫整張原始鏡頭畫面，
     // 否則鏡頭剛開啟會短暫閃出使用者全身，再突然切成摳像。
-    if (!state.segmentationMask) {
-      outCtx.restore();
-      return;
-    }
-        const camera = cameraFrame(cw, ch);
-        const person = personFrame(cw, ch, results.image);
-        const source = containedImageFrame(
-          camera.x,
-          camera.y,
-          camera.width,
-          camera.height,
-          results.image,
-          cw,
-          ch,
-        );
-       const layerCtx = ensurePersonLayer(cw, ch);
-       layerCtx.clearRect(0, 0, cw, ch);
-       layerCtx.save();
-       layerCtx.scale(-1, 1);
-       /* 先在全螢幕鏡頭層完成去背，再把已去背的人物層縮小。
-          不讓小人物框先限制來源影像，避免頭部與左右身體被框邊截掉。 */
-       drawContained(layerCtx, results.image, camera.x, camera.y, camera.width, camera.height, cw, ch);
-       layerCtx.globalCompositeOperation = 'destination-in';
-       drawContained(layerCtx, state.segmentationMask, camera.x, camera.y, camera.width, camera.height, cw, ch);
-       layerCtx.restore();
-       layerCtx.globalCompositeOperation = 'source-over';
-         // 最後只取保持來源比例的有效影像區，避免把透明留白一起縮放，
-         // 並讓人物框的寬高維持原始相機比例。
-         outCtx.drawImage(
-           personLayerCanvas,
-           source.x, source.y, source.width, source.height,
-           person.x, person.y, person.width, person.height
-         );
+         const camera = cameraFrame(cw, ch);
+         if (state.segmentationMask) {
+           const person = personFrame(cw, ch, results.image);
+           const source = containedImageFrame(
+             camera.x,
+             camera.y,
+             camera.width,
+             camera.height,
+             results.image,
+             cw,
+             ch,
+           );
+          const layerCtx = ensurePersonLayer(cw, ch);
+          layerCtx.clearRect(0, 0, cw, ch);
+          layerCtx.save();
+          layerCtx.scale(-1, 1);
+          /* 先在全螢幕鏡頭層完成去背，再把已去背的人物層縮小。
+             不讓小人物框先限制來源影像，避免頭部與左右身體被框邊截掉。 */
+          drawContained(layerCtx, results.image, camera.x, camera.y, camera.width, camera.height, cw, ch);
+          layerCtx.globalCompositeOperation = 'destination-in';
+          drawContained(layerCtx, state.segmentationMask, camera.x, camera.y, camera.width, camera.height, cw, ch);
+          layerCtx.restore();
+          layerCtx.globalCompositeOperation = 'source-over';
+            // 最後只取保持來源比例的有效影像區，避免把透明留白一起縮放，
+            // 並讓人物框的寬高維持原始相機比例。
+            outCtx.drawImage(
+              personLayerCanvas,
+              source.x, source.y, source.width, source.height,
+              person.x, person.y, person.width, person.height
+            );
+         } else {
+           // JJ5 低效能模式停用 Selfie Segmentation：保留鏡頭與手勢流程，
+           // 直接鏡像繪製低解析度影像，避免每幀再跑第二個 WASM 模型。
+           outCtx.save();
+           outCtx.scale(-1, 1);
+           drawContained(outCtx, results.image, camera.x, camera.y, camera.width, camera.height, cw, ch);
+           outCtx.restore();
+         }
      outCtx.restore();
 
     const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;

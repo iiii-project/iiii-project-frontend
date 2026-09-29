@@ -53,11 +53,4 @@ onMounted(() => {
   pointer-events: none;
 }
 
-@media (max-width: 700px) {
-  .live2d-companion {
-    right: 8px;
-    width: min(280px, 55vw);
-    height: min(420px, 58vh);
-  }
-}
 </style>

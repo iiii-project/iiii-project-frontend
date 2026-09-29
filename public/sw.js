@@ -13,15 +13,13 @@
 
    影片（/videos）也不進快取：檔案大、又常以 206 range 回應，存不進 Cache API，
    交給瀏覽器自己的 HTTP 快取即可。 */
- const VERSION = 'v4'
+ const VERSION = 'v5'
 const SHELL_CACHE = `temple-shell-${VERSION}`
 const ASSET_CACHE = `temple-assets-${VERSION}`
 const SHELL_URL = '/index.html'
 
-/* 第一次上線瀏覽就要把該存的都存起來。
-   只靠 runtime 快取的話，js/css 是在 SW 還沒接管前就載完的（註冊發生在 load 之後），
-   等於第一次瀏覽什麼都沒存到，要到第二次上線才有離線能力——實測就是這樣，
-   斷線重開只剩一個空殼。所以這裡在安裝階段照建置產出的資產清單一次抓齊。 */
+/* 安裝階段只快取 app shell，不把所有路由、Three.js、Live2D、影片與音訊
+   一次抓進 JJ5。其他靜態資源在真正使用時由 fetch handler runtime cache。 */
 const ASSET_MANIFEST_URL = '/asset-manifest.json'
 
 async function precache() {
@@ -32,12 +30,14 @@ async function precache() {
     const response = await fetch(ASSET_MANIFEST_URL, { cache: 'no-cache' })
     if (!response.ok) return
     const manifest = await response.json()
-    const files = Object.values(manifest)
-      .flatMap((entry) => [entry.file, ...(entry.css || [])])
+    const entry = manifest['index.html']
+    const files = entry
+      ? [entry.file, ...(entry.css || [])]
       .filter(Boolean)
       .map((file) => `/${String(file).replace(/^\/+/, '')}`)
+      : []
     const assets = await caches.open(ASSET_CACHE)
-    // 個別失敗（某支檔案 404）不要讓整包安裝失敗
+    // shell 以外的資源維持按需載入；個別檔案失敗不要讓安裝失敗。
     await Promise.allSettled(files.map((file) => assets.add(file)))
   } catch {
     // 沒有清單（舊版建置）就退回純 runtime 快取，第二次上線後照樣能離線

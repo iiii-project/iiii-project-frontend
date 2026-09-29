@@ -18,16 +18,14 @@
            sequence-complete, toast
    ========================================================================= */
 import { Hands } from '@mediapipe/hands';
-import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 import { Camera } from '@mediapipe/camera_utils';
 
 import { CONFIG } from './engine/config.js';
 import { createArState } from './engine/state.js';
 import { AudioEngine } from './engine/audio-engine.js';
-import { createBwaScene } from './engine/bwa-scene.js';
 import { createGestureEngine } from './engine/gesture-engine.js';
 import { createDivinationApi } from './engine/divination-api.js';
-import { createFlowController , preloadOracleTransition } from './engine/flow-controller.js';
+import { createFlowController } from './engine/flow-controller.js';
 import { renderTemplate } from './template.js';
 import { getPerformanceProfile } from '@/utils/performance';
 
@@ -35,6 +33,60 @@ import { getPerformanceProfile } from '@/utils/performance';
 // 一定拿得到樣式（無論宿主專案的建置工具是否支援 CSS 檔案 import）。
 // 開發時仍是獨立的 styles.css 檔案，建置腳本可自行選擇要 inline 還是額外複製。
 import stylesText from './styles.css?raw';
+
+/* Three.js 與筊杯 GLB 只在真正進入擲筊階段才需要。這個代理保留 flow-controller
+   原本的同步介面，但把 598 KB 的 Three.js chunk 延後到 init/resume/toss 第一次
+   被呼叫時才下載、解析，避免上香與抽籤期間佔用主執行緒。 */
+function createLazyBwaScene(state) {
+  let scene = null;
+  let loading = null;
+  let container = null;
+  let destroyed = false;
+
+  function ensure() {
+    if (scene) return Promise.resolve(scene);
+    if (!loading) {
+      loading = import('./engine/bwa-scene.js').then(({ createBwaScene }) => {
+        if (destroyed) return null;
+        scene = createBwaScene(state);
+        if (container) scene.init(container);
+        return scene;
+      });
+    }
+    return loading;
+  }
+
+  return {
+    init(el) {
+      container = el;
+      return ensure();
+    },
+    pause() {
+      scene?.pause?.();
+    },
+    resume() {
+      void ensure().then((value) => value?.resume?.());
+    },
+    resetIdle() {
+      if (scene) scene.resetIdle();
+      else void ensure().then((value) => value?.resetIdle?.());
+    },
+    toss(...args) {
+      void ensure().then((value) => value?.toss?.(...args));
+    },
+    getScreenPos() {
+      return scene?.getScreenPos?.() || { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
+    },
+    destroy() {
+      destroyed = true;
+      scene?.destroy?.();
+      scene = null;
+    },
+    hitTest(...args) {
+      return scene?.hitTest?.(...args) || false;
+    },
+  };
+}
 
 class TempleArOracle extends HTMLElement {
   static get observedAttributes(){ return ['question', 'category', 'api-base', 'input-mode']; }
@@ -68,6 +120,7 @@ class TempleArOracle extends HTMLElement {
 
     const root = document.createElement('div');
     root.className = 'ar-oracle-root';
+    if (getPerformanceProfile().isLowEnd) root.classList.add('ar-low-end');
     root.innerHTML = renderTemplate();
     this.shadowRoot.appendChild(root);
     this._root = root;
@@ -107,7 +160,8 @@ class TempleArOracle extends HTMLElement {
     // 前面已經直接取得模板產生的 <video id="input_video"> 節點，不需要額外處理。
 
     this._state = createArState();
-    this._bwaScene = createBwaScene(this._state);
+    this._state.useSelfieSegmentation = getPerformanceProfile().useSelfieSegmentation;
+    this._bwaScene = createLazyBwaScene(this._state);
     // 後端連不上時，divination-api 會自動切到本地備援資料把儀式跑完，
     // 並透過這個 callback 通知宿主頁面（讓外面有機會顯示「目前離線」的提示）。
     this._api = this._makeApi(this.getAttribute('api-base'));
@@ -138,9 +192,6 @@ class TempleArOracle extends HTMLElement {
        換過影片（如 dragon.mp4）不受這個限制，交由 data-fill 讓 CSS 改用 cover 鋪滿。 */
     if (transitionSrc) this._els.transitionVideo.dataset.fill = '1';
 
-    // 過場影片先預載，播放時才不會頓一下
-    preloadOracleTransition(this._els, { src: transitionSrc });
-
     /* 攝影機畫布的後備緩衝區要在這裡就校正好。
        原本只在 MediaPipe 送影格時才校正，但搖籤模式不開鏡頭、
        永遠等不到影格，畫布就會一直停在 HTML 預設的 300x150。 */
@@ -159,8 +210,6 @@ class TempleArOracle extends HTMLElement {
       emit: (name, detail) => this._emit(name, detail),
       transitionSrc,
     });
-
-    this._bwaScene.init(this._els.bwaThreeContainer);
 
     this._els.btnManualDraw.addEventListener('click', () => this._flow.completeDraw());
     this._els.btnClickBwa.addEventListener('click', () => this._flow.castClickBwa());
@@ -206,8 +255,14 @@ class TempleArOracle extends HTMLElement {
   _startCamera(){
     if (this._cameraPromise) return this._cameraPromise;
 
-    this._cameraPromise = new Promise((resolve, reject) => {
-      const profile = getPerformanceProfile();
+    const profile = getPerformanceProfile();
+    // JJ5 直接跳過 Selfie Segmentation；其他裝置也只在真的啟用去背時
+    // 動態下載該模型，避免 AR 啟動就多載入一個大型 WASM/JS chunk。
+    const segmentationClassPromise = profile.useSelfieSegmentation
+      ? import('@mediapipe/selfie_segmentation').then((module) => module.SelfieSegmentation)
+      : Promise.resolve(null);
+
+    this._cameraPromise = segmentationClassPromise.then((SelfieSegmentationClass) => new Promise((resolve, reject) => {
        // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑；開鏡先用單手模式，
        // 進入搖籤／擲筊場景時才切換兩手，避免把不必要的負載集中在開鏡瞬間。
       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
@@ -220,28 +275,31 @@ class TempleArOracle extends HTMLElement {
       /* 人像去背：把最新的分割遮罩存進共用的 state，讓 gesture-engine 畫
          #output_canvas 時可以只畫出人像、其餘鏤空，讓底下的神明實景疊加層透出來。
          跟 Hands 各自獨立送同一格畫面，彼此不互相依賴、也不用等對方。 */
-      const selfieSegmentation = new SelfieSegmentation({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
-      });
-      selfieSegmentation.setOptions({ modelSelection: 1 });
-       selfieSegmentation.onResults((results) => {
-         this._state.segmentationMask = results.segmentationMask;
-         // 預熱可能在 flow.start() 之前完成；若場景已經顯示，遮罩一到就
-         // 立即揭露人物，不再等待固定的 ritual veil 計時器。
-         if (this._state.resolvedMode === 'camera' && this._state.current !== 'creating' && this._state.current !== 'transition') {
-           this._els.ritualOverlay?.classList.add('blended');
-           this._els.outputCanvas?.classList.add('blended');
-         }
-       });
-      this._selfieSegmentation = selfieSegmentation;
+       let selfieSegmentation = null;
+       if (SelfieSegmentationClass) {
+         selfieSegmentation = new SelfieSegmentationClass({
+           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+         });
+         selfieSegmentation.setOptions({ modelSelection: 1 });
+         selfieSegmentation.onResults((results) => {
+           this._state.segmentationMask = results.segmentationMask;
+           // 預熱可能在 flow.start() 之前完成；若場景已經顯示，遮罩一到就
+           // 立即揭露人物，不再等待固定的 ritual veil 計時器。
+           if (this._state.resolvedMode === 'camera' && this._state.current !== 'creating' && this._state.current !== 'transition') {
+             this._els.ritualOverlay?.classList.add('blended');
+             this._els.outputCanvas?.classList.add('blended');
+           }
+         });
+         this._selfieSegmentation = selfieSegmentation;
+       }
 
-      // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
+       // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
       // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把實際送進
        // MediaPipe 的頻率依裝置 profile 夾在 8~12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
         const INFERENCE_INTERVAL_MS = 1000 / profile.arInferenceFps;
         let lastInferenceTime = 0;
         let inferenceBusy = false;
-        let inferenceCount = 0;
+         let lastSegmentationTime = 0;
         let inferenceEnabledAt = Number.POSITIVE_INFINITY;
         let hasSegmentationMask = false;
 
@@ -265,19 +323,20 @@ class TempleArOracle extends HTMLElement {
               if (wantedMaxHands !== activeMaxHands) {
                 activeMaxHands = wantedMaxHands;
                 hands.setOptions({ ...handOptions, maxNumHands: activeMaxHands });
-                inferenceCount = 0;
+                 lastSegmentationTime = 0;
               }
 
               // 先做 Hands；去背模型延後到第二輪，避免開鏡第一幀同時初始化兩個模型。
               await hands.send({ image: this._els.video });
 
-              // 遮罩變化比手勢慢：首次取得後每三輪更新一次，低階裝置不必每輪
-              // 同時執行兩個模型。沒有遮罩時第二輪一定補做一次，仍不會閃出原始畫面。
-              if (!hasSegmentationMask || inferenceCount % 3 === 0) {
-                await selfieSegmentation.send({ image: this._els.video });
-                hasSegmentationMask = true;
-              }
-              inferenceCount += 1;
+               // 遮罩變化比手勢慢：依 profile 限制去背頻率，低階裝置不必每輪
+               // 同時執行兩個模型；首次仍立即取得，避免畫面長時間沒有去背影像。
+               const segmentationInterval = 1000 / profile.arSegmentationFps;
+               if (selfieSegmentation && (!hasSegmentationMask || now - lastSegmentationTime >= segmentationInterval)) {
+                 lastSegmentationTime = now;
+                 await selfieSegmentation.send({ image: this._els.video });
+                 hasSegmentationMask = true;
+               }
             } finally {
               inferenceBusy = false;
             }
@@ -296,7 +355,7 @@ class TempleArOracle extends HTMLElement {
          this._cameraPromise = null;
          reject(error);
        });
-    });
+    }));
     // 預熱呼叫可能早於 flow.start()，但仍共用同一個 Promise，避免重複開鏡。
     this._cameraPromise.catch(() => undefined);
     return this._cameraPromise;

@@ -51,10 +51,6 @@ const IDLE_SPREAD = 0.5;       // 閒置時兩杯的中心間距（半距）
 // 地板（陰影承接面）跟著往上移，維持跟原本一樣「杯底貼地」的相對距離（0.1）。
 const REST_Y = -0.2;
 
- export function preloadBwaModel() {
-   return loadJiaoTemplates();
- }
-
  export function createBwaScene(state) {
   let renderer, scene, camera, cupA, cupB, ground, light;
   const profile = getPerformanceProfile();
@@ -69,6 +65,7 @@ const REST_Y = -0.2;
   let loopRafId = null;
   let lastRenderTime = 0;
   let modelLoadStarted = false;
+  let initialized = false;
   let tossAnimation = null;
 
   // 把模型節點複製成一顆獨立的筊杯：重置成原始網格座標（見上方註解），
@@ -103,6 +100,8 @@ const REST_Y = -0.2;
   }
 
   function init(el) {
+    if (initialized) return;
+    initialized = true;
     container = el;
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
