@@ -1,6 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router'
 
-// 電腦版路由表：只負責這個資料夾底下的頁面，不受手機版開發影響。
+// 唯一路由表：所有裝置都使用同一份桌面版頁面。
 export const desktopRoutes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: () => import('./views/HomeView.vue'), meta: { immersive: true } },
   { path: '/celestial', redirect: '/' },

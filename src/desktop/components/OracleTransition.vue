@@ -9,7 +9,7 @@
    （影片播到尾聲、或墨染蓋滿畫面時），那一刻再把結果換上去，
    使用者看到的就是龍把籤送到眼前、畫面接著變成籤詩。
 
-   桌機版改用 dragon.mp4（AR 版跟手機版維持引擎預設的 oracle-transition.mov，
+   桌面版改用 dragon.mp4（AR 引擎維持預設的 oracle-transition.mov，
    不受影響），透過 preload/play 的 src 覆蓋參數指定，不動共用引擎的預設值。 */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {

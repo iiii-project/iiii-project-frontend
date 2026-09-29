@@ -26,26 +26,19 @@ export function getPerformanceProfile(): PerformanceProfile {
   const nav = navigator as ExtendedNavigator
   const connection = nav.connection
   const profileKey = [
-    window.innerWidth <= 640 ? 'mobile' : 'desktop',
     nav.hardwareConcurrency || 0,
     nav.deviceMemory || 0,
     connection?.saveData ? 'save-data' : connection?.effectiveType || '',
   ].join(':')
   if (cachedProfile && cachedProfileKey === profileKey) return cachedProfile
 
-  const isAndroid = /Android/i.test(nav.userAgent || '')
-  const isMobile = /Android|iPhone|iPad|Mobile/i.test(nav.userAgent || '') || window.innerWidth <= 640
   const cores = nav.hardwareConcurrency || 4
   const memory = nav.deviceMemory || 4
   const slowConnection = connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g'
 
-  // Use a conservative budget on Android 15 phones; unknown hardware should
-  // not be treated as a flagship just because the browser hides its specs.
-  const isLowEnd = isAndroid
-    ? cores <= 6 || memory <= 4 || Boolean(slowConnection)
-    : isMobile
-      ? cores <= 4 || memory <= 4 || Boolean(slowConnection)
-      : cores <= 2 || memory <= 2 || Boolean(slowConnection)
+  // 所有裝置都使用同一套桌面版 UI；只依硬體能力決定是否降級渲染，
+  // 避免用 viewport 或 User-Agent 產生另一套手機流程。
+  const isLowEnd = cores <= 4 || memory <= 4 || Boolean(slowConnection)
 
   if (isLowEnd) {
     cachedProfileKey = profileKey
@@ -54,7 +47,7 @@ export function getPerformanceProfile(): PerformanceProfile {
   }
 
   cachedProfileKey = profileKey
-  cachedProfile = { isLowEnd: false, canvasPixelRatio: isMobile ? 1 : 1.25, live2dFps: 30, arInferenceFps: 12, arCameraWidth: 640, arCameraHeight: 480, threeFps: 45, threePixelRatio: isMobile ? 1.25 : 1.5 }
+  cachedProfile = { isLowEnd: false, canvasPixelRatio: 1.25, live2dFps: 30, arInferenceFps: 12, arCameraWidth: 640, arCameraHeight: 480, threeFps: 45, threePixelRatio: 1.5 }
   return cachedProfile
 }
 
