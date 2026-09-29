@@ -47,9 +47,11 @@ const activeInkTransitionCancels = new WeakMap();
 export function cancelOracleTransition(video) {
   activeVideoTransitionCancels.get(video)?.();
   if (!video) return;
+  // Hide before pausing/seeking. Seeking an ended video to 0 can make the
+  // browser compositor present its first frame for one paint.
+  video.style.visibility = "hidden";
   video.pause?.();
   video.classList.remove("show", "fade-out");
-  video.style.visibility = "hidden";
   try { video.currentTime = 0; } catch (_) {}
 }
 
@@ -129,10 +131,12 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
   const cancel = () => {
     if (settled) return;
     settled = true;
-    cleanup();
+    // Hide before cleanup resumes AR rendering, so cleanup cannot expose a
+    // frame produced by the seek below.
+    video.style.visibility = "hidden";
     video.pause();
     video.classList.remove("show", "fade-out");
-    video.style.visibility = "hidden";
+    cleanup();
     try { video.currentTime = 0; } catch (_) {}
   };
 
@@ -157,22 +161,23 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
   const finish = () => {
     if (settled) return;
     settled = true;
-    cleanup();
-    // Do not leave a final frame alive while the host changes to the result
-    // page. The old fade-out timer allowed the video to flash once at the end.
+    // Keep the final frame off-screen. Resetting currentTime here can make
+    // Chromium/WebView briefly paint frame 0 after `ended`; the next play
+    // resets it while the video is already hidden instead.
+    video.style.visibility = "hidden";
     video.pause();
     video.classList.remove("show", "fade-out");
-    video.style.visibility = "hidden";
-    try { video.currentTime = 0; } catch (_) {}
+    cleanup();
     reveal();
   };
 
   const bail = () => {
     if (settled) return;
     settled = true;
-    cleanup();
-    video.classList.remove("show", "fade-out");
     video.style.visibility = "hidden";
+    video.pause();
+    video.classList.remove("show", "fade-out");
+    cleanup();
     playInkTransition(els, onCovered);
   };
 
@@ -852,11 +857,6 @@ export function createFlowController({
     // The persistent host survives route changes, so explicitly pause the
     // BWA render loop when a ritual ends instead of relying on destroy().
     bwaScene.pause?.();
-    els.transitionVideo?.pause?.();
-    if (els.transitionVideo) {
-      els.transitionVideo.currentTime = 0;
-      els.transitionVideo.classList.remove("show", "fade-out");
-    }
     els.transitionOverlay?.classList.remove("play");
     state.current = "idle";
     state.bwaTossing = false;

@@ -176,7 +176,13 @@ function openTutorial() {
 }
 
 function closeTutorial() {
-  tutorialVideo.value?.pause()
+  const video = tutorialVideo.value
+  // Hide before pausing so the browser cannot composite a stale/seeked frame
+  // during the tick in which Vue removes the modal from the DOM.
+  if (video) {
+    video.style.visibility = 'hidden'
+    video.pause()
+  }
   showTutorial.value = false
 }
 

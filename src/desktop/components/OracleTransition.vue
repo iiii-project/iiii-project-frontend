@@ -37,7 +37,13 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (hideTimer) window.clearTimeout(hideTimer)
-  videoEl.value?.pause()
+  const video = videoEl.value
+  if (video) {
+    // Hide before pausing on route changes for the same reason as the
+    // ended-handler: never give the compositor a visible stale frame.
+    video.style.visibility = 'hidden'
+    video.pause()
+  }
 })
 
 /** 播放過場；Promise 在揭曉點 resolve（此時可以把結果畫面換上） */
