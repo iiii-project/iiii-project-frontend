@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * 全站浮動的 Live2D 小夥伴。預設在瀏覽器閒置後載入，但求籤儀式進行時會卸載，
- * 直到結果頁才重新掛載，避免和 AR/MediaPipe/Three.js 同時爭用客戶端資源。
+ * 全站浮動的 Live2D 小夥伴。進站後只掛載一次；求籤儀式期間隱藏並暫停 render，
+ * 結果頁直接恢復，避免把 Cubism/WebGL/model 初始化成本放在結果轉場之後。
  * 全部裝置使用同一份桌面版 Live2DCompanion.vue，並限制在右下角的小型容器內。
  */
 import { defineAsyncComponent, onMounted } from 'vue'
 import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 
-/* 動態 import 讓整套桌面版 Live2D 引擎只在需要顯示時載入。 */
+/* 動態 import 仍保留分 chunk，但元件本身會在 App 初次渲染時預先掛載。 */
 const Live2DCompanion = defineAsyncComponent(() => import('@/desktop/components/live2d/Live2DCompanion.vue'))
 
 const companion = useLive2DCompanionStore()
@@ -20,10 +20,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- 儀式期間直接卸載整個元件，釋放 Cubism/WebGL/Live2D WebSocket。 -->
+  <!-- 元件全站只掛載一次；儀式期間只隱藏，避免結果頁才第一次初始化。 -->
   <Teleport to="body">
-    <div class="live2d-companion">
-      <component :is="Live2DCompanion" v-if="companion.isVisible && !companion.isRitualActive" />
+    <div
+      class="live2d-companion"
+      :style="{ visibility: companion.isVisible && !companion.isRitualActive ? 'visible' : 'hidden' }"
+    >
+      <component :is="Live2DCompanion" />
     </div>
   </Teleport>
 </template>

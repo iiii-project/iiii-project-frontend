@@ -13,15 +13,27 @@ import { LAppGlManager } from "./lappglmanager";
 import { LAppLive2DManager } from "./lapplive2dmanager";
 import { LAppAdapter } from "./lappadapter";
 
+let live2dPaused = false;
+
 /**
  * 釋放目前的 Live2D 執行個體與 WebGL manager。
- * Live2DCompanion 是依求籤流程動態掛載／卸載的，不能讓舊的 rAF loop
- * 或舊 canvas 在儀式期間繼續佔用資源。
+ * Live2DCompanion 會全站保留；儀式期間只暫停 rAF，避免舊 canvas
+ * 繼續和 AR 的 MediaPipe/Three.js 佔用主執行緒。
  */
 export function releaseLive2D(): void {
   LAppDelegate.releaseInstance();
   LAppLive2DManager.releaseInstance();
   LAppGlManager.releaseInstance();
+}
+
+export function pauseLive2D(): void {
+  live2dPaused = true;
+  LAppDelegate.getExistingInstance()?.pause();
+}
+
+export function resumeLive2D(): void {
+  live2dPaused = false;
+  LAppDelegate.getExistingInstance()?.run();
 }
 
 /**
@@ -34,10 +46,9 @@ export function initializeLive2D(): void {
   );
   console.log("Model directories:", LAppDefine.ModelDir);
 
-  // Live2DCompanion 會在求籤儀式期間卸載，結果頁再掛載新的 canvas。
-  // 不能沿用舊的 delegate / WebGL manager，否則 renderer 仍會指向已卸載的
-  // canvas，畫面看起來就像模型沒有自動出現。每次初始化前完整釋放單例，
-  // 讓 LAppGlManager 的 constructor 重新抓取目前 DOM 裡的 #canvas。
+  // 初始化前完整釋放舊 singleton，讓 LAppGlManager 的 constructor 重新抓取
+  // 目前 DOM 裡的 #canvas。正常求籤流程不會卸載這個 canvas，因此不會在結果頁
+  // 再次觸發初始化。
   releaseLive2D();
 
   const glManager = LAppGlManager.getInstance();
@@ -47,7 +58,7 @@ export function initializeLive2D(): void {
     return;
   }
 
-  delegate.run();
+  if (!live2dPaused) delegate.run();
 
   (window as any).getLive2DManager = () => LAppLive2DManager.getInstance();
 

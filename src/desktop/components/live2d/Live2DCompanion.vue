@@ -18,6 +18,7 @@ import { useAudioTask } from '@/composables/useAudioTask'
 import { useInterrupt } from '@/composables/useInterrupt'
 import { useLive2DWebSocket } from '@/composables/useLive2DWebSocket'
 import { loadCubismCore } from '@/live2d/loadCubismCore'
+import { pauseLive2D, resumeLive2D } from '@/live2d/webSDK/engine/entry'
 import { useSpeechInput } from '@/utils/speech'
 
 const aiState = useAiStateStore()
@@ -43,6 +44,17 @@ const { isDragging, isHovering, handlers } = useLive2DModel(modelInfoRef, canvas
 const { addAudioTask } = useAudioTask()
 const { interrupt } = useInterrupt()
 const ws = useLive2DWebSocket({ addAudioTask })
+
+/* AR 儀式期間保留 Live2D 資源，但停止 rAF/WebGL render，避免和
+   MediaPipe/Three.js 搶主執行緒；結果頁只恢復既有 instance。 */
+watch(
+  () => companion.isRitualActive,
+  (active) => {
+    if (active) pauseLive2D()
+    else resumeLive2D()
+  },
+  { immediate: true }
+)
 
 /* 角色講完話（回到 idle）就把表情重置回預設，避免停在講話中途的表情上。 */
 watch(

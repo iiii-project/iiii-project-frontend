@@ -165,6 +165,7 @@ export class LAppDelegate {
   public release(): void {
     this._isEnd = true;
     this._isRunning = false;
+    this._isPaused = false;
     if (this._animationFrame !== null) {
       cancelAnimationFrame(this._animationFrame);
       this._animationFrame = null;
@@ -211,6 +212,7 @@ export class LAppDelegate {
    */
   public run(): void {
     if (this._isRunning) return;
+    this._isPaused = false;
     this._isRunning = true;
     const targetFrameRate = getPerformanceProfile().live2dFps;
     // メインループ
@@ -219,7 +221,7 @@ export class LAppDelegate {
       this._animationFrame = null;
       // インスタンスの有無の確認
       // 检查实例是否存在
-      if (s_instance == null) {
+      if (s_instance == null || this._isPaused || !this._isRunning) {
         return;
       }
 
@@ -257,12 +259,26 @@ export class LAppDelegate {
           cancelAnimationFrame(this._animationFrame);
           this._animationFrame = null;
         }
-      } else if (this._animationFrame === null && s_instance === this && !this._isEnd) {
+      } else if (this._animationFrame === null && s_instance === this && !this._isEnd && !this._isPaused) {
         this._animationFrame = requestAnimationFrame(loop);
       }
     };
     document.addEventListener('visibilitychange', this._visibilityHandler, { passive: true });
     this._animationFrame = requestAnimationFrame(loop);
+  }
+
+  /** Pause rendering while AR owns the main thread, without releasing assets. */
+  public pause(): void {
+    this._isPaused = true;
+    this._isRunning = false;
+    if (this._animationFrame !== null) {
+      cancelAnimationFrame(this._animationFrame);
+      this._animationFrame = null;
+    }
+    if (this._visibilityHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
   }
 
   /**
@@ -355,6 +371,7 @@ export class LAppDelegate {
     this._animationFrame = null;
     this._visibilityHandler = null;
     this._isRunning = false;
+    this._isPaused = false;
 
     this._cubismOption = new Option();
     this._view = new LAppView();
@@ -408,6 +425,7 @@ export class LAppDelegate {
   _animationFrame: number | null;
   _visibilityHandler: (() => void) | null;
   _isRunning: boolean;
+  _isPaused: boolean;
 }
 
 /**

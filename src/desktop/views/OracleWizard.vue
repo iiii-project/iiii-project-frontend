@@ -122,7 +122,7 @@ const {
 })
 
 onMounted(() => {
-  // 求籤頁從輸入問題開始就不與 Live2D 同時執行；結果頁才重新掛載角色。
+  // 求籤頁從輸入問題開始就隱藏並暫停 Live2D；結果頁直接恢復既有角色。
   companionStore.beginRitual()
   // 一進入求籤頁就開始載入 AR、筊杯 GLB、Three.js shader、MediaPipe 與過場
   // 影片；不要等使用者選完分類，否則前面的表單時間沒有被利用。

@@ -8,8 +8,8 @@ const GREETING_TEXT = '我是你的解籤助手金鶴，有任何問題都可以
  */
 export const useLive2DCompanionStore = defineStore('live2dCompanion', {
   state: () => ({
-    // 由 Live2DCompanionWidget 掛載後立即開啟；進入求籤儀式時由
-    // beginRitual 暫時卸載，結果頁再由 showResult 重新顯示。
+    // 由 Live2DCompanionWidget 掛載後立即開啟；進入求籤儀式時只隱藏，
+    // 結果頁再恢復顯示，避免重新建立 Live2D。
     isVisible: false,
     hasOpenedOnce: false,
     hasGreeted: false,
