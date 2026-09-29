@@ -41,6 +41,21 @@ const ORACLE_TRANSITION_MS = 5120; // 素材長度（拿不到 metadata 時的�
 const REVEAL_LEAD_MS = 350; // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
 const HARD_CAP_EXTRA_MS = 2500; // 影片真的卡死時的保險
 const preloadedVideos = new Map();
+const activeVideoTransitionCancels = new WeakMap();
+const activeInkTransitionCancels = new WeakMap();
+
+export function cancelOracleTransition(video) {
+  activeVideoTransitionCancels.get(video)?.();
+  if (!video) return;
+  video.pause?.();
+  video.classList.remove("show", "fade-out");
+  try { video.currentTime = 0; } catch (_) {}
+}
+
+export function cancelInkTransition(overlay) {
+  activeInkTransitionCancels.get(overlay)?.();
+  overlay?.classList.remove("play");
+}
 
 /* 選定分類後預載入流程會用到的影片；正式播放時直接使用瀏覽器快取。
    失敗只代表播放時走既有 fallback，不阻擋求籤流程。 */
@@ -104,9 +119,21 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
     return;
   }
 
+  cancelOracleTransition(video);
+
   let settled = false;
   let revealed = false;
   let capTimer = 0;
+  let fadeTimer = 0;
+
+  const cancel = () => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    video.pause();
+    video.classList.remove("show", "fade-out");
+    try { video.currentTime = 0; } catch (_) {}
+  };
 
   const reveal = () => {
     if (revealed) return;
@@ -117,7 +144,12 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
   const cleanup = () => {
     video.removeEventListener("timeupdate", onTimeUpdate);
     video.removeEventListener("ended", onEnded);
+    video.removeEventListener("error", bail);
     if (capTimer) clearTimeout(capTimer);
+    if (fadeTimer) clearTimeout(fadeTimer);
+    if (activeVideoTransitionCancels.get(video) === cancel) {
+      activeVideoTransitionCancels.delete(video);
+    }
     // 過場結束，把 AR 的繪圖負載放回去
     if (hooks.onEnd) hooks.onEnd();
   };
@@ -129,7 +161,7 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
     cleanup();
     video.classList.remove("show");
     video.classList.add("fade-out");
-    setTimeout(() => {
+    fadeTimer = setTimeout(() => {
       video.classList.remove("fade-out");
       video.pause();
       video.currentTime = 0;
@@ -143,6 +175,8 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
     video.classList.remove("show", "fade-out");
     playInkTransition(els, onCovered);
   };
+
+  activeVideoTransitionCancels.set(video, cancel);
 
   /* 揭曉時機改用影片自己的 currentTime，而不是 setTimeout。
      牆上時鐘與影片時鐘會分岔——畫面掉格時影片會落後，
@@ -201,14 +235,32 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
 }
 
 export function playInkTransition(els, onCovered) {
-  els.transitionOverlay.classList.remove("play");
-  void els.transitionOverlay.offsetWidth;
-  els.transitionOverlay.classList.add("play");
-  setTimeout(() => {
-    if (onCovered) onCovered();
+  const overlay = els.transitionOverlay;
+  cancelInkTransition(overlay);
+  let coveredTimer = 0;
+  let clearTimer = 0;
+  let cancelled = false;
+  const cancel = () => {
+    cancelled = true;
+    if (coveredTimer) clearTimeout(coveredTimer);
+    if (clearTimer) clearTimeout(clearTimer);
+    overlay.classList.remove("play");
+    if (activeInkTransitionCancels.get(overlay) === cancel) {
+      activeInkTransitionCancels.delete(overlay);
+    }
+  };
+  activeInkTransitionCancels.set(overlay, cancel);
+  overlay.classList.remove("play");
+  void overlay.offsetWidth;
+  overlay.classList.add("play");
+  coveredTimer = setTimeout(() => {
+    if (!cancelled && onCovered) onCovered();
   }, 320);
-  setTimeout(() => {
-    els.transitionOverlay.classList.remove("play");
+  clearTimer = setTimeout(() => {
+    overlay.classList.remove("play");
+    if (activeInkTransitionCancels.get(overlay) === cancel) {
+      activeInkTransitionCancels.delete(overlay);
+    }
   }, 950);
 }
 
@@ -266,6 +318,7 @@ export function createFlowController({
   let pendingCast = null; // 這一輪擲筊結果（Promise）
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
   let pendingPrayer = null; // 拜拜 API 與墨染轉場並行，抽籤時再確認已完成
+  let transitionGeneration = 0;
 
   /* 神明實景疊加：鏡頭模式等第一張去背遮罩完成就顯示人物，
      不再用固定秒數讓使用者等待；手動／手機模式則立即顯示場景。 */
@@ -335,6 +388,7 @@ export function createFlowController({
 
   function finishAfter(pending) {
     const startedAt = Date.now(); // 呼叫點就是過場開始的時間
+    const generation = transitionGeneration;
     return async () => {
       const grace = new Promise((resolve) =>
         setTimeout(resolve, REVEAL_GRACE_MS),
@@ -343,6 +397,7 @@ export function createFlowController({
       await Promise.race([pending || grace, grace]);
       const left = MIN_TRANSITION_MS - (Date.now() - startedAt);
       if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
+      if (generation !== transitionGeneration) return;
       /* 聖筊分支（resolveBwaResult/castClickBwa）呼叫這裡之前都還維持
          bwaTossing=true，就是要撐到這一刻——在這之前手勢/點擊引擎都還可能
          判定成「可以再擲一次」，對同一個 session 重複送出 blocks/interpret。
@@ -787,6 +842,9 @@ export function createFlowController({
 
   // 重置AR核心場景相關狀態（原始 goHome() 的AR部分；周邊 modal 的關閉交還給新前端自己處理）
   function reset() {
+    transitionGeneration += 1;
+    cancelOracleTransition(els.transitionVideo);
+    cancelInkTransition(els.transitionOverlay);
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach((s) =>
       s.classList.add("hidden"),
     );
