@@ -12,20 +12,10 @@ const Live2DCompanion = defineAsyncComponent(() => import('@/desktop/components/
 
 const companion = useLive2DCompanionStore()
 
-/* 這裡只負責讓小夥伴可見（isVisible），不觸發自我介紹語音——那個當下沒有使用者
-   手勢，瀏覽器的 autoplay 政策會擋掉。自我介紹改成使用者點角色開聊天室時才講
-   （見 companionStore.greet()，一個真正的使用者手勢）。companionStore 仍保留
-   isVisible/hasOpenedOnce 狀態，因為 OracleWizard.vue 會在結果頁重新開啟角色。
-   延後到瀏覽器閒置（或最長 1.5 秒）才開：一開就跟著載 Cubism Core、連 WebSocket，
-   如果緊接在 app 剛掛載、首頁開門動畫還在跑的當下就做，會搶首屏渲染的主執行緒，
-   造成剛進站那幾秒明顯卡頓。沒有 requestIdleCallback 的瀏覽器退回 setTimeout。 */
+/* 首頁要預設看到角色；這裡只負責確保狀態為可見，不觸發自我介紹語音。
+   自我介紹改成使用者點角色開聊天室時才講（見 companionStore.greet()）。 */
 onMounted(() => {
-  const open = () => companion.open()
-  if (typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(open, { timeout: 1500 })
-  } else {
-    window.setTimeout(open, 300)
-  }
+  companion.open()
 })
 </script>
 

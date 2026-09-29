@@ -74,6 +74,23 @@ export function useLive2DModel(
     return { x: 0, y: 0 }
   }
 
+  function scheduleInitialize() {
+    void loadCubismCore().then(() => {
+      if (disposed) return
+      if (initializeTimer !== null) window.clearTimeout(initializeTimer)
+      initializeTimer = window.setTimeout(() => {
+        initializeTimer = null
+        if (disposed || !canvasRef.value?.isConnected) return
+        initializeLive2D()
+        window.setTimeout(() => {
+          if (!disposed) position.value = getModelPosition()
+        }, 500)
+      }, 150)
+    }).catch((error) => {
+      console.error('Live2D Cubism Core 載入失敗:', error)
+    })
+  }
+
   watch(
     () => [modelInfo.value?.url, modelInfo.value?.kScale],
     () => {
@@ -89,23 +106,7 @@ export function useLive2DModel(
           // 結果頁重新掛載時，modelInfo 可能已存在；確保 Cubism Core
           // 先載入完成，避免 watcher 比 Live2DCompanion.vue 的 onMounted 更早
           // 執行 initializeLive2D，導致角色只有容器沒有畫面。
-          void loadCubismCore().then(() => {
-            if (disposed) return
-            if (initializeTimer !== null) window.clearTimeout(initializeTimer)
-            initializeTimer = window.setTimeout(() => {
-              initializeTimer = null
-              // watcher 可能在元件尚未完成掛載時就收到設定；若 canvas 尚未
-              // 進入 DOM，延到下一次 model 設定更新會錯過初始化，因此這裡
-              // 直接安全退出，避免對不存在的 canvas 建立 renderer。
-              if (disposed || !canvasRef.value?.isConnected) return
-              initializeLive2D()
-              setTimeout(() => {
-                if (!disposed) position.value = getModelPosition()
-              }, 500)
-            }, 500)
-          }).catch((error) => {
-            console.error('Live2D Cubism Core 載入失敗:', error)
-          })
+          scheduleInitialize()
         }
       } catch (error) {
         console.error('Error processing model URL:', error)
@@ -340,6 +341,9 @@ export function useLive2DModel(
   onMounted(() => {
     exposeDebugHelpers()
     window.addEventListener('mousemove', handleWindowMouseMove)
+    // modelInfo 可能在元件掛載前就已存在；watcher 的第一次計時若遇到
+    // 尚未連接的 canvas 會安全退出，掛載完成後再補一次初始化。
+    if (modelInfo.value?.url) scheduleInitialize()
   })
   onBeforeUnmount(() => {
     disposed = true
