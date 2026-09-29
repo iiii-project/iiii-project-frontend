@@ -313,9 +313,8 @@
   .ritual-title{ font-size:1.8rem; }
 }
 
-/* 换成非預設影片時（見 index.js 的 transition-src / data-fill），不受上面
-   「直式素材怕被裁」的顧慮，桌機也鋪滿到滿版，不留兩側空白。 */
-#oracle-transition-video[data-fill]{ object-fit:cover; }
+/* dragon.mp4 是橫式素材；縮小一點避免龍頭與籤枝貼到畫面邊緣。 */
+#oracle-transition-video[data-fill]{ object-fit:cover; transform:scale(0.9); transform-origin:center; }
 
 #transition-overlay{ position:fixed; inset:0; z-index:70; pointer-events:none; display:flex; align-items:center; justify-content:center; }
 #transition-overlay .ink-blot{
