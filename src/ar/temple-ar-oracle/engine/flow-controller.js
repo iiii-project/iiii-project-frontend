@@ -330,7 +330,7 @@ export function createFlowController({
   const AUTO_ADVANCE = true;
   const AUTO_ENTRY_DELAY_MS = 1500;
   const AUTO_DRAW_ENTRY_DELAY_MS = 2500;
-  const AUTO_BWA_ENTRY_DELAY_MS = 3000;
+  const AUTO_BWA_ENTRY_DELAY_MS = 2000;
   const AUTO_INCENSE_MS = 10000;
   const AUTO_DRAW_MS = 5000;
   let autoAdvanceTimer = null;
