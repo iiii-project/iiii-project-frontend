@@ -164,13 +164,12 @@ async function warmupCamera() {
       // @ts-ignore -- JavaScript AR module has no declaration file.
       import('@/ar/temple-ar-oracle/engine/flow-controller.js')
     ])
-    const element = arModule.getPersistentTempleArOracle({ apiBase: '/api/v1', transitionSrc: '/videos/dragon.mp4' }) as TempleArOracleEl
+    const element = arModule.getPersistentTempleArOracle({ apiBase: '/api/v1' }) as TempleArOracleEl
     arEl.value = element
     element.reset()
 
     const assetPreloads = [
       (bwaModule as any).preloadBwaModel(),
-      (flowModule as any).preloadVideoAsset('/videos/dragon.mp4'),
       (flowModule as any).preloadVideoAsset('/videos/oracle-transition.mov'),
       (flowModule as any).preloadVideoAsset('/videos/tutorial.mp4')
     ]
@@ -355,7 +354,7 @@ async function submit(requestedMode: 'camera' | 'manual' = 'camera') {
     step.value = 4
     await nextTick()
     if (!arEl.value) {
-      arEl.value = arModule.getPersistentTempleArOracle({ apiBase: '/api/v1', transitionSrc: '/videos/dragon.mp4' }) as TempleArOracleEl
+      arEl.value = arModule.getPersistentTempleArOracle({ apiBase: '/api/v1' }) as TempleArOracleEl
     }
     const reusableEl = arEl.value
     if (!reusableEl) {

@@ -9,15 +9,15 @@
    （影片播到尾聲、或墨染蓋滿畫面時），那一刻再把結果換上去，
    使用者看到的就是龍把籤送到眼前、畫面接著變成籤詩。
 
-   桌面版改用 dragon.mp4（AR 引擎維持預設的 oracle-transition.mov，
-   不受影響），透過 preload/play 的 src 覆蓋參數指定，不動共用引擎的預設值。 */
+   桌面版與 AR 引擎統一使用 public/videos/oracle-transition.mov，
+   不另轉檔、不壓縮畫質，透過 preload/play 共用同一份原始影片。 */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   playOracleTransition,
   preloadOracleTransition
 } from '@/ar/temple-ar-oracle/engine/flow-controller.js'
 
-const DESKTOP_TRANSITION_SRC = '/videos/dragon.mp4'
+const DESKTOP_TRANSITION_SRC = '/videos/oracle-transition.mov'
 
 const videoEl = ref<HTMLVideoElement | null>(null)
 const overlayEl = ref<HTMLElement | null>(null)
@@ -106,10 +106,9 @@ defineExpose({ play })
   z-index: 72;
   width: 100%;
   height: 100%;
-  /* 這支固定播 dragon.mp4（見上方 DESKTOP_TRANSITION_SRC），不是引擎預設的
-     直式 oracle-transition.mov，不必為了保留直式構圖而 contain 留白，
-     直接鋪滿到滿版。 */
-  object-fit: cover;
+  /* 播放 public/videos/oracle-transition.mov 原始檔，保留完整直式構圖，
+     不重新壓縮影片畫質。 */
+  object-fit: contain;
   background: radial-gradient(120% 90% at 50% 42%, #fffdf6 0%, #fbf9f5 46%, #f3ece0 100%);
   opacity: 0;
   pointer-events: none;

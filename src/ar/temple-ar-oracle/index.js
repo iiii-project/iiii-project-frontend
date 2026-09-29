@@ -188,13 +188,13 @@ class TempleArOracle extends HTMLElement {
       },
     });
 
-    /* 領籤過場影片來源：預設吃引擎內建的 oracle-transition.mov，
-       宿主頁面可用 transition-src attribute 覆蓋（例如桌機版換成 dragon.mp4）。
+    /* 領籤過場影片來源：預設吃 public/videos/oracle-transition.mov，
+       宿主頁面仍可用 transition-src attribute 覆蓋。
        只在建立當下讀一次，過場開始播放後才換片沒有意義，不需要做成響應式的。 */
     const transitionSrc = this.getAttribute('transition-src') || undefined;
-    /* 預設的 oracle-transition.mov 是直式 720x1280，桌機用 cover 會裁掉龍與籤枝
+     /* oracle-transition.mov 是直式 720x1280，桌機用 cover 會裁掉龍與籤枝
        （見 styles.css 內的說明），所以預設保留 contain、兩側留白。
-       換過影片（如 dragon.mp4）不受這個限制，交由 data-fill 讓 CSS 改用 cover 鋪滿。 */
+        若宿主指定其他影片，交由 data-fill 讓 CSS 改用 cover 鋪滿。 */
     if (transitionSrc) this._els.transitionVideo.dataset.fill = '1';
     // 使用實際播放用的 video 元素提前載入與解碼，避免切到擲筊時才初始化影片。
     preloadOracleTransition(this._els, { src: transitionSrc });
@@ -477,11 +477,11 @@ if (!customElements.get('temple-ar-oracle')) {
  */
 let persistentOracle = null;
 
-export function getPersistentTempleArOracle({ apiBase = '/api/v1', transitionSrc = '/videos/dragon.mp4' } = {}) {
+export function getPersistentTempleArOracle({ apiBase = '/api/v1', transitionSrc } = {}) {
   if (!persistentOracle) {
     persistentOracle = document.createElement('temple-ar-oracle');
     persistentOracle.setAttribute('api-base', apiBase);
-    persistentOracle.setAttribute('transition-src', transitionSrc);
+    if (transitionSrc) persistentOracle.setAttribute('transition-src', transitionSrc);
     persistentOracle.style.display = 'none';
     persistentOracle.style.visibility = 'hidden';
     persistentOracle.style.pointerEvents = 'none';

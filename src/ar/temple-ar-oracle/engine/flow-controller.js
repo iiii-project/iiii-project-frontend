@@ -34,8 +34,7 @@
    影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
    載入失敗、解碼失敗、或播放卡住超過預期時間，都走 fallback。
    預設值是這支影片；呼叫端可透過 options.src / hooks.src 覆蓋，未帶入時
-   就走這個預設值。<temple-ar-oracle> 把這個覆蓋參數接到 transition-src
-   attribute，OracleWizard.vue 會用它換成 dragon.mp4。 */
+   就走這個預設值。<temple-ar-oracle> 仍可用 transition-src attribute 覆蓋。 */
 export const ORACLE_TRANSITION_SRC = "/videos/oracle-transition.mov";
 const ORACLE_TRANSITION_MS = 5120; // 素材長度（拿不到 metadata 時的備用值）
 const REVEAL_LEAD_MS = 350; // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
