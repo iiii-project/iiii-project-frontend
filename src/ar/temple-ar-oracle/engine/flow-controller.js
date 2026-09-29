@@ -324,6 +324,40 @@ export function createFlowController({
   let pendingCast = null; // 這一輪擲筊結果（Promise）
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
   let pendingPrayer = null; // 拜拜 API 與墨染轉場並行，抽籤時再確認已完成
+
+  // 暫停手勢偵測期間，三個需要動作的階段改成固定倒數自動前進。
+  // 相機與人像去背仍持續運作，只有 Hands/WASM 手勢推論被移除。
+  const AUTO_ADVANCE = true;
+  const AUTO_COUNTDOWN_SECONDS = 3;
+  let autoAdvanceTimer = null;
+  let autoAdvanceGeneration = 0;
+
+  function cancelAutoAdvance() {
+    autoAdvanceGeneration += 1;
+    if (autoAdvanceTimer !== null) {
+      clearTimeout(autoAdvanceTimer);
+      autoAdvanceTimer = null;
+    }
+  }
+
+  function startAutoCountdown(sceneName, getHint, onComplete) {
+    if (!AUTO_ADVANCE) return;
+    cancelAutoAdvance();
+    const generation = autoAdvanceGeneration;
+    let remaining = AUTO_COUNTDOWN_SECONDS;
+    const tick = () => {
+      if (generation !== autoAdvanceGeneration || state.current !== sceneName) return;
+      if (remaining <= 0) {
+        autoAdvanceTimer = null;
+        onComplete();
+        return;
+      }
+      getHint(remaining);
+      remaining -= 1;
+      autoAdvanceTimer = setTimeout(tick, 1000);
+    };
+    tick();
+  }
   let transitionGeneration = 0;
 
   /* 神明實景疊加：鏡頭模式等第一張去背遮罩完成就顯示人物，
@@ -432,6 +466,7 @@ export function createFlowController({
   };
 
   function showScene(name) {
+    cancelAutoAdvance();
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach((s) =>
       s.classList.add("hidden"),
     );
@@ -521,6 +556,32 @@ export function createFlowController({
       // 只在即將需要時載入過場影片，不在 AR 元件建立時偷跑下載。
       preloadOracleTransition(els, { src: transitionSrc });
     }
+
+    if (name === "incense") {
+      startAutoCountdown(
+        "incense",
+        (seconds) => {
+          els.incenseHint.textContent = `請誠心默念，${seconds} 秒後進入抽籤`;
+        },
+        () => completeIncense(),
+      );
+    } else if (name === "draw") {
+      startAutoCountdown(
+        "draw",
+        (seconds) => {
+          els.drawHint.textContent = `準備抽籤，${seconds} 秒後自動抽籤`;
+        },
+        () => completeDraw(),
+      );
+    } else if (name === "bwa") {
+      startAutoCountdown(
+        "bwa",
+        (seconds) => {
+          els.bwaHint.textContent = `準備擲筊，${seconds} 秒後自動擲筊`;
+        },
+        () => tossBwa(window.innerWidth / 2, window.innerHeight / 2, 0, 0),
+      );
+    }
   }
 
   function flashOnce() {
@@ -534,6 +595,7 @@ export function createFlowController({
 
   async function completeIncense() {
     if (state.current !== "incense") return;
+    cancelAutoAdvance();
     state.current = "transition";
     pendingPrayer = api.prayer(state.sessionId);
     // 不再先等網路回應才開始畫面轉場；使用者看到抽籤畫面後，
@@ -551,6 +613,7 @@ export function createFlowController({
 
   async function completeDraw() {
     if (state.current !== "draw") return;
+    cancelAutoAdvance();
     // 轉場已經先讓使用者進入抽籤畫面；若使用者極快完成抽籤，
     // 這裡才等待拜拜 API，避免把網路延遲放在「拜拜→抽籤」的切換上。
     if (pendingPrayer) {
@@ -653,6 +716,7 @@ export function createFlowController({
   // ============================================================
   async function tossBwa(_sx, _sy, _vx, _vy) {
     if (state.bwaTossing) return;
+    cancelAutoAdvance();
     state.bwaTossing = true;
     els.bwaHint.textContent = "筊杯擲出中…";
     try {
@@ -807,8 +871,17 @@ export function createFlowController({
         els.bwaResultPanel.classList.add("hidden");
         resetBwaVisual();
         gestureEngine.lockBwaUntilHandsLeave();
-        els.bwaHint.textContent = "請讓雙手同時進入畫面即可擲筊";
+        els.bwaHint.textContent = AUTO_ADVANCE
+          ? "準備再次擲筊"
+          : "請讓雙手同時進入畫面即可擲筊";
         state.bwaTossing = false;
+        startAutoCountdown(
+          "bwa",
+          (seconds) => {
+            els.bwaHint.textContent = `準備再次擲筊，${seconds} 秒後自動擲筊`;
+          },
+          () => tossBwa(window.innerWidth / 2, window.innerHeight / 2, 0, 0),
+        );
       }, 2200);
     } else {
       els.bwaResultTitle.textContent = `${result?.result_name || "非聖筊"} · 重新抽籤`;
@@ -848,6 +921,7 @@ export function createFlowController({
 
   // 重置AR核心場景相關狀態（原始 goHome() 的AR部分；周邊 modal 的關閉交還給新前端自己處理）
   function reset() {
+    cancelAutoAdvance();
     transitionGeneration += 1;
     cancelOracleTransition(els.transitionVideo);
     cancelInkTransition(els.transitionOverlay);

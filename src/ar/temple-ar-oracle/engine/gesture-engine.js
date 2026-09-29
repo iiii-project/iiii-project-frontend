@@ -199,7 +199,15 @@
          }
      outCtx.restore();
 
-    const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
+     // 動作偵測暫停時，GestureEngine 只負責繪製相機／去背畫面；
+     // 不再執行合十、搖籤、擲筊判定，也不覆蓋 flow-controller 的倒數文字。
+     if (state.gestureDetectionEnabled === false) {
+       hideFingertipUI();
+       hideFistIndicator();
+       return;
+     }
+
+     const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
 
     if (state.current === 'incense'){
       handleIncenseGesture(results.multiHandLandmarks || []);

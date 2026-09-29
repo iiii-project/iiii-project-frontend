@@ -7,7 +7,7 @@
    【外部依賴】
    本檔案假設執行環境有 bundler（Vite/webpack/esbuild 皆可，專案本身用 Vite）
    能解析以下 npm 套件（package.json 裡都已經有）：
-     three, @mediapipe/hands, @mediapipe/camera_utils
+      three, @mediapipe/camera_utils
    如果新專案完全不用 bundler，需要改用 import map 或把這幾行 import 換成
    CDN ESM 版本，詳見 README.md「零建置環境」章節。
 
@@ -17,7 +17,6 @@
      事件：input-mode-resolved, incense-complete, draw-complete, bwa-result,
            sequence-complete, toast
    ========================================================================= */
-import { Hands } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 
 import { CONFIG } from './engine/config.js';
@@ -35,8 +34,8 @@ import { getPerformanceProfile } from '@/utils/performance';
 import stylesText from './styles.css?raw';
 
 /* Three.js 與筊杯 GLB 只在真正進入擲筊階段才需要。這個代理保留 flow-controller
-   原本的同步介面，但把 598 KB 的 Three.js chunk 延後到 init/resume/toss 第一次
-   被呼叫時才下載、解析，避免上香與抽籤期間佔用主執行緒。 */
+   原本的同步介面，但把 Three.js chunk 延後到 prepare 第一次被呼叫時才下載、解析。
+   動作偵測暫停後，攝影機仍保留給人像去背與 AR 畫面使用。 */
 function createLazyBwaScene(state) {
   let scene = null;
   let loading = null;
@@ -258,8 +257,8 @@ class TempleArOracle extends HTMLElement {
     if (name === 'api-base') this._api = this._makeApi(newVal);
   }
 
-  // MediaPipe Hands + Camera 啟動（對應原始碼檔案尾端 4108–4126 行的 bootstrap，
-  // 這裡包成一個 Promise 回傳的函式，供 flow-controller.start() 呼叫）
+  // Camera 啟動。動作偵測暫停，不再載入 MediaPipe Hands；攝影機仍持續提供
+  // 人像去背與 AR 畫面，這裡包成一個 Promise 供 flow-controller.start() 呼叫。
   _startCamera(){
     if (this._cameraPromise) return this._cameraPromise;
 
@@ -271,17 +270,9 @@ class TempleArOracle extends HTMLElement {
       : Promise.resolve(null);
 
     this._cameraPromise = segmentationClassPromise.then((SelfieSegmentationClass) => new Promise((resolve, reject) => {
-       // 各階段都會用到雙手判定；一開始就固定 maxNumHands=2，避免在抽籤／擲筊
-       // 第一個影格才重新設定 MediaPipe，將模型設定成本疊在場景切換上。
-       const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-       const handOptions = { modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 };
-       hands.setOptions({ ...handOptions, maxNumHands: 2 });
-      hands.onResults(this._gestureEngine.onResults);
-      this._hands = hands;
-
-      /* 人像去背：把最新的分割遮罩存進共用的 state，讓 gesture-engine 畫
-         #output_canvas 時可以只畫出人像、其餘鏤空，讓底下的神明實景疊加層透出來。
-         跟 Hands 各自獨立送同一格畫面，彼此不互相依賴、也不用等對方。 */
+       /* 人像去背：把最新的分割遮罩存進共用的 state，讓 gesture-engine 畫
+          #output_canvas 時可以只畫出人像、其餘鏤空，讓底下的神明實景疊加層透出來。
+          攝影機畫面與去背模型彼此獨立，不依賴手部結果回呼。 */
        let selfieSegmentation = null;
        if (SelfieSegmentationClass) {
          selfieSegmentation = new SelfieSegmentationClass({
@@ -300,11 +291,13 @@ class TempleArOracle extends HTMLElement {
          this._selfieSegmentation = selfieSegmentation;
        }
 
-       // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
-      // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把實際送進
-       // MediaPipe 的頻率依裝置 profile 夾在 8~12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
+        // 去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
+       // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把去背推論
+       // 依裝置 profile 夾在 8~12 FPS，人物畫布則限制在 15~24 FPS。
         const INFERENCE_INTERVAL_MS = 1000 / profile.arInferenceFps;
+        const CAMERA_RENDER_INTERVAL_MS = 1000 / (profile.isLowEnd ? 15 : 24);
         let lastInferenceTime = 0;
+        let lastRenderTime = 0;
         let inferenceBusy = false;
          let lastSegmentationTime = 0;
         let inferenceEnabledAt = Number.POSITIVE_INFINITY;
@@ -321,24 +314,24 @@ class TempleArOracle extends HTMLElement {
              // 分類選定時可以先開啟相機串流；真正開始儀式前不跑模型推論。
               if (!this._cameraInferenceEnabled || this._state.current === 'transition') return;
              const now = performance.now();
-            // 先讓 camera/video、AR 畫面與頁面完成第一輪繪製，再啟動兩個
-            // MediaPipe WASM 模型，避免使用者按下開始後立刻被模型編譯卡住。
+            // 先讓 camera/video、AR 畫面與頁面完成第一輪繪製，再啟動
+            // MediaPipe 去背 WASM，避免使用者按下開始後立刻被模型編譯卡住。
             if (now < inferenceEnabledAt) return;
+            if (now - lastRenderTime >= CAMERA_RENDER_INTERVAL_MS) {
+               this._gestureEngine.onResults({ image: this._els.video, multiHandLandmarks: [] });
+              lastRenderTime = now;
+            }
             if (inferenceBusy || now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
             lastInferenceTime = now;
             inferenceBusy = true;
             try {
-               // 先做 Hands；去背模型延後到第二輪，避免開鏡第一幀同時初始化兩個模型。
-              await hands.send({ image: this._els.video });
-
-               // 遮罩變化比手勢慢：依 profile 限制去背頻率，低階裝置不必每輪
-               // 同時執行兩個模型；首次仍立即取得，避免畫面長時間沒有去背影像。
+                // 遮罩變化比畫面慢：依 profile 限制去背頻率，避免每幀執行 WASM。
                const segmentationInterval = 1000 / profile.arSegmentationFps;
                if (selfieSegmentation && (!hasSegmentationMask || now - lastSegmentationTime >= segmentationInterval)) {
                  lastSegmentationTime = now;
-                 await selfieSegmentation.send({ image: this._els.video });
-                 hasSegmentationMask = true;
-               }
+                  await selfieSegmentation.send({ image: this._els.video });
+                  hasSegmentationMask = true;
+                }
             } finally {
               inferenceBusy = false;
             }
@@ -369,13 +362,13 @@ class TempleArOracle extends HTMLElement {
 
     this._modelWarmupPromise = (async () => {
       const video = this._els?.video;
-      if (!video || !this._hands) return;
+      if (!video) return;
 
-      // 只送一格影像讓 WASM/model 完成下載與編譯；此時不開啟流程判定。
-      await this._hands.send({ image: video });
+      // 只送一格影像讓去背 WASM/model 完成下載與編譯；此時不開啟流程判定。
       if (this._selfieSegmentation) {
         await this._selfieSegmentation.send({ image: video });
       }
+      this._gestureEngine.onResults({ image: video, multiHandLandmarks: [] });
       this._modelsWarmed = true;
     })().catch((error) => {
       this._modelWarmupPromise = null;
@@ -385,7 +378,7 @@ class TempleArOracle extends HTMLElement {
     return this._modelWarmupPromise;
   }
 
-  /** 在開始求籤的使用者手勢中先開啟鏡頭並預熱模型；真正顯示場景仍由 start() 控制。 */
+  /** 在開始求籤的使用者手勢中先開啟鏡頭並預熱去背模型；真正顯示場景仍由 start() 控制。 */
   async prepareCamera(){
     await this._startCamera();
     try {
@@ -462,7 +455,6 @@ class TempleArOracle extends HTMLElement {
     }
     try { this._camera?.stop?.(); } catch (e) {}
     this._cameraPromise = null;
-    try { this._hands?.close?.(); } catch (e) {}
     try { this._selfieSegmentation?.close?.(); } catch (e) {}
     try {
       const stream = this._els?.video?.srcObject;

@@ -27,6 +27,8 @@ export function createArState() {
     current: 'idle',
     drawSubState: 'shake',
     bwaTossing: false,
+    // 暫停 Hands 動作偵測時仍可用同一套 GestureEngine 繪製相機／去背畫面。
+    gestureDetectionEnabled: false,
     selectedStickCx: 100,
     userQuery: { category: '綜合運勢', question: '' },
     // 以下欄位是flow-controller在串接後端API時需要的場次資料，
