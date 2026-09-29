@@ -68,11 +68,10 @@ interface TempleArOracleEl extends HTMLElement {
   start(options: { question?: string; category?: string; inputMode?: 'camera' | 'manual' }): Promise<void>
   prepareCamera(): Promise<void>
   prepareBwa(): Promise<void>
-  destroy(): void
+  reset(): void
 }
 
 const arEl = ref<TempleArOracleEl | null>(null)
-const cameraWarmup = ref(false)
 const cameraWarmupStarted = ref(false)
 const arNotice = ref('')
 const isOffline = ref(false)
@@ -154,18 +153,21 @@ function chooseCategory(value: Category) {
 async function warmupCamera() {
   if (cameraWarmupStarted.value) return
   cameraWarmupStarted.value = true
-  cameraWarmup.value = true
   try {
-    // 分類一選定就建立 AR 元件；所有後續會用到的資源從這裡並行載入，
+    // 進入求籤頁就建立 AR 元件；所有後續會用到的資源從這裡並行載入，
     // 不要等到抽籤完成才讓 Three.js / GLB / shader 第一次碰到 GPU。
     // @ts-ignore -- AR Web Component is a JavaScript module without declarations.
-    await import('@/ar/temple-ar-oracle/index.js')
+    const arModule = await import('@/ar/temple-ar-oracle/index.js')
     const [bwaModule, flowModule] = await Promise.all([
       // @ts-ignore -- JavaScript AR module has no declaration file.
       import('@/ar/temple-ar-oracle/engine/bwa-scene.js'),
       // @ts-ignore -- JavaScript AR module has no declaration file.
       import('@/ar/temple-ar-oracle/engine/flow-controller.js')
     ])
+    const element = arModule.getPersistentTempleArOracle({ apiBase: '/api/v1', transitionSrc: '/videos/dragon.mp4' }) as TempleArOracleEl
+    arEl.value = element
+    element.reset()
+
     const assetPreloads = [
       (bwaModule as any).preloadBwaModel(),
       (flowModule as any).preloadVideoAsset('/videos/dragon.mp4'),
@@ -174,7 +176,6 @@ async function warmupCamera() {
     ]
 
     await nextTick()
-    const element = arEl.value
     await Promise.allSettled([
       ...assetPreloads,
       element?.prepareCamera() ?? Promise.resolve(),
@@ -318,9 +319,13 @@ function unbindAr() {
     el.removeEventListener('offline', onArOffline)
     el.removeEventListener('sequence-complete', onArComplete)
     el.removeEventListener('interpretation-ready', onArInterpretation)
-    try { el.destroy() } catch { /* 元件可能已卸載 */ }
+    // AR host is intentionally persistent. Reset the ritual but keep the
+    // warmed Three.js context, GLB meshes, shaders, camera and MediaPipe.
+    try { el.reset() } catch { /* host may not have finished building */ }
+    el.style.visibility = 'hidden'
+    el.style.pointerEvents = 'none'
+    el.style.zIndex = '-1'
   }
-  cameraWarmup.value = false
   cameraWarmupStarted.value = false
 }
 
@@ -338,33 +343,38 @@ async function submit(requestedMode: 'camera' | 'manual' = 'camera') {
     errorMessage.value = ''
     arNotice.value = ''
     companionStore.beginRitual()
-    // MediaPipe / Three.js / AR Web Component 只在真正開始求籤時載入，
-    // 不讓使用者填寫分類與問題時就下載、解析大型引擎。
+    // AR Web Component 與資源已在進入本頁時開始預熱；這裡只切換顯示狀態
+    // 並重用 persistent host，不重新載入或建立 Three.js context。
     // @ts-ignore -- AR Web Component is a JavaScript module without declarations.
-    await import('@/ar/temple-ar-oracle/index.js')
+    const arModule = await import('@/ar/temple-ar-oracle/index.js')
     /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
        一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
     step.value = 4
     await nextTick()
-    const el = arEl.value
-    if (!el) {
+    if (!arEl.value) {
+      arEl.value = arModule.getPersistentTempleArOracle({ apiBase: '/api/v1', transitionSrc: '/videos/dragon.mp4' }) as TempleArOracleEl
+    }
+    const reusableEl = arEl.value
+    if (!reusableEl) {
       errorMessage.value = '無法載入求籤場景，請重新整理頁面再試一次。'
       companionStore.endRitual()
       return
     }
-    bindAr(el)
+    reusableEl.style.visibility = 'visible'
+    reusableEl.style.pointerEvents = 'auto'
+    reusableEl.style.zIndex = '60'
+    bindAr(reusableEl)
     setBodyLock(true)
     try {
-       if (requestedMode === 'camera') {
-         // 使用者按下開始求籤的手勢中先預熱鏡頭與 MediaPipe；API 建立和畫面
-         // 轉換期間模型可以在背景準備好，進入誠心場景時不必再等初始化。
-         void el.prepareCamera().catch(() => undefined)
-       }
-       await el.start({
-          question: askedQuestion.value,
-          category: chosen.value?.arLabel ?? '綜合運勢',
-          inputMode: requestedMode
-        })
+      if (requestedMode === 'camera') {
+        // 使用者按下開始求籤的手勢中確認鏡頭可用；資源本身已在進頁時預熱。
+        void reusableEl.prepareCamera().catch(() => undefined)
+      }
+      await reusableEl.start({
+        question: askedQuestion.value,
+        category: chosen.value?.arLabel ?? '綜合運勢',
+        inputMode: requestedMode
+      })
     } catch (error) {
       // 引擎本身已對後端錯誤做離線降級，這裡只處理連引擎都起不來的情況
       errorMessage.value = error instanceof Error ? error.message : '無法開始求籤，請稍後再試。'
@@ -379,7 +389,6 @@ async function submit(requestedMode: 'camera' | 'manual' = 'camera') {
 function quitRitual() {
   setBodyLock(false)
   unbindAr()
-  arEl.value = null
   arNotice.value = ''
   step.value = 3
 }
@@ -672,54 +681,20 @@ function restart() {
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
     </main>
 
-    <!-- AR 儀式全螢幕層 -->
+    <!-- AR 儀式由全站 persistent host 承載；避免路由切換時釋放 WebGL/shader。 -->
     <Teleport to="body">
-      <div v-if="cameraWarmup" :class="step === 4 ? 'ar-fullscreen' : 'ar-prewarm'">
-        <temple-ar-oracle ref="arEl" api-base="/api/v1" transition-src="/videos/dragon.mp4"></temple-ar-oracle>
-        <p v-if="step === 4 && arNotice" class="ar-toast">{{ arNotice }}</p>
-        <button v-if="step === 4" class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
+      <div v-if="step === 4 && arEl" class="ar-controls">
+        <p v-if="arNotice" class="ar-toast">{{ arNotice }}</p>
+        <button class="ar-exit" type="button" @click="quitRitual">離開儀式</button>
       </div>
     </Teleport>
   </div>
 </template>
 
 <style>
-/* AR 儀式全螢幕層：Teleport 到 body，所以這段不能是 scoped。
-   引擎根節點本身是 position:fixed，這層只負責背景、離開鈕與層級。 */
+/* AR 儀式控制項會 Teleport 到 body；persistent host 本身負責全螢幕畫面。 */
 body.ar-ritual-open { overflow: hidden; }
 
-.ar-fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  background: #120d0a;
-}
-
-/* 分類選定後只保留相機串流，不顯示 AR 畫面；正式開始求籤時改成
-   .ar-fullscreen，但不重新掛載 Web Component。 */
-.ar-prewarm {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  overflow: hidden;
-}
-.ar-prewarm temple-ar-oracle {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.ar-fullscreen temple-ar-oracle {
-  display: block;
-  width: 100%;
-  height: 100%;
-  --gold: #d4af37;
-  --jiang-hong: #a63a3a;
-  --ink: #3a2c22;
-}
 .ar-exit {
   position: fixed;
   top: calc(14px + env(safe-area-inset-top));

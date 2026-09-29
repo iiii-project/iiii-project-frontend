@@ -790,6 +790,15 @@ export function createFlowController({
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach((s) =>
       s.classList.add("hidden"),
     );
+    // The persistent host survives route changes, so explicitly pause the
+    // BWA render loop when a ritual ends instead of relying on destroy().
+    bwaScene.pause?.();
+    els.transitionVideo?.pause?.();
+    if (els.transitionVideo) {
+      els.transitionVideo.currentTime = 0;
+      els.transitionVideo.classList.remove("show", "fade-out");
+    }
+    els.transitionOverlay?.classList.remove("play");
     state.current = "idle";
     state.bwaTossing = false;
     els.ritualOverlay?.classList.remove("blended");

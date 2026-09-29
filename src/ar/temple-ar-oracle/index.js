@@ -410,6 +410,28 @@ class TempleArOracle extends HTMLElement {
   }
 
   /**
+   * Reset the reusable ritual without releasing the warmed WebGL/MediaPipe
+   * resources.  The host page keeps this element alive between route changes,
+   * so the next ritual can start with the already compiled renderer and models.
+   */
+  reset(){
+    if (this._destroyed) return;
+    this._cameraInferenceEnabled = false;
+    this._started = false;
+    this._flow?.reset?.();
+    if (this._state) {
+      this._state.sessionId = null;
+      this._state.shareToken = null;
+      this._state.currentFortune = null;
+      this._state.interpretation = null;
+      this._state.pendingBwaResult = null;
+      this._state.resolvedMode = null;
+      this._state.clickBwaMode = false;
+      this._state.transitionActive = false;
+    }
+  }
+
+  /**
    * 啟動整個插香→搖籤→擲筊儀式。
    * @param {{question?: string, category?: string, inputMode?: 'camera'|'manual'}} [options]
    */
@@ -461,6 +483,28 @@ class TempleArOracle extends HTMLElement {
 
 if (!customElements.get('temple-ar-oracle')) {
   customElements.define('temple-ar-oracle', TempleArOracle);
+}
+
+/*
+ * One persistent AR host for the whole app.  Route components are short-lived,
+ * but disposing this element would also dispose the Three.js context and force
+ * shader compilation again on every visit to /oracle.  Keep it outside Vue's
+ * route tree; callers only hide/reset it between rituals.
+ */
+let persistentOracle = null;
+
+export function getPersistentTempleArOracle({ apiBase = '/api/v1', transitionSrc = '/videos/dragon.mp4' } = {}) {
+  if (!persistentOracle) {
+    persistentOracle = document.createElement('temple-ar-oracle');
+    persistentOracle.setAttribute('api-base', apiBase);
+    persistentOracle.setAttribute('transition-src', transitionSrc);
+    persistentOracle.style.visibility = 'hidden';
+    persistentOracle.style.pointerEvents = 'none';
+    persistentOracle.style.zIndex = '-1';
+    persistentOracle.style.background = '#120d0a';
+    document.body.appendChild(persistentOracle);
+  }
+  return persistentOracle;
 }
 
 export { TempleArOracle };
