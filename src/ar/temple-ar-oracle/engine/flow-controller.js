@@ -329,6 +329,8 @@ export function createFlowController({
   // 相機與人像去背仍持續運作，只有 Hands/WASM 手勢推論被移除。
   const AUTO_ADVANCE = true;
   const AUTO_ENTRY_DELAY_MS = 1500;
+  const AUTO_DRAW_ENTRY_DELAY_MS = 2500;
+  const AUTO_BWA_ENTRY_DELAY_MS = 3000;
   const AUTO_INCENSE_MS = 10000;
   const AUTO_DRAW_MS = 5000;
   let autoAdvanceTimer = null;
@@ -347,7 +349,11 @@ export function createFlowController({
     }
   }
 
-  function startAutoStage(sceneName, durationMs, { onEnter, onProgress, onComplete }) {
+  function startAutoStage(
+    sceneName,
+    durationMs,
+    { entryDelayMs = AUTO_ENTRY_DELAY_MS, onEnter, onStart, onProgress, onComplete },
+  ) {
     if (!AUTO_ADVANCE) return;
     cancelAutoAdvance();
     const generation = autoAdvanceGeneration;
@@ -363,6 +369,7 @@ export function createFlowController({
         onComplete();
         return;
       }
+      onStart?.();
       const startedAt = performance.now();
       const tick = () => {
         if (!isActive()) return;
@@ -376,11 +383,12 @@ export function createFlowController({
       };
       tick();
       autoAdvanceInterval = setInterval(tick, 100);
-    }, AUTO_ENTRY_DELAY_MS);
+    }, entryDelayMs);
   }
 
   function startAutoBwaStage() {
     startAutoStage("bwa", 0, {
+      entryDelayMs: AUTO_BWA_ENTRY_DELAY_MS,
       onEnter: () => {
         els.bwaHint.textContent = "筊杯準備中…";
       },
@@ -613,7 +621,11 @@ export function createFlowController({
       });
     } else if (name === "draw") {
       startAutoStage("draw", AUTO_DRAW_MS, {
+        entryDelayMs: AUTO_DRAW_ENTRY_DELAY_MS,
         onEnter: () => {
+          els.drawHint.textContent = "請專心準備抽籤…";
+        },
+        onStart: () => {
           els.shakeRing.classList.add("on");
           els.shakeRing.style.setProperty("--p", 0);
           els.qianTongZone.classList.add("shaking");
