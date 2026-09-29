@@ -154,7 +154,8 @@ async function warmupCamera() {
   cameraWarmupStarted.value = true
   cameraWarmup.value = true
   try {
-    // 分類一選定就建立相機串流，並同步預載後續所有模型與媒體資源。
+    // 分類一選定就建立 AR 元件；所有後續會用到的資源從這裡並行載入，
+    // 不要等到抽籤完成才讓 Three.js / GLB / shader 第一次碰到 GPU。
     // @ts-ignore -- AR Web Component is a JavaScript module without declarations.
     await import('@/ar/temple-ar-oracle/index.js')
     const [bwaModule, flowModule] = await Promise.all([
@@ -163,15 +164,20 @@ async function warmupCamera() {
       // @ts-ignore -- JavaScript AR module has no declaration file.
       import('@/ar/temple-ar-oracle/engine/flow-controller.js')
     ])
-    await Promise.allSettled([
+    const assetPreloads = [
       (bwaModule as any).preloadBwaModel(),
       (flowModule as any).preloadVideoAsset('/videos/dragon.mp4'),
       (flowModule as any).preloadVideoAsset('/videos/oracle-transition.mov'),
       (flowModule as any).preloadVideoAsset('/videos/tutorial.mp4')
-    ])
+    ]
+
     await nextTick()
-    await arEl.value?.prepareCamera()
-    await arEl.value?.prepareBwa()
+    const element = arEl.value
+    await Promise.allSettled([
+      ...assetPreloads,
+      element?.prepareCamera() ?? Promise.resolve(),
+      element?.prepareBwa() ?? Promise.resolve()
+    ])
   } catch {
     // 正式開始時仍會再次嘗試，失敗後由 AR 引擎切換手動備援。
     cameraWarmupStarted.value = false
