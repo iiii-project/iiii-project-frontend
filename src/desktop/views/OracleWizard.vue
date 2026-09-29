@@ -171,7 +171,7 @@ async function warmupCamera() {
 
     const assetPreloads = [
       (bwaModule as any).preloadBwaModel(),
-      (flowModule as any).preloadVideoAsset('/videos/oracle-transition.mov'),
+      (flowModule as any).preloadVideoAsset('/videos/oracle-transition.mp4'),
       (flowModule as any).preloadVideoAsset('/videos/tutorial.mp4')
     ]
 

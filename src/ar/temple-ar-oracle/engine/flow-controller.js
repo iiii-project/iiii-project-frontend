@@ -35,7 +35,7 @@
    載入失敗、解碼失敗、或播放卡住超過預期時間，都走 fallback。
    預設值是這支影片；呼叫端可透過 options.src / hooks.src 覆蓋，未帶入時
    就走這個預設值。<temple-ar-oracle> 仍可用 transition-src attribute 覆蓋。 */
-export const ORACLE_TRANSITION_SRC = "/videos/oracle-transition.mov";
+ export const ORACLE_TRANSITION_SRC = "/videos/oracle-transition.mp4";
 const ORACLE_TRANSITION_MS = 5120; // 素材長度（拿不到 metadata 時的備用值）
 const REVEAL_LEAD_MS = 350; // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
 const HARD_CAP_EXTRA_MS = 2500; // 影片真的卡死時的保險

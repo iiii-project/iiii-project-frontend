@@ -9,7 +9,7 @@
    （影片播到尾聲、或墨染蓋滿畫面時），那一刻再把結果換上去，
    使用者看到的就是龍把籤送到眼前、畫面接著變成籤詩。
 
-   桌面版與 AR 引擎統一使用 public/videos/oracle-transition.mov，
+   桌面版與 AR 引擎統一使用 public/videos/oracle-transition.mp4，
    不另轉檔、不壓縮畫質，透過 preload/play 共用同一份原始影片。 */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
@@ -17,7 +17,7 @@ import {
   preloadOracleTransition
 } from '@/ar/temple-ar-oracle/engine/flow-controller.js'
 
-const DESKTOP_TRANSITION_SRC = '/videos/oracle-transition.mov'
+const DESKTOP_TRANSITION_SRC = '/videos/oracle-transition.mp4'
 
 const videoEl = ref<HTMLVideoElement | null>(null)
 const overlayEl = ref<HTMLElement | null>(null)
@@ -106,7 +106,7 @@ defineExpose({ play })
   z-index: 72;
   width: 100%;
   height: 100%;
-  /* 播放 public/videos/oracle-transition.mov 原始檔，保留完整直式構圖，
+  /* 播放 public/videos/oracle-transition.mp4，保留完整直式構圖，
      不重新壓縮影片畫質。 */
   object-fit: contain;
   background: radial-gradient(120% 90% at 50% 42%, #fffdf6 0%, #fbf9f5 46%, #f3ece0 100%);

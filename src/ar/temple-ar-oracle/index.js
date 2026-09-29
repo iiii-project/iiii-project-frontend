@@ -192,11 +192,11 @@ class TempleArOracle extends HTMLElement {
       },
     });
 
-    /* 領籤過場影片來源：預設吃 public/videos/oracle-transition.mov，
+    /* 領籤過場影片來源：預設吃 public/videos/oracle-transition.mp4，
        宿主頁面仍可用 transition-src attribute 覆蓋。
        只在建立當下讀一次，過場開始播放後才換片沒有意義，不需要做成響應式的。 */
     const transitionSrc = this.getAttribute('transition-src') || undefined;
-     /* oracle-transition.mov 是直式 720x1280，桌機用 cover 會裁掉龍與籤枝
+     /* oracle-transition.mp4 是直式 720x1280，桌機用 cover 會裁掉龍與籤枝
        （見 styles.css 內的說明），所以預設保留 contain、兩側留白。
         若宿主指定其他影片，交由 data-fill 讓 CSS 改用 cover 鋪滿。 */
     if (transitionSrc) this._els.transitionVideo.dataset.fill = '1';
