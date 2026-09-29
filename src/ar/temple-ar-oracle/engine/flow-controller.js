@@ -265,6 +265,7 @@ export function createFlowController({
      這時候一起發出去，比使用者擲完再發又早了整段擲筊動作的時間。 */
   let pendingCast = null; // 這一輪擲筊結果（Promise）
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
+  let pendingPrayer = null; // 拜拜 API 與墨染轉場並行，抽籤時再確認已完成
 
   /* 神明實景疊加：鏡頭模式等第一張去背遮罩完成就顯示人物，
      不再用固定秒數讓使用者等待；手動／手機模式則立即顯示場景。 */
@@ -473,18 +474,33 @@ export function createFlowController({
   async function completeIncense() {
     if (state.current !== "incense") return;
     state.current = "transition";
+    pendingPrayer = api.prayer(state.sessionId);
+    // 不再先等網路回應才開始畫面轉場；使用者看到抽籤畫面後，
+    // 通常還有足夠時間完成 prayer request。
+    playInkTransition(els, () => showScene("draw"));
     try {
-      await api.prayer(state.sessionId);
+      await pendingPrayer;
       emit("incense-complete");
-      playInkTransition(els, () => showScene("draw"));
     } catch (error) {
       state.current = "incense";
+      showScene("incense");
       emit("toast", { message: error.message || "無法完成祈求，請再試一次" });
     }
   }
 
   async function completeDraw() {
     if (state.current !== "draw") return;
+    // 轉場已經先讓使用者進入抽籤畫面；若使用者極快完成抽籤，
+    // 這裡才等待拜拜 API，避免把網路延遲放在「拜拜→抽籤」的切換上。
+    if (pendingPrayer) {
+      // 先鎖住狀態，避免等待 prayer 的短時間內連續觸發兩次抽籤。
+      state.current = "transition";
+      try {
+        await pendingPrayer;
+      } catch {
+        return;
+      }
+    }
     state.current = "transition";
 
     // 手動備援沒有經過手勢引擎的選籤階段，這裡補上同一段自動抽籤動畫。
@@ -518,7 +534,9 @@ export function createFlowController({
       } catch (error) {
         console.warn("[temple-ar-oracle] 筊杯場景預載失敗，進入擲筊時再試", error);
       }
-      setTimeout(() => playInkTransition(els, () => showScene("bwa")), 700);
+      // 筊杯 renderer、GLB 與 shader 已在分類選擇時預熱完成，這裡直接
+      // 開始轉場，不再額外硬等 700ms。
+      playInkTransition(els, () => showScene("bwa"));
     } catch (error) {
       state.current = "draw";
       state.drawSubState = "shake";

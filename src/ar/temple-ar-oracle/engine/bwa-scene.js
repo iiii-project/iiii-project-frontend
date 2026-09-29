@@ -167,6 +167,17 @@ const REST_Y = -0.2;
       resetIdle();
       scene.add(cupA);
       scene.add(cupB);
+      // GLB 下載／解析完成不代表 GPU 已完成材質 shader 編譯；Three.js
+      // 通常會把這個成本延到第一次 render，剛切到擲筊場景時就會看到卡頓。
+      // 在分類選擇後的預載階段先編譯並繪製一格，正式切場景只需顯示既有畫布。
+      try {
+        renderer.compile(scene, camera);
+        renderer.render(scene, camera);
+      } catch (error) {
+        // 部分舊 WebView 不支援 compile，正式 render 時仍可自動編譯，
+        // 因此預熱失敗不阻擋後續流程。
+        console.warn('[BwaScene] shader 預熱失敗，將於正式渲染時編譯', error);
+      }
     }).catch((error) => {
       modelLoadStarted = false;
       modelReadyPromise = null;
