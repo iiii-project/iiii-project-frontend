@@ -321,10 +321,13 @@ function unbindAr() {
     el.removeEventListener('interpretation-ready', onArInterpretation)
     // AR host is intentionally persistent. Reset the ritual but keep the
     // warmed Three.js context, GLB meshes, shaders, camera and MediaPipe.
-    try { el.reset() } catch { /* host may not have finished building */ }
+    // Hide the host before resetting the video so its final frame can never
+    // be composited into the result page.
+    el.style.display = 'none'
     el.style.visibility = 'hidden'
     el.style.pointerEvents = 'none'
     el.style.zIndex = '-1'
+    try { el.reset() } catch { /* host may not have finished building */ }
   }
   cameraWarmupStarted.value = false
 }
@@ -360,6 +363,7 @@ async function submit(requestedMode: 'camera' | 'manual' = 'camera') {
       companionStore.endRitual()
       return
     }
+    reusableEl.style.display = 'block'
     reusableEl.style.visibility = 'visible'
     reusableEl.style.pointerEvents = 'auto'
     reusableEl.style.zIndex = '60'

@@ -490,6 +490,7 @@ export function getPersistentTempleArOracle({ apiBase = '/api/v1', transitionSrc
     persistentOracle = document.createElement('temple-ar-oracle');
     persistentOracle.setAttribute('api-base', apiBase);
     persistentOracle.setAttribute('transition-src', transitionSrc);
+    persistentOracle.style.display = 'none';
     persistentOracle.style.visibility = 'hidden';
     persistentOracle.style.pointerEvents = 'none';
     persistentOracle.style.zIndex = '-1';
