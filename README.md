@@ -125,39 +125,47 @@ Live2D 只需要 `public/live2d/libs/live2dcubismcore.js` 這個 Cubism 執行�
 
 ## Docker Compose 部署
 
-跟 `npm run dev` 是完全不同的兩套環境變數，不要混用。在此前端目錄執行 Compose 前：
+前端與後端是**兩個獨立的 compose 專案**，各自啟動、各自部署，透過共用的 docker network `iiii-project` 互通：nginx 以 `backend:8000` 把 `/api`、`/admin`、`/client-ws` 等路徑轉給後端（後端 compose 替 backend 服務設了這個網路別名，nginx 設定見 `nginx/default.conf.template`）。
 
-1. 已安裝並啟動 Docker Desktop / Docker Engine，`docker compose version` 可正常執行。
-2. 前端與後端目錄位於同一層，名稱分別是 `iiii-project-frontend`、`iiii-project-backend`。
-3. 已建立後端環境設定檔：
+| 檔案 | 用途 | 內容 |
+|---|---|---|
+| `compose.yaml` | 本機開發 | frontend（對外 80 埠） |
+| `compose.prod.yaml` | 正式環境 | frontend + caddy（TLS，對外 80/443） |
+| `../iiii-project-backend/compose.yaml` | 本機開發 | backend + llama.cpp |
+| `../iiii-project-backend/compose.prod.yaml` | 正式環境 | backend（不對外開埠） |
 
-   ```bash
-   cp ../iiii-project-backend/.env.example ../iiii-project-backend/.env
-   ```
+跟 `npm run dev` 是完全不同的兩套環境變數，不要混用；**不需要設定 `VITE_API_PROXY_TARGET` 或 `BACKEND_URL`**。
 
-   正式環境記得修改後端 `.env` 的 `DJANGO_SECRET_KEY`、`DJANGO_DEBUG=False`、`DJANGO_ALLOWED_HOSTS`、`CORS_ALLOWED_ORIGINS`、`CSRF_TRUSTED_ORIGINS`，以及 `LLM_API_KEY` 等 LLM 設定（見後端 README）。
+啟動前：
 
-4. 若要一起用 Docker 啟動 llama.cpp：需要先準備好 `../iiii-project-backend/llamacpp/`（見後端 README「Docker Compose」章節的說明，這個目錄目前沒有隨 git 流通，需要自己準備），並把至少一個 `.gguf` 模型放進 `llamacpp/model/`。**如果 LLM 走 OpenAI 官方 API 或其他外部端點，可以完全跳過這一步。**
+1. 已安裝並啟動 Docker Engine，`docker compose version` 可正常執行。
+2. 前端與後端目錄位於同一層（`iiii-project-frontend`、`iiii-project-backend`）。
+3. 後端已建立 `../iiii-project-backend/.env`（見後端 README）；正式環境另外需要本目錄的 `.env`（`cp .env.production.example .env`，填入 `DOMAIN`）。
+4. 第一次先建立共用網路：`docker network create iiii-project`。
 
-建立此前端的 Compose 環境檔並啟動：
+本機開發（先起後端，再起前端；順序反過來也可以，後端還沒起來時 API 會暫時回 502）：
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
+cd ../iiii-project-backend && docker compose up -d --build
+cd ../iiii-project-frontend && docker compose up -d --build
 ```
+
+正式環境：
 
 ```bash
-docker compose ps
-docker compose logs -f
+cd ../iiii-project-backend && docker compose -f compose.prod.yaml up -d --build
+cd ../iiii-project-frontend && docker compose -f compose.prod.yaml up -d --build
 ```
 
-預設前端網址為 `http://localhost:8888`（可用 `.env` 的 `FRONTEND_PORT` 改埠號）。Compose 會同時啟動前端、Django 後端（跟可選的 llama.cpp），並透過內部網路把 `/api`、`/admin` 等路徑轉送到 `backend:8000`（nginx 設定見 `nginx/default.conf.template`），**不需要設定 `VITE_API_PROXY_TARGET` 或 `BACKEND_URL`**——這組環境變數只在 `npm run dev` 情境用得到。後端設定完全由 `../iiii-project-backend/.env` 讀取。
+VM 上也可以直接用 `scripts/deploy.sh`（兩個 repo 各有一份，只更新、重建自己）：拉最新的 main、必要時建立共用網路、`up -d --build --force-recreate`。GitHub Actions 的 deploy job 就是透過 SSH 執行它。
 
-停止服務：
+停止服務（各自在自己的目錄）：
 
 ```bash
 docker compose down
 ```
+
+> 從「前後端合併在前端 compose」的舊版升級：後端 compose 沿用舊的 volume 名稱（`iiii-project-frontend_sqlite_data`、`iiii-project-frontend_media_data`），資料庫與上傳檔案不會遺失。升級時先在前端目錄 `docker compose -f compose.prod.yaml down`（**不要加 `-v`**），再依上面的順序分別啟動。
 
 ## 已知技術債
 

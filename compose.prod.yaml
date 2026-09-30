@@ -1,35 +1,25 @@
-# 生產環境用(單台 Azure VM)。跟 compose.yaml(本機開發用)的差異:
-#   - 不含 llama 服務 —— 生產環境走外部 LLM API,不在機器上跑 llama.cpp
-#   - frontend 不直接對外開埠,前面多一層 caddy 做 TLS 終止 + 自動憑證更新
-#   - backend/frontend restart 政策改成 always(VM 重開機也要自動長回來)
+# 生產環境用（單台 Azure VM），只含前端 nginx 與 caddy。
+# 後端在 iiii-project-backend/compose.prod.yaml 另外啟動，兩邊透過共用的
+# docker network「iiii-project」互通（nginx 以 backend:8000 連到後端）。
 #
-# 用法:
+# 跟 compose.yaml（本機開發用）的差異：
+#   - frontend 不直接對外開埠，前面多一層 caddy 做 TLS 終止 + 自動憑證更新
+#   - restart 政策改成 always（VM 重開機也要自動長回來）
+#
+# 用法（第一次要先建立共用網路）：
+#   docker network create iiii-project
 #   cd iiii-project-frontend
 #   docker compose -f compose.prod.yaml up -d --build
 services:
-  backend:
-    build: ../iiii-project-backend
-    restart: always
-    env_file: ../iiii-project-backend/.env
-    volumes:
-      - sqlite_data:/app/data
-      - media_data:/app/media
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-
   frontend:
     build: .
     restart: always
     environment:
       BACKEND_URL: http://backend:8000
       NGINX_ENVSUBST_FILTER: BACKEND_URL
-    depends_on:
-      backend:
-        condition: service_healthy
+    networks:
+      - default
+      - iiii-project
 
   caddy:
     image: caddy:2-alpine
@@ -46,8 +36,11 @@ services:
     depends_on:
       - frontend
 
+networks:
+  iiii-project:
+    name: iiii-project
+    external: true
+
 volumes:
-  sqlite_data:
-  media_data:
   caddy_data:
   caddy_config:

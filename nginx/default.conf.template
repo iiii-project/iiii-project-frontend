@@ -5,6 +5,13 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # 前後端是兩個獨立的 compose 專案，後端可能比前端晚起、也可能單獨重建（IP 會變）。
+    # proxy_pass 直接寫主機名稱的話，nginx 只在啟動時解析一次：後端沒起來就啟動失敗，
+    # 後端重建後還會一直連舊 IP。改成經由變數 + Docker 內建 DNS，每 10 秒重新解析；
+    # 後端暫時不在時只會回 502，不會讓整個前端掛掉。
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $backend_upstream ${BACKEND_URL};
+
     # 壓縮傳輸：JS/CSS/wasm/manifest 這類文字型資產最吃這個，
     # 圖片/影片/字型已經是壓縮格式，本來就不列進 gzip_types。
     gzip on;
@@ -26,7 +33,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -34,7 +41,7 @@ server {
     }
 
     location /admin/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -44,7 +51,7 @@ server {
     # Django Admin 的 CSS/JavaScript 由 backend 的 WhiteNoise 提供。
     # 必須放在最後的 SPA fallback(location /)之前，避免被回傳 index.html。
     location /static/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -53,7 +60,7 @@ server {
 
     # Live2D 角色引擎（Django Channels），跟 /api 同一個後端，但需要 WebSocket 升級 header
     location /client-ws {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -64,22 +71,22 @@ server {
     }
 
     location /live2d-models/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_set_header Host $host;
     }
 
     location /avatars/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_set_header Host $host;
     }
 
     location /bg/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_set_header Host $host;
     }
 
     location /cache/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_set_header Host $host;
     }
 
