@@ -1,25 +1,41 @@
-# 本機開發用：只含前端（nginx 提供建置好的 SPA，並把 /api、/client-ws 等轉給後端）。
-# 後端在 iiii-project-backend 另外啟動，兩邊透過共用的 docker network「iiii-project」
-# 互通；nginx 以 backend:8000 連到後端（後端 compose 替 backend 服務設了這個別名）。
+# 前端：nginx（提供 SPA，並把 /api、/client-ws 等轉給後端）+ caddy（TLS 終止、自動憑證）。
+# 後端在 iiii-project-backend/compose.yaml 另外啟動，兩邊透過共用的
+# docker network「iiii-project」互通（nginx 以 backend:8000 連到後端）。
 #
 # 用法（第一次要先建立共用網路）：
 #   docker network create iiii-project
-#   cd iiii-project-backend && docker compose up -d --build     # 先起後端
-#   cd iiii-project-frontend && docker compose up -d --build    # 再起前端
+#   docker compose up -d --build
 services:
   frontend:
     build: .
-    ports:
-      - "80:80"
+    restart: always
     environment:
       BACKEND_URL: http://backend:8000
       NGINX_ENVSUBST_FILTER: BACKEND_URL
-    restart: unless-stopped
     networks:
       - default
       - iiii-project
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
 
 networks:
   iiii-project:
     name: iiii-project
     external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

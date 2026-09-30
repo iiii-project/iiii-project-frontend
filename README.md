@@ -125,14 +125,12 @@ Live2D 只需要 `public/live2d/libs/live2dcubismcore.js` 這個 Cubism 執行�
 
 ## Docker Compose 部署
 
-前端與後端是**兩個獨立的 compose 專案**，各自啟動、各自部署，透過共用的 docker network `iiii-project` 互通：nginx 以 `backend:8000` 把 `/api`、`/admin`、`/client-ws` 等路徑轉給後端（後端 compose 替 backend 服務設了這個網路別名，nginx 設定見 `nginx/default.conf.template`）。
+前端與後端是**兩個獨立的 compose 專案**，各自只有一份 `compose.yaml`，各自啟動、各自部署，透過共用的 docker network `iiii-project` 互通：nginx 以 `backend:8000` 把 `/api`、`/admin`、`/client-ws` 等路徑轉給後端（後端 compose 替 backend 服務設了這個網路別名，nginx 設定見 `nginx/default.conf.template`）。
 
-| 檔案 | 用途 | 內容 |
-|---|---|---|
-| `compose.yaml` | 本機開發 | frontend（對外 80 埠） |
-| `compose.prod.yaml` | 正式環境 | frontend + caddy（TLS，對外 80/443） |
-| `../iiii-project-backend/compose.yaml` | 本機開發 | backend + llama.cpp |
-| `../iiii-project-backend/compose.prod.yaml` | 正式環境 | backend（不對外開埠） |
+| 檔案 | 內容 |
+|---|---|
+| `compose.yaml` | frontend + caddy（TLS，對外 80/443） |
+| `../iiii-project-backend/compose.yaml` | backend（不對外開埠） |
 
 跟 `npm run dev` 是完全不同的兩套環境變數，不要混用；**不需要設定 `VITE_API_PROXY_TARGET` 或 `BACKEND_URL`**。
 
@@ -140,32 +138,19 @@ Live2D 只需要 `public/live2d/libs/live2dcubismcore.js` 這個 Cubism 執行�
 
 1. 已安裝並啟動 Docker Engine，`docker compose version` 可正常執行。
 2. 前端與後端目錄位於同一層（`iiii-project-frontend`、`iiii-project-backend`）。
-3. 後端已建立 `../iiii-project-backend/.env`（見後端 README）；正式環境另外需要本目錄的 `.env`（`cp .env.production.example .env`，填入 `DOMAIN`）。
+3. 後端已建立 `../iiii-project-backend/.env`（見後端 README）；本目錄建立 `.env`（`cp .env.production.example .env`，填入 `DOMAIN`）。
 4. 第一次先建立共用網路：`docker network create iiii-project`。
 
-本機開發（先起後端，再起前端；順序反過來也可以，後端還沒起來時 API 會暫時回 502）：
+啟動（兩邊順序不拘；後端還沒起來時 API 會暫時回 502）：
 
 ```bash
 cd ../iiii-project-backend && docker compose up -d --build
 cd ../iiii-project-frontend && docker compose up -d --build
 ```
 
-正式環境：
+VM 上也可以直接用 `scripts/deploy.sh`（兩個 repo 各有一份，只更新、重建自己）：拉最新的 main、必要時建立共用網路、`up -d --build --force-recreate --remove-orphans`。GitHub Actions 的 deploy job 就是透過 SSH 執行它。
 
-```bash
-cd ../iiii-project-backend && docker compose -f compose.prod.yaml up -d --build
-cd ../iiii-project-frontend && docker compose -f compose.prod.yaml up -d --build
-```
-
-VM 上也可以直接用 `scripts/deploy.sh`（兩個 repo 各有一份，只更新、重建自己）：拉最新的 main、必要時建立共用網路、`up -d --build --force-recreate`。GitHub Actions 的 deploy job 就是透過 SSH 執行它。
-
-停止服務（各自在自己的目錄）：
-
-```bash
-docker compose down
-```
-
-> 從「前後端合併在前端 compose」的舊版升級：後端 compose 沿用舊的 volume 名稱（`iiii-project-frontend_sqlite_data`、`iiii-project-frontend_media_data`），資料庫與上傳檔案不會遺失。升級時先在前端目錄 `docker compose -f compose.prod.yaml down`（**不要加 `-v`**），再依上面的順序分別啟動。
+停止服務（各自在自己的目錄）：`docker compose down`（**不要加 `-v`**，會刪掉資料庫 volume）。
 
 ## 已知技術債
 
