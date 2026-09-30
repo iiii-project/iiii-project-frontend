@@ -65,11 +65,9 @@ export function renderTemplate() {
 
   <!-- ============ 畫面零：誠心機制（插香 / 合十默念）============ -->
   <div id="scene-incense" class="scene">
-    <div class="glass-card ritual-card text-center fade-in absolute ar-top-10">
-      <h1 class="ritual-title">誠　心　默　念</h1>
-      <div class="hairline mt-4"></div>
-      <p id="incense-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請雙手合十，於心中默念所求之事</p>
-    </div>
+    <!-- 標題卡會擋到神明，已移除；說明改由 #stage-guide 在進場時顯示。
+         提示文字仍保留給螢幕閱讀器（視覺上隱藏），流程程式照常更新它。 -->
+    <p id="incense-hint" class="ar-status" aria-live="polite">請雙手合十，於心中默念所求之事</p>
     <div id="incense-anchor">
       <div id="incense-progress-ring"></div>
       <div id="incense-stick"><div class="stick-body"></div><div class="stick-tip"></div></div>
@@ -77,13 +75,9 @@ export function renderTemplate() {
   </div>
 
   <!-- ============ 畫面一：線上抽籤 ============ -->
-  <div id="scene-draw" class="scene hidden justify-between ar-py-8vh">
-    <div class="glass-card ritual-card text-center fade-in">
-      <h1 class="ritual-title">祈　願　抽　籤</h1>
-      <div class="hairline mt-4"></div>
-       <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請站到畫面中央，開始搖籤</p>
-      <button id="btn-manual-draw" class="btn-line mt-4 hidden" type="button">點 擊 抽 籤</button>
-    </div>
+  <div id="scene-draw" class="scene hidden justify-end ar-py-8vh">
+    <p id="draw-hint" class="ar-status" aria-live="polite">請站到畫面中央，開始搖籤</p>
+    <button id="btn-manual-draw" class="btn-line ar-manual-btn hidden" type="button">點 擊 抽 籤</button>
 
     <div id="qian-tong-zone">
       <div id="shake-progress-ring"></div>
@@ -129,12 +123,8 @@ export function renderTemplate() {
 
   <!-- ============ 畫面二：捧筊與拋擲 ============ -->
   <div id="scene-bwa" class="scene hidden justify-center items-center">
-    <div class="glass-card ritual-card absolute ar-top-7vh text-center fade-in">
-      <h2 class="ritual-title">擲　筊　請　示</h2>
-      <div class="hairline mt-4"></div>
-      <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請站到畫面中央即可擲筊</p>
-      <button id="btn-click-bwa" class="btn-line mt-4 hidden" type="button">擲　筊</button>
-    </div>
+    <p id="bwa-hint" class="ar-status" aria-live="polite">請站到畫面中央即可擲筊</p>
+    <button id="btn-click-bwa" class="btn-line ar-manual-btn hidden" type="button">擲　筊</button>
 
     <!-- 筊杯以 Three.js 即時 3D 渲染（真實光照 + 陰影 + PBR 材質），取代先前的 2D 卡片翻轉 -->
     <div id="bwa-three-container"></div>
@@ -142,6 +132,18 @@ export function renderTemplate() {
     <div id="bwa-result-panel" class="glass-card hidden absolute ar-bottom-9vh result-card text-center fade-in max-w-md">
       <p id="bwa-result-title" class="gold-text text-xl font-normal tracking-03em"></p>
       <p id="bwa-result-desc" class="text-13px opacity-80 leading-relaxed font-light tracking-wide"></p>
+    </div>
+  </div>
+
+  <!-- ============ 階段教學：每個階段開始前說明動作，按確認才開始 ============ -->
+  <div id="stage-guide" class="stage-guide hidden" role="dialog" aria-modal="true" aria-labelledby="stage-guide-title">
+    <div class="glass-card stage-guide-card fade-in">
+      <p class="stage-guide-eyebrow">下一步怎麼做</p>
+      <h2 id="stage-guide-title" class="ritual-title"></h2>
+      <div class="hairline"></div>
+      <div id="stage-guide-figure" class="stage-guide-figure"></div>
+      <ol id="stage-guide-steps" class="stage-guide-steps"></ol>
+      <button id="stage-guide-confirm" class="stage-guide-confirm" type="button">我知道了，開始</button>
     </div>
   </div>
   `;

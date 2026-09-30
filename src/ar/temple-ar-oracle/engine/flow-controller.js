@@ -31,6 +31,7 @@
    ========================================================================= */
 
 import { CONFIG } from "./config.js";
+import { createStageGuide } from "./stage-guide.js";
 
 /* 領籤過場：播放自製的 5.12 秒動畫（龍銜籤送到眼前）。
    影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
@@ -353,8 +354,14 @@ export function createFlowController({
   let autoAdvanceGeneration = 0;
   let cancelPresenceWait = null;
 
+  /* 每個階段開始前先跳出教學框，按確認才開始。同一場求籤每個階段只教一次
+     （非聖筊重抽、連續擲筊時不再重複跳出）；新的一場會重新顯示。 */
+  const stageGuide = createStageGuide(els);
+  const guidedStages = new Set();
+
   function cancelAutoAdvance() {
     autoAdvanceGeneration += 1;
+    stageGuide.hide();
     cancelPresenceWait?.();
     cancelPresenceWait = null;
     if (autoAdvanceTimer !== null) {
@@ -643,52 +650,61 @@ export function createFlowController({
       preloadOracleTransition(els, { src: transitionSrc });
     }
 
-    if (name === "incense") {
-      startAutoStage("incense", AUTO_INCENSE_MS, {
-        onWaiting: () => {
-          // 保留原本「默念：問題」的提示，只在前面加上站位指引。
-          els.incenseHint.textContent = `${PRESENCE_HINT}。${els.incenseHint.textContent}`;
-        },
-        onStart: () => {
-          els.incenseRing.classList.add("on");
-          els.incenseRing.style.setProperty("--p", 0);
-          els.incenseStick.classList.add("sensing");
-          els.incenseHint.textContent = "誠心默念中…";
-        },
-        onProgress: (progress) => {
-          els.incenseRing.style.setProperty("--p", Math.round(progress * 100));
-        },
-        onComplete: () => {
-          stopAutoVisualStage();
-          completeIncense();
-        },
-      });
-    } else if (name === "draw") {
-      startAutoStage("draw", AUTO_DRAW_MS, {
-        entryDelayMs: AUTO_DRAW_ENTRY_DELAY_MS,
-        onEnter: () => {
-          els.drawHint.textContent = "請專心準備抽籤…";
-        },
-        onWaiting: () => {
-          els.drawHint.textContent = `${PRESENCE_HINT}，開始搖籤`;
-        },
-        onStart: () => {
-          els.shakeRing.classList.add("on");
-          els.shakeRing.style.setProperty("--p", 0);
-          els.qianTongZone.classList.add("shaking");
-          els.sticksGroup.classList.add("is-shaking");
-          els.drawHint.textContent = "搖籤中…";
-        },
-        onProgress: (progress) => {
-          els.shakeRing.style.setProperty("--p", Math.round(progress * 100));
-        },
-        onComplete: () => {
-          stopAutoVisualStage();
-          completeDraw();
-        },
-      });
-    } else if (name === "bwa") {
-      startAutoBwaStage();
+    const startStage = () => {
+      if (state.current !== name) return;
+      if (name === "incense") {
+        startAutoStage("incense", AUTO_INCENSE_MS, {
+          onWaiting: () => {
+            // 保留原本「默念：問題」的提示，只在前面加上站位指引。
+            els.incenseHint.textContent = `${PRESENCE_HINT}。${els.incenseHint.textContent}`;
+          },
+          onStart: () => {
+            els.incenseRing.classList.add("on");
+            els.incenseRing.style.setProperty("--p", 0);
+            els.incenseStick.classList.add("sensing");
+            els.incenseHint.textContent = "誠心默念中…";
+          },
+          onProgress: (progress) => {
+            els.incenseRing.style.setProperty("--p", Math.round(progress * 100));
+          },
+          onComplete: () => {
+            stopAutoVisualStage();
+            completeIncense();
+          },
+        });
+      } else if (name === "draw") {
+        startAutoStage("draw", AUTO_DRAW_MS, {
+          entryDelayMs: AUTO_DRAW_ENTRY_DELAY_MS,
+          onEnter: () => {
+            els.drawHint.textContent = "請專心準備抽籤…";
+          },
+          onWaiting: () => {
+            els.drawHint.textContent = `${PRESENCE_HINT}，開始搖籤`;
+          },
+          onStart: () => {
+            els.shakeRing.classList.add("on");
+            els.shakeRing.style.setProperty("--p", 0);
+            els.qianTongZone.classList.add("shaking");
+            els.sticksGroup.classList.add("is-shaking");
+            els.drawHint.textContent = "搖籤中…";
+          },
+          onProgress: (progress) => {
+            els.shakeRing.style.setProperty("--p", Math.round(progress * 100));
+          },
+          onComplete: () => {
+            stopAutoVisualStage();
+            completeDraw();
+          },
+        });
+      } else if (name === "bwa") {
+        startAutoBwaStage();
+      }
+    };
+    if (guidedStages.has(name)) {
+      startStage();
+    } else {
+      guidedStages.add(name);
+      stageGuide.show(name, state.resolvedMode, startStage);
     }
   }
 
@@ -1022,6 +1038,7 @@ export function createFlowController({
   // 重置AR核心場景相關狀態（原始 goHome() 的AR部分；周邊 modal 的關閉交還給新前端自己處理）
   function reset() {
     cancelAutoAdvance();
+    guidedStages.clear();
     stopAutoVisualStage();
     transitionGeneration += 1;
     cancelOracleTransition(els.transitionVideo);
@@ -1060,6 +1077,7 @@ export function createFlowController({
   }) {
     state.userQuery = { question, category };
     state.current = "creating";
+    guidedStages.clear();
 
     const session = await api.create(question, category);
     state.sessionId = session.session_id;

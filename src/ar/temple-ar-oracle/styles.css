@@ -345,6 +345,7 @@
 .font-normal{ font-weight:400; }
 .max-w-md{ max-width:28rem; }
 .justify-between{ justify-content:space-between; }
+.justify-end{ justify-content:flex-end; }
 .justify-center{ justify-content:center; }
 .items-center{ align-items:center; }
 .leading-relaxed{ line-height:1.625; }
@@ -372,3 +373,47 @@
   .text-13px-md-sm{ font-size:0.875rem; line-height:1.25rem; } /* md:text-sm */
 }
 .text-13px-md-sm{ font-size:13px; }
+
+/* ===================== 階段提示與教學框（1080×1920 直式）=====================
+   標題卡已移除（會擋到神明）。提示文字只留給螢幕閱讀器；
+   動作說明改由 #stage-guide 在每個階段開始前顯示，按確認才開始。 */
+.ar-status{
+  position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+.ar-manual-btn{ pointer-events:auto; margin-bottom:2vh; }
+
+.stage-guide{
+  position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+  padding:0 5vw; background:rgba(20,12,8,0.55); pointer-events:auto;
+}
+.stage-guide-card{
+  width:min(88vw, 860px); padding:3.2rem 3rem 2.6rem; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:1.4rem;
+}
+.stage-guide-eyebrow{ margin:0; color:var(--ink-soft); font-size:1.25rem; letter-spacing:0.3em; }
+.stage-guide-card .ritual-title{ margin:0; font-size:3rem; }
+.stage-guide-figure{ width:min(52vw, 420px); color:var(--gold); }
+.stage-guide-figure svg{ display:block; width:100%; height:auto; }
+.stage-guide-steps{
+  margin:0; padding:0; list-style:none; counter-reset:guide-step;
+  display:grid; gap:1.1rem; width:100%; text-align:left;
+}
+.stage-guide-steps li{
+  counter-increment:guide-step; position:relative; padding-left:3.4rem;
+  color:var(--ink); font-size:1.6rem; line-height:1.55; letter-spacing:0.04em;
+}
+.stage-guide-steps li::before{
+  content:counter(guide-step); position:absolute; left:0; top:0.1rem;
+  width:2.4rem; height:2.4rem; border-radius:50%; display:grid; place-items:center;
+  background:var(--gold); color:#fffaf0; font-size:1.3rem; font-weight:600;
+}
+.stage-guide-confirm{
+  margin-top:0.8rem; min-width:60%; min-height:5rem; padding:0 2.4rem;
+  border:0; border-radius:999px; cursor:pointer;
+  background:linear-gradient(180deg, #b8423c, var(--jiang-hong-deep, #7a2229));
+  color:#fffaf0; font:inherit; font-size:1.7rem; font-weight:600; letter-spacing:0.18em;
+  box-shadow:0 12px 28px rgba(122,38,38,0.28);
+}
+.stage-guide-confirm:active{ transform:translateY(1px); }
+.stage-guide-confirm:focus-visible{ outline:3px solid var(--gold-soft); outline-offset:4px; }

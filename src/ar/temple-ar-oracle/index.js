@@ -207,6 +207,11 @@ class TempleArOracle extends HTMLElement {
       bwaResultPanel: $('bwa-result-panel'),
       bwaResultTitle: $('bwa-result-title'),
       bwaResultDesc: $('bwa-result-desc'),
+      stageGuide: $('stage-guide'),
+      stageGuideTitle: $('stage-guide-title'),
+      stageGuideFigure: $('stage-guide-figure'),
+      stageGuideSteps: $('stage-guide-steps'),
+      stageGuideConfirm: $('stage-guide-confirm'),
     };
     // 前面已經直接取得模板產生的 <video id="input_video"> 節點，不需要額外處理。
 
