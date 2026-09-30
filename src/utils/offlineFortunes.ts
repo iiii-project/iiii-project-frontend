@@ -23,7 +23,7 @@ export const OFFLINE_MAX_NUMBER = TABLE.reduce((max, item) => Math.max(max, item
 
  /* 欄位對照（跟 divination-api.js 的 mapFortune() 相反方向）：
     explain（白話翻譯）→ translation
-    modern（一般解釋）→ general_meaning，這樣它會出現在「籤書解釋」那一區
+    modern（一般解釋）→ general_meaning
     story（典故）→ story */
 export function offlineFortuneByNumber(number: number): Fortune | null {
   const found = TABLE.find((item) => item.no === number)

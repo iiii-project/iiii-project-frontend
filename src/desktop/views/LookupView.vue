@@ -5,13 +5,13 @@
      第二步 選方向
      第三步 說心事（可留白）→ 誠心送出
      過場   龍銜籤（與求籤同一段動畫）
-     結果   籤紙 + 籤書解釋 + AI 解籤 + 可帶走的 QR
+     結果   籤紙 + 白話 + AI 解籤 + 可帶走的 QR
 
    送出時建立場次並帶上 fortune_number：後端會把這支籤釘在場次上、狀態直接是
    confirmed，所以不必走祈求→抽籤→擲筊就能解籤，也因此一定有 session id，
-   QR 一律拿得到。AI 解籤是盡力而為——它慢（實測 ~21 秒）就先把籤詩與籤書解釋
+   QR 一律拿得到。AI 解籤是盡力而為——它慢（實測 ~21 秒）就先把籤詩與白話
    顯示出來，解籤回來再補進「神明指點」那一頁；真的失敗也只是少了那一段，
-   籤詩、籤書解釋與 QR 都還在。 */
+   籤詩、白話與 QR 都還在。 */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toUserMessage } from '@/api/client'
@@ -195,7 +195,7 @@ async function submit() {
   if (!f || !picked) return
   errorMessage.value = ''
   aiNote.value = ''
-  /* 離線：籤詩與籤書解釋都在本地，直接掀結果頁。
+  /* 離線：籤詩與白話都在本地，直接掀結果頁。
      AI 解籤與 QR 都要伺服器，這裡明白講一句，不要讓人以為壞了。 */
   if (isOffline.value) {
     aiNote.value = '目前離線，AI 解籤與 QR 暫時無法提供。'
@@ -223,7 +223,7 @@ async function submit() {
     /* 送出的這一刻才斷線：籤詩已經查到了，還是把結果頁給他，
        只是少了 AI 解籤與 QR。 */
     isOffline.value = true
-    aiNote.value = `${toUserMessage(error)} 以下先為你顯示籤詩與籤書上的解釋。`
+    aiNote.value = `${toUserMessage(error)} 以下先為你顯示籤詩與白話說明。`
     await revealWithTransition()
   } finally {
     isLoading.value = false
@@ -274,16 +274,16 @@ async function buildShareQr(sessionId: string) {
 }
 
 /* 有 AI 就問 AI。沒有（本機沒開模型、服務暫時掛掉）就明講一句，
-   籤詩與籤書解釋照樣看得到。 */
+   籤詩與白話照樣看得到。 */
 async function askAi(sessionId: string) {
   waitingInterpretation.value = true
   try {
     const result = await interpretFortune(sessionId)
     interpretation.value = result.interpretation ?? null
     if (result.fortune && fortune.value) fortune.value = { ...fortune.value, ...result.fortune }
-    if (!interpretation.value) aiNote.value = 'AI 解籤這次沒有回內容，以下是籤書上的解釋。'
+    if (!interpretation.value) aiNote.value = 'AI 解籤這次沒有回內容，以下先為你顯示籤詩與白話說明。'
   } catch {
-    aiNote.value = 'AI 解籤暫時無法使用，以下先為你顯示籤詩與籤書上的解釋；這支籤的紀錄已經留著，稍後掃 QR 再看就會補上。'
+    aiNote.value = 'AI 解籤暫時無法使用，以下先為你顯示籤詩與白話說明；這支籤的紀錄已經留著，稍後掃 QR 再看就會補上。'
   } finally {
     waitingInterpretation.value = false
   }
@@ -305,35 +305,6 @@ function restart() {
   errorMessage.value = ''
 }
 
-/* ── 籤書上的解釋 ──
-   這是籤書資料（跟 AI 解籤是兩回事），依所選方向排在最前面。 */
-const MEANING_LABELS: { key: keyof Fortune; label: string; category?: Category }[] = [
-  { key: 'general_meaning', label: '一般' },
-  { key: 'health_meaning', label: '身體健康', category: 'health' },
-  { key: 'family_meaning', label: '家庭平安', category: 'family' },
-  { key: 'career_meaning', label: '工作錢財', category: 'career' },
-  { key: 'love_meaning', label: '感情姻緣', category: 'love' },
-  { key: 'study_meaning', label: '功名學業', category: 'study' },
-  { key: 'wealth_meaning', label: '財運投資', category: 'wealth' },
-  { key: 'relationship_meaning', label: '人際關係', category: 'relationship' },
-  { key: 'travel_meaning', label: '出行遠遊', category: 'travel' }
-]
-
-const bookMeanings = computed(() => {
-  const f = fortune.value
-  if (!f) return []
-  const list = MEANING_LABELS.map((item) => ({
-    label: item.label,
-    text: String(f[item.key] ?? '').trim(),
-    mine: item.category !== undefined && item.category === category.value
-  })).filter((item) => item.text)
-  // 自己問的那個方向排前面
-  return [...list.filter((item) => item.mine), ...list.filter((item) => !item.mine)]
-})
-const openMeaning = ref('')
-const shownMeaning = computed(
-  () => bookMeanings.value.find((item) => item.label === openMeaning.value) ?? bookMeanings.value[0] ?? null
-)
 </script>
 
 <template>
@@ -498,7 +469,7 @@ const shownMeaning = computed(
           <span v-else class="toggle-hint">收 起 籤 詩 ▲</span>
         </button>
 
-        <!-- 中段：解籤、籤書、摘要。只有這一區會捲，籤詩與動作按鈕固定不動 -->
+        <!-- 中段：解籤、摘要。只有這一區會捲，籤詩與動作按鈕固定不動 -->
         <div class="result-scroll">
           <p v-if="aiNote" class="ai-note">{{ aiNote }}</p>
 
@@ -512,24 +483,6 @@ const shownMeaning = computed(
             :offline-hint="shareUrl ? null : '離線查詢沒有留下紀錄，無法用 QR 帶走。'"
             :pending="waitingInterpretation"
           />
-
-          <!-- 籤書的各方向解釋：自己問的那個方向排最前面 -->
-          <div v-if="bookMeanings.length" class="book">
-            <p class="book-title">籤 書 解 釋</p>
-            <div class="book-list">
-              <button
-                v-for="item in bookMeanings"
-                :key="item.label"
-                class="book-item"
-                :class="{ on: shownMeaning?.label === item.label }"
-                type="button"
-                @click="openMeaning = item.label"
-              >
-                {{ item.label }}
-              </button>
-            </div>
-            <p v-if="shownMeaning" class="book-text">{{ shownMeaning.text }}</p>
-          </div>
 
           <dl class="summary">
             <div>
@@ -936,38 +889,6 @@ const shownMeaning = computed(
   text-indent: 0.24em;
 }
 
-.book { margin-top: 22px; }
-.book-title {
-  margin: 0 0 10px;
-  font-size: 12px;
-  letter-spacing: 0.3em;
-  text-indent: 0.3em;
-  color: var(--jiang-hong);
-}
-.book-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.book-item {
-  appearance: none;
-  cursor: pointer;
-  padding: 8px 13px;
-  border: 1px solid var(--gold-line);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.6);
-  font-family: inherit;
-  font-size: calc(12.5px * var(--fs, 1));
-  color: var(--ink-soft);
-}
-.book-item.on {
-  background: rgba(212, 175, 55, 0.2);
-  border-color: var(--gold);
-  color: var(--jiang-hong-deep);
-}
-.book-text {
-  margin: 12px 2px 0;
-  font-size: calc(14px * var(--fs, 1));
-  line-height: 2;
-  color: var(--ink-soft);
-}
-
 .take-away {
   display: flex;
   align-items: center;
@@ -1114,7 +1035,7 @@ const shownMeaning = computed(
   /* 籤詩那一頁例外：內容本來就可能很長（放大字級更長），
      整頁不捲的話會直接裁掉籤文，所以讓卡片自己內部捲。 */
   /* 籤詩永遠在最上面：卡片自己不捲，改成直排三段——
-     上段（籤詩＋收合列）固定、中段（解籤／籤書／摘要）自己捲、下段（動作按鈕）固定。
+     上段（籤詩＋收合列）固定、中段（解籤／摘要）自己捲、下段（動作按鈕）固定。
      與掃碼分享頁同一套作法（見 FortuneShare.vue 的 .sheet / .reading-block）。 */
   .panel.result {
     flex: 1;
