@@ -1,7 +1,7 @@
 /**
  * Live2D 角色的 WebSocket client。移植自 live2d-frontend 的 WebSocketService，
  * 拿掉 rxjs（改用陣列存 callback 的極簡訂閱機制）跟 toaster/i18next（改用 console），
- * 其餘行為（連線後自動送 4 個初始化訊息、訊息/連線狀態廣播）原樣保留。
+ * 其餘行為（連線後自動送初始化訊息、訊息/連線狀態廣播）原樣保留。
  */
 
 export interface DisplayText {
@@ -98,9 +98,8 @@ class WebSocketService {
     return WebSocketService.instance
   }
 
+  // 背景圖與角色設定檔清單這個嵌入場景用不到，不再向後端要
   private initializeConnection() {
-    this.sendMessage({ type: 'fetch-backgrounds' })
-    this.sendMessage({ type: 'fetch-configs' })
     this.sendMessage({ type: 'fetch-history-list' })
     this.sendMessage({ type: 'create-new-history' })
   }

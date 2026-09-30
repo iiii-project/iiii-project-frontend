@@ -343,7 +343,6 @@ export function createFlowController({
   // 三個需要動作的階段：「進場 → 等有人進到主要位置 → 播放動畫進度 → 自動前進」。
   // 鏡頭模式由 presence（讀去背遮罩）觸發；手動模式或沒有 presence 時退回固定延遲。
   // 觸發只是動畫的開關，開始之後人離開也不會中斷。
-  const AUTO_ADVANCE = true;
   const AUTO_ENTRY_DELAY_MS = 1500;
   const AUTO_DRAW_ENTRY_DELAY_MS = 2500;
   const AUTO_BWA_ENTRY_DELAY_MS = 2000;
@@ -379,7 +378,6 @@ export function createFlowController({
     durationMs,
     { entryDelayMs = AUTO_ENTRY_DELAY_MS, onEnter, onWaiting, onStart, onProgress, onComplete },
   ) {
-    if (!AUTO_ADVANCE) return;
     cancelAutoAdvance();
     const generation = autoAdvanceGeneration;
     const isActive = () =>

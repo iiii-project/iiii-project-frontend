@@ -1,6 +1,6 @@
 /* =========================================================================
    AR核心場景樣式表
-   來源：temple_oracle_v17.html 17–717行的大型 <style> 區塊，只抽出AR三場景
+   來源：temple_oracle_v17.html 17–717行的大型 \3c style> 區塊，只抽出AR三場景
    （插香/搖籤抽籤/擲筊）實際會用到的規則，逐一核對後複製，數值未更動。
 
    分成三部分：
@@ -63,7 +63,6 @@
 @keyframes arDrift{ 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(14px);} }
 #ar-decoration.dof-blur, #output_canvas.dof-blur{ filter: blur(7px) brightness(0.85) saturate(0.6); }
 
-
 /* 神明實景疊加層：z-index 0，疊在 #output_canvas（z-index 1）下方——人像去背後
    #output_canvas 只剩人像範圍不透明、其餘鏤空，鏤空處會直接透出這層神明實景，
    形成「人在神明實景前」的效果。預設 opacity:1（進場veil期間完全不透明），
@@ -122,9 +121,6 @@
 @media (min-width:768px){
   .ritual-title{ font-size: 2.75rem; }
 }
-/* 標題卡：跟 px-14/py-6 通用工具class脫鉤，才能單獨縮小這三張卡，
-   不影響共用同一組utility class的擲筊結果卡（bwa-result-panel）。 */
-.ritual-card{ padding: 1.1rem 2.25rem; }
 .scene{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; pointer-events:none; }
 .hidden{ display:none !important; }
 
@@ -145,8 +141,6 @@
 #shake-progress-ring.on{ opacity:1; }
 #qian-tong{ position:absolute; bottom:0; left:0; right:0; top:0; transition: filter 0.5s ease; }
 #qian-tong svg{ width:100%; height:100%; overflow:visible; }
-#qian-tong.aligned{ animation: breatheGlow 1.8s ease-in-out infinite; }
-@keyframes breatheGlow{ 0%,100%{ filter: drop-shadow(0 0 0px rgba(255,207,122,0)); } 50%{ filter: drop-shadow(0 0 26px rgba(255,207,122,0.85)); } }
 
 .stick{ transform-box: fill-box; transform-origin: bottom center; }
 #sticks.is-shaking .stick{ animation: stickShake 0.16s ease-in-out infinite; }
@@ -175,7 +169,6 @@
 .qian-stick.punch{ animation: punchScale 0.25s ease-out; }
 @keyframes punchScale{ 0%{ filter:brightness(1);} 40%{ filter:brightness(1.8) drop-shadow(0 0 20px #fff4dc);} 100%{ filter:brightness(1);} }
 
-
 /* ===================== 畫面二：雙手擲筊與結果動畫（Three.js 3D 渲染）===================== */
 #bwa-three-container{ position:fixed; inset:0; z-index:11; pointer-events:none; }
 /* 手動模式：改成直接點筊杯擲出，這時容器才需要收事件 */
@@ -194,7 +187,6 @@
 .ar-low-end .glass-card,
 .ar-low-end #bwa-result-panel{ backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
 .ar-low-end #qian-tong-zone{ filter:none; }
-.ar-low-end #qian-tong.aligned,
 .ar-low-end #incense-hint.sensing,
 .ar-low-end #incense-stick.sensing .stick-tip{ animation:none; }
 
@@ -301,7 +293,6 @@
   /* 直式畫面保留足夠寬度給籤筒與手部動作，避免 24vw 在手機上縮成
      只有八、九十像素，使用者看得到但不好對準。 */
   #qian-tong-zone{ width:min(48vw, 210px); height:min(42vh, 360px); }
-  .ritual-card{ max-width:calc(100vw - 28px); padding:0.9rem 1.25rem; }
   .ritual-title{ font-size:1.8rem; }
 }
 
@@ -330,49 +321,22 @@
 /* 拋擲瞬間的動態模糊（原始碼第360行附近，供 tossBwa 快速拋擲時使用；
    保留選擇器命名一致，數值原封不動） */
 .qian-stick.punch, #qian-stick.punch{ will-change: filter; }
-
-/* ---------- 3. Tailwind utility class 等價寫死 ---------- */
-/* 以下數值皆為 Tailwind 預設刻度（本專案 Tailwind CDN 無自訂 config），
-   md: 對應 Tailwind 預設斷點 768px。 */
-.px-14{ padding-left:3.5rem; padding-right:3.5rem; }
-.py-6{ padding-top:1.5rem; padding-bottom:1.5rem; }
-.py-8{ padding-top:2rem; padding-bottom:2rem; }
 .text-center{ text-align:center; }
-.mt-2{ margin-top:0.5rem; }
-.mt-4{ margin-top:1rem; }
 .opacity-80{ opacity:0.8; }
 .font-light{ font-weight:300; }
 .font-normal{ font-weight:400; }
 .max-w-md{ max-width:28rem; }
-.justify-between{ justify-content:space-between; }
 .justify-end{ justify-content:flex-end; }
 .justify-center{ justify-content:center; }
 .items-center{ align-items:center; }
 .leading-relaxed{ line-height:1.625; }
 .tracking-wide{ letter-spacing:0.025em; }
 .text-xl{ font-size:1.25rem; line-height:1.75rem; }
-
-/* 原始 class 帶有 Tailwind 任意值語法（如 top-[10vh]、tracking-[0.5em]），
-   這裡直接等價換算成固定值的具名 class，數值與原始完全相同： */
-.ar-top-10{ top:10vh; }
-.ar-top-7vh{ top:7vh; }
 .ar-bottom-9vh{ bottom:20vh; }
 .ar-py-8vh{ padding-top:8vh; padding-bottom:8vh; }
 .text-13px{ font-size:13px; }
-.tracking-05em{ letter-spacing:0.5em; }
 .tracking-03em{ letter-spacing:0.3em; }
-.tracking-015em{ letter-spacing:0.15em; }
 .absolute{ position:absolute; }
-
-/* text-2xl md:text-3xl（合十/擲筊標題）與 text-xl md:text-2xl（擲筊副標） */
-.text-2xl-md{ font-size:1.5rem; line-height:2rem; }
-.text-xl-md{ font-size:1.25rem; line-height:1.75rem; }
-@media (min-width:768px){
-  .text-2xl-md{ font-size:1.875rem; line-height:2.25rem; } /* md:text-3xl */
-  .text-xl-md{ font-size:1.5rem; line-height:2rem; }       /* md:text-2xl */
-  .text-13px-md-sm{ font-size:0.875rem; line-height:1.25rem; } /* md:text-sm */
-}
-.text-13px-md-sm{ font-size:13px; }
 
 /* ===================== 階段提示與教學框（1080×1920 直式）=====================
    標題卡已移除（會擋到神明）。提示文字只留給螢幕閱讀器；

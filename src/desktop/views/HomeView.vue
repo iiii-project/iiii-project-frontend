@@ -532,26 +532,6 @@ html.constrained-android .mist {
   padding: 0 24px;
   transform: translate3d(calc(var(--px, 0) * 8px), calc(var(--py, 0) * 6px), 0);
 }
-.celestial-eyebrow {
-  margin: 0 0 22px;
-  font-size: 12px;
-  letter-spacing: 0.5em;
-  text-indent: 0.5em;
-  color: var(--ink-soft);
-  opacity: 0;
-  animation: reveal 1.2s 0.2s ease-out forwards;
-}
-.celestial-eyebrow::before,
-.celestial-eyebrow::after {
-  content: '';
-  display: inline-block;
-  width: 40px;
-  height: 1px;
-  vertical-align: middle;
-  background: linear-gradient(90deg, transparent, var(--gold-line));
-  margin: 0 16px 4px;
-}
-.celestial-eyebrow::after { background: linear-gradient(90deg, var(--gold-line), transparent); }
 
 .title {
   margin: 0;
@@ -574,16 +554,6 @@ html.constrained-android .mist {
   color: var(--ink-soft);
   opacity: 0;
   animation: reveal 1.4s 0.55s ease-out forwards;
-}
-.desc {
-  margin: 18px auto 0;
-  max-width: 30em;
-  font-size: 14.5px;
-  line-height: 2.1;
-  letter-spacing: 0.08em;
-  color: rgba(91, 70, 53, 0.82);
-  opacity: 0;
-  animation: reveal 1.4s 0.7s ease-out forwards;
 }
 
 /* 寬度／位移是照 .title 實測反推的比例算出來的，不是寫死的 px：
@@ -853,11 +823,7 @@ html.constrained-android .mist {
   }
 
   .celestial-hero { padding: 0 22px; }
-  .celestial-eyebrow { font-size: 11px; letter-spacing: 0.34em; text-indent: 0.34em; }
-  .celestial-eyebrow::before,
-  .celestial-eyebrow::after { width: 22px; margin: 0 10px 4px; }
   .subtitle { margin-top: 20px; letter-spacing: 0.24em; text-indent: 0.24em; }
-  .desc { margin-top: 14px; font-size: 14px; line-height: 1.95; }
 
   /* 按鈕改成整排，單手好按 */
   .actions {
@@ -884,13 +850,11 @@ html.constrained-android .mist {
 
 /* 直式且螢幕偏矮：把上下留白再收一點 */
 @media (max-width: 640px) and (max-height: 700px) {
-  .desc { display: none; }
   .actions { margin-top: 26px; }
 }
 
 /* 螢幕高度不足（手機橫放、矮視窗）：只留標題與兩顆按鈕 */
 @media (max-height: 560px) {
-  .celestial-eyebrow { display: none; }
   .title { font-size: clamp(38px, 13vh, 72px); }
   .subtitle {
     margin-top: 12px;
@@ -898,7 +862,6 @@ html.constrained-android .mist {
     letter-spacing: 0.22em;
     text-indent: 0.22em;
   }
-  .desc { display: none; }
   .actions {
     margin-top: 20px;
     flex-direction: row;
@@ -916,7 +879,7 @@ html.constrained-android .mist {
     animation: none !important;
   }
   .sovereign { opacity: 0.32; }
-  .celestial-eyebrow, .title, .subtitle, .desc, .actions {
+  .title, .subtitle, .actions {
     opacity: 1;
     animation: none;
   }

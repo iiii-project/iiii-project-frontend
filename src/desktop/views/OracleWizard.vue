@@ -1328,7 +1328,6 @@ body.ar-ritual-open { overflow: hidden; }
 }
 .summary dt { flex: 0 0 5.6em; font-size: 15px; color: var(--ink-soft); line-height: 1.8; }
 .summary dd { flex: 1; margin: 0; font-size: 17px; line-height: 1.8; color: var(--ink); word-break: break-word; }
-.summary dd.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--ink-soft); }
 .chosen-icon { width: 20px; height: 20px; object-fit: contain; vertical-align: -4px; margin-right: 2px; }
 /* 所問方向：這是使用者選的那個方向，要像點燈一樣亮出來，
    跟「要問的事」那種純文字輸入區隔開，一眼就知道是自己選的選項。 */
