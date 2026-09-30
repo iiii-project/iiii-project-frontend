@@ -10,6 +10,7 @@
       靠 canvas 取影格。功能一樣，只是耗電多一點。 */
 import { onBeforeUnmount, ref } from 'vue'
 import { getPerformanceProfile } from '@/utils/performance'
+import { openPreferredCamera } from '@/utils/camera'
 
 const emit = defineEmits<{ decoded: [text: string]; error: [message: string] }>()
 
@@ -53,10 +54,8 @@ async function start(options: { facingMode?: 'environment' | 'user' } = {}) {
   hint.value = ''
   try {
     await prepareDecoder()
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: options.facingMode ?? 'environment' },
-      audio: false
-    })
+    // 外接 USB 鏡頭優先，找不到再依 facingMode 用內建鏡頭
+    stream = await openPreferredCamera({ facingMode: options.facingMode ?? 'environment' })
     if (stopped) {
       stream.getTracks().forEach((track) => track.stop())
       stream = null

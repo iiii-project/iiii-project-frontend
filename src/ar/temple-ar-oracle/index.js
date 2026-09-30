@@ -17,7 +17,6 @@
      事件：input-mode-resolved, incense-complete, draw-complete, bwa-result,
            sequence-complete, toast
    ========================================================================= */
-import { Camera } from '@mediapipe/camera_utils';
 
 import { CONFIG } from './engine/config.js';
 import { createArState } from './engine/state.js';
@@ -31,11 +30,48 @@ import {
 } from './engine/flow-controller.js';
 import { renderTemplate } from './template.js';
 import { getPerformanceProfile } from '@/utils/performance';
+import { openPreferredCamera } from '@/utils/camera';
 
 // styles.css 內容以字串方式內嵌，避免額外一次網路請求，且確保 Shadow DOM
 // 一定拿得到樣式（無論宿主專案的建置工具是否支援 CSS 檔案 import）。
 // 開發時仍是獨立的 styles.css 檔案，建置腳本可自行選擇要 inline 還是額外複製。
 import stylesText from './styles.css?raw';
+
+/* 取代 @mediapipe/camera_utils 的 Camera：它把 getUserMedia 參數寫死，沒辦法
+   指定 deviceId。這裡改用 openPreferredCamera（外接 USB 鏡頭優先，找不到再退
+   下一順位），其餘行為照舊——每個 rAF 檢查影片有沒有新影格，有才呼叫 onFrame。 */
+function createCameraLoop(video, { onFrame, width, height }) {
+  let stream = null;
+  let stopped = false;
+  let lastTime = -1;
+  const tick = async () => {
+    if (stopped) return;
+    if (!video.paused && video.currentTime !== lastTime) {
+      lastTime = video.currentTime;
+      try { await onFrame(); } catch (error) { console.warn('[temple-ar-oracle] onFrame 失敗', error); }
+    }
+    if (!stopped) requestAnimationFrame(tick);
+  };
+  return {
+    async start() {
+      stopped = false;
+      stream = await openPreferredCamera({ facingMode: 'user', width, height });
+      if (stopped) {
+        stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+        return;
+      }
+      video.srcObject = stream;
+      await video.play();
+      requestAnimationFrame(tick);
+    },
+    stop() {
+      stopped = true;
+      stream?.getTracks().forEach((track) => track.stop());
+      stream = null;
+    },
+  };
+}
 
 /* Three.js 與筊杯 GLB 只在真正進入擲筊階段才需要。這個代理保留 flow-controller
    原本的同步介面，但把 Three.js chunk 延後到 prepare 第一次被呼叫時才下載、解析。
@@ -313,7 +349,7 @@ class TempleArOracle extends HTMLElement {
        const portrait = window.innerHeight > window.innerWidth;
        const cameraWidth = portrait ? profile.arCameraHeight : profile.arCameraWidth;
        const cameraHeight = portrait ? profile.arCameraWidth : profile.arCameraHeight;
-       const camera = new Camera(this._els.video, {
+       const camera = createCameraLoop(this._els.video, {
            onFrame: async () => {
              // 分類選定時可以先開啟相機串流；真正開始儀式前不跑模型推論。
               if (!this._cameraInferenceEnabled || this._state.current === 'transition') return;
