@@ -8,7 +8,7 @@
 export const CONFIG = {
     // 鏡頭來源以完整比例放入全螢幕透明畫布，再套用人物去背遮罩。
     // 只控制去背人物最後貼到輸出畫布時的顯示大小，不影響鏡頭／分割範圍。
-    PERSON_SCALE: 0.50,
+    PERSON_SCALE: 0.60,
   DRAW_REQUIRED_HANDS: 2,
   DRAW_HAND_HOLD_MS: 2000,
 
