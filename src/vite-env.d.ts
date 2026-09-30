@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-/* AR 引擎那份離線籤詩表是純 JS（原樣搬自舊版單頁），
+/* AR 引擎那份離線籤詩表是純 JS（由後端籤詩資料產生），
    查籤的離線備援會 import 它，這裡補上型別宣告。 */
 declare module '@/ar/temple-ar-oracle/engine/offline-fortunes.js' {
   export const OFFLINE_FORTUNES: Array<{
@@ -9,6 +9,7 @@ declare module '@/ar/temple-ar-oracle/engine/offline-fortunes.js' {
     poem: string
     explain: string
     modern: string
+    story: string
   }>
 }
 

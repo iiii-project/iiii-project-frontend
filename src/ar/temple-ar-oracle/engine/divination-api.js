@@ -122,15 +122,18 @@ export function createDivinationApi(apiBase, options = {}) {
     };
   }
 
-  /* 預設解籤：不假裝是 AI 產生的，內容依籤詩本身的吉凶等級與使用者提問組出來 */
+  /* 這一場實際抽到的籤：線上抽到的是後端那支，離線抽到的是本地籤袋那支。
+     解籤失敗退回離線解說時要沿用它——以前會改用 local.fortune || 重新亂抽一支，
+     畫面上的籤詩就在最後一步被換成另一首。 */
+  let drawnFortune = null;
+  function currentFortune() {
+    return drawnFortune || local.fortune || pickLocalFortune();
+  }
+
+  /* 預設解籤：不假裝是 AI 產生的，內容由籤詩本身的解釋與使用者提問組出來 */
   function localInterpretation(question, category) {
-    const fortune = local.fortune || pickLocalFortune();
-    const grade = fortune.grade || '';
-    const tone = grade.includes('上')
-      ? '整體方向是順的，適合順勢推進。'
-      : grade.includes('下')
-        ? '眼下阻力較明顯，宜守不宜攻。'
-        : '目前處於持平的階段，穩住比求快重要。';
+    const fortune = currentFortune();
+    const tone = '靜下心來，把眼前能掌握的事先做好。';
     return {
       overall_meaning: `${fortune.explain || ''}${fortune.explain ? '' : tone}`.trim() || tone,
       relation_to_question: question
@@ -205,6 +208,22 @@ export function createDivinationApi(apiBase, options = {}) {
     }
   }
 
+  /* 後端正在生成解籤時，定期讀場次直到解籤寫入（最多等 interpretTimeoutMs）。 */
+  async function waitForInterpretation(id) {
+    const deadline = Date.now() + interpretTimeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      try {
+        const session = await attempt(`/divinations/${id}/`, { method: 'GET' }, timeoutMs);
+        if (session?.interpretation?.overall_meaning) return session;
+        if (session?.status && session.status !== 'interpreting') return null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
   function mapFortune(fortune){
     return {
       no: fortune.number,
@@ -238,6 +257,7 @@ export function createDivinationApi(apiBase, options = {}) {
     async create(question, category, interactionMode = 'click', fortuneNumber = null) {
       lastQuestion = question;
       lastCategory = category;
+      drawnFortune = null;
       if (shouldSkipNetwork()) return { session_id: `offline-${Date.now()}`, share_token: null, offline: true };
       try {
         return await create(question, category, interactionMode, fortuneNumber);
@@ -258,12 +278,13 @@ export function createDivinationApi(apiBase, options = {}) {
     },
 
     async draw(id) {
-      if (shouldSkipNetwork()) return pickLocalFortune();
+      if (shouldSkipNetwork()) return (drawnFortune = pickLocalFortune());
       try {
-        return mapFortune((await request(`/divinations/${id}/draw/`, { method: 'POST' })).fortune);
+        drawnFortune = mapFortune((await request(`/divinations/${id}/draw/`, { method: 'POST' })).fortune);
+        return drawnFortune;
       } catch (error) {
         goOffline(error);
-        return pickLocalFortune();
+        return (drawnFortune = pickLocalFortune());
       }
     },
 
@@ -280,7 +301,7 @@ export function createDivinationApi(apiBase, options = {}) {
     async interpret(id) {
       if (shouldSkipNetwork()) {
         return {
-          fortune: local.fortune || pickLocalFortune(),
+          fortune: currentFortune(),
           interpretation: localInterpretation(lastQuestion, lastCategory),
           offline: true,
         };
@@ -290,9 +311,15 @@ export function createDivinationApi(apiBase, options = {}) {
         const session = await request(`/divinations/${id}/interpret/`, { method: 'POST', timeoutMs: interpretTimeoutMs });
         return { ...session, fortune: mapFortune(session.fortune) };
       } catch (error) {
+        /* 409 INTERPRETATION_IN_PROGRESS：上一次請求逾時被中止、重試時後端其實還在
+           生成——這不是連不上，等它寫完再讀回來就好，不要退回離線解說。 */
+        if (error.code === 'INTERPRETATION_IN_PROGRESS') {
+          const session = await waitForInterpretation(id);
+          if (session) return { ...session, fortune: mapFortune(session.fortune) };
+        }
         goOffline(error);
         return {
-          fortune: local.fortune || pickLocalFortune(),
+          fortune: currentFortune(),
           interpretation: localInterpretation(lastQuestion, lastCategory),
           offline: true,
         };

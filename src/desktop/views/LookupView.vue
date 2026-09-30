@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /* 查籤：/lookup
    跟求籤同一套精靈流程，只是抽籤那一段換成「你手上已經有籤號了」：
-     第一步 籤號（或掃我們自己產的籤 QR）
+     第一步 籤號
      第二步 選方向
      第三步 說心事（可留白）→ 誠心送出
      過場   龍銜籤（與求籤同一段動畫）
@@ -12,7 +12,7 @@
    QR 一律拿得到。AI 解籤是盡力而為——它慢（實測 ~21 秒）就先把籤詩與籤書解釋
    顯示出來，解籤回來再補進「神明指點」那一頁；真的失敗也只是少了那一段，
    籤詩、籤書解釋與 QR 都還在。 */
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toUserMessage } from '@/api/client'
 import {
@@ -23,6 +23,9 @@ import {
 } from '@/api/divinationApi'
 import type { Category, Fortune, FortuneSet, Interpretation } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
+import { buildFortuneContext } from '@/utils/fortuneContext'
+import { sendWhenReady } from '@/live2d/websocketService'
+import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 import { OFFLINE_MAX_NUMBER, offlineFortuneByNumber } from '@/utils/offlineFortunes'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
 import { useSpeechInput } from '@/utils/speech'
@@ -31,10 +34,10 @@ import FontScaleControl from '@/desktop/components/FontScaleControl.vue'
 import FortunePoem from '@/desktop/components/FortunePoem.vue'
 import FortuneReading from '@/desktop/components/FortuneReading.vue'
 import OracleTransition from '@/desktop/components/OracleTransition.vue'
-import QrScanner from '@/desktop/components/QrScanner.vue'
 
 const router = useRouter()
 const { scaleStyle } = useFontScale()
+const companionStore = useLive2DCompanionStore()
 
 const healthyIcon = new URL('../../assets/images/healthy.webp', import.meta.url).href
 const homeIcon = new URL('../../assets/images/home.webp', import.meta.url).href
@@ -232,7 +235,34 @@ async function submit() {
 async function revealWithTransition() {
   await transitionEl.value?.play()
   step.value = 4
+  hasCompletedFortune = true
+  // 跟求籤結果頁一樣：一掀開就請小夥伴先唸籤詩原文，解籤晚到也不用等
+  if (fortune.value?.poem) sendWhenReady({ type: 'speak-text', text: fortune.value.poem })
 }
+
+/* 小夥伴的上下文：結果頁出現（解籤晚到時再補一次）就把問題、籤詩與解籤交給它，
+   信眾追問時才答得出這支籤。與求籤結果頁共用 utils/fortuneContext。 */
+watch(
+  () => [step.value, fortune.value, interpretation.value] as const,
+  ([currentStep, currentFortune, currentInterpretation]) => {
+    if (currentStep !== 4 || !currentFortune) return
+    companionStore.setFortuneContext(
+      buildFortuneContext({
+        question: askedQuestion.value,
+        number: currentFortune.number,
+        poem: currentFortune.poem,
+        interpretation: currentInterpretation
+      })
+    )
+  }
+)
+
+/* 查完一支籤再離開（回首頁等），就把小夥伴換成新的對話 session，
+   下一位不會看到上一位的對話與籤詩。 */
+let hasCompletedFortune = false
+onBeforeUnmount(() => {
+  if (hasCompletedFortune) companionStore.resetConversation()
+})
 
 async function buildShareQr(sessionId: string) {
   shareUrl.value = fortuneShareUrl(sessionId)
@@ -260,6 +290,8 @@ async function askAi(sessionId: string) {
 }
 
 function restart() {
+  if (hasCompletedFortune) companionStore.resetConversation()
+  hasCompletedFortune = false
   step.value = 1
   numberInput.value = ''
   fortune.value = null
@@ -302,53 +334,6 @@ const openMeaning = ref('')
 const shownMeaning = computed(
   () => bookMeanings.value.find((item) => item.label === openMeaning.value) ?? bookMeanings.value[0] ?? null
 )
-
-/* ── 掃 QR（第一步的另一個入口）── */
-const scanOpen = ref(false)
-const scannerEl = ref<InstanceType<typeof QrScanner> | null>(null)
-const scanNote = ref('')
-
-async function openScanner() {
-  scanOpen.value = true
-  scanNote.value = ''
-  errorMessage.value = ''
-  await Promise.resolve() // 等元件掛上再開相機
-  scannerEl.value?.start({ facingMode: 'environment' })
-}
-
-function closeScanner() {
-  scannerEl.value?.stop()
-  scanOpen.value = false
-}
-
-/* 從 QR 內容裡認出「本站的籤」。
-   接受三種寫法：完整網址（任何網域，只看路徑）、/fortune/<id> 這樣的路徑、
-   以及只有一組 UUID 的裸字串——實體籤上若只印 id，掃了照樣認得。 */
-const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
-
-function sessionIdFromQr(text: string): string | null {
-  const trimmed = text.trim()
-  const pathMatch = trimmed.match(/\/fortune\/([^/?#\s]+)/i)
-  if (pathMatch) return pathMatch[1]
-  if (UUID.test(trimmed) && trimmed.replace(UUID, '').trim() === '') return trimmed
-  return null
-}
-
-function onDecoded(text: string) {
-  const sessionId = sessionIdFromQr(text)
-  if (!sessionId) {
-    scanNote.value = '這張 QR 不是本站的籤，請掃籤詩頁上那一張，或直接輸入籤號。'
-    scannerEl.value?.start({ facingMode: 'environment' }) // 讓人可以馬上再掃
-    return
-  }
-  router.push(`/fortune/${sessionId}`)
-}
-
-function onScanError(message: string) {
-  scanNote.value = message
-}
-
-onBeforeUnmount(() => scannerEl.value?.stop())
 </script>
 
 <template>
@@ -379,39 +364,26 @@ onBeforeUnmount(() => scannerEl.value?.stop())
         <h1>手上這支籤是第幾號？</h1>
         <p class="lede">
           輸入籤號就能查籤詩，接著可以請神明依你的處境解這支籤。
-          <span class="note">如果拿到的是我們的籤詩 QR，直接掃更快。</span>
         </p>
 
-        <template v-if="!scanOpen">
-          <label class="field">
-            <span class="field-label">籤 號</span>
-            <input
-              v-model="numberInput"
-              class="no-input"
-              type="number"
-              inputmode="numeric"
-              :min="1"
-              :max="MAX_NUMBER"
-              :placeholder="`1 - ${MAX_NUMBER}`"
-              @keyup.enter="confirmNumber"
-            />
-          </label>
-          <div class="row">
-            <button class="btn ghost" type="button" @click="openScanner">掃 QR 取 籤</button>
-            <button class="btn primary" type="button" :disabled="isLoading || parsedNumber === null" @click="confirmNumber">
-              {{ isLoading ? '查 籤 中…' : '下 一 步' }}
-            </button>
-          </div>
-        </template>
-
-        <template v-else>
-          <QrScanner ref="scannerEl" @decoded="onDecoded" @error="onScanError" />
-          <p v-if="scanNote" class="scan-note">{{ scanNote }}</p>
-          <p class="scan-help">籤詩頁上那張「把這支籤帶走」的 QR 就是。掃到會直接打開那一支籤。</p>
-          <div class="row">
-            <button class="btn ghost" type="button" @click="closeScanner">改 用 輸 入 籤 號</button>
-          </div>
-        </template>
+        <label class="field">
+          <span class="field-label">籤 號</span>
+          <input
+            v-model="numberInput"
+            class="no-input"
+            type="number"
+            inputmode="numeric"
+            :min="1"
+            :max="MAX_NUMBER"
+            :placeholder="`1 - ${MAX_NUMBER}`"
+            @keyup.enter="confirmNumber"
+          />
+        </label>
+        <div class="row">
+          <button class="btn primary" type="button" :disabled="isLoading || parsedNumber === null" @click="confirmNumber">
+            {{ isLoading ? '查 籤 中…' : '下 一 步' }}
+          </button>
+        </div>
       </section>
 
       <!-- 第二步：選方向 -->
@@ -744,23 +716,6 @@ onBeforeUnmount(() => scannerEl.value?.stop())
   color: var(--jiang-hong-deep);
 }
 .no-input:focus { outline: 2px solid rgba(212, 175, 55, 0.5); outline-offset: 1px; }
-
-.scan-note {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(166, 58, 58, 0.08);
-  border: 1px solid rgba(166, 58, 58, 0.24);
-  font-size: 12.5px;
-  line-height: 1.8;
-  color: var(--jiang-hong-deep);
-}
-.scan-help {
-  margin: 10px 0 0;
-  font-size: 12px;
-  line-height: 1.8;
-  color: rgba(91, 70, 53, 0.65);
-}
 
 /* 第二步：方向（沿用求籤流程的大圖示清單） */
 .choice-list { display: grid; gap: 10px; }

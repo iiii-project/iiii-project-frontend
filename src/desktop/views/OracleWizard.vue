@@ -10,6 +10,7 @@ import FontScaleControl from '@/desktop/components/FontScaleControl.vue'
 import FortunePoem from '@/desktop/components/FortunePoem.vue'
 import FortuneReading from '@/desktop/components/FortuneReading.vue'
 import { sendWhenReady } from '@/live2d/websocketService'
+import { buildFortuneContext } from '@/utils/fortuneContext'
 import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 
 const router = useRouter()
@@ -56,7 +57,7 @@ const errorMessage = ref('')
 const loadingLabel = ref('')
 /* AR 儀式（插香 → 搖籤 → 擲筊）的狀態。場次由 AR 引擎自己建立，
    所以這裡不再另外呼叫 createDivination，避免同一次求籤開出兩個場次。 */
-interface ArFortune { no: number; ganzhi: string; grade: string; poem: string; explain: string; modern: string }
+interface ArFortune { no: number; ganzhi: string; poem: string; explain: string; modern: string }
 interface ArInterpretation {
   overall_meaning?: string
   relation_to_question?: string
@@ -256,36 +257,19 @@ function onArInterpretation(event: Event) {
   waitingInterpretation.value = false
 }
 
-/* 把「使用者問了什麼」+「抽到的籤跟解籤結果」組成一段文字，讓角色靜靜記住（不是拿來念的）。
-   兩件事都要放進去，缺一不可：只放解籤結果，角色答得出籤詩意思，但答不出「你剛才問的
-   是什麼」；只放問題，角色答得出方向，但答不出籤詩本身的內容。之後每一輪追問都是接著
-   這個當下的籤詩+問題延續，不是每次都當成全新、無關的對話重新開始。 */
-function buildFortuneContext(fortune: ArFortune | null, interpretation: ArInterpretation | null): string {
-  const parts: string[] = []
-  parts.push(`使用者剛才求籤時問的是：「${askedQuestion.value}」。`)
-  if (fortune) {
-    parts.push(`抽到第 ${fortune.no} 籤${fortune.grade ? `，${fortune.grade}` : ''}。`)
-  }
-  if (interpretation?.overall_meaning) parts.push(interpretation.overall_meaning)
-  if (interpretation?.relation_to_question) parts.push(interpretation.relation_to_question)
-  if (interpretation?.suggested_actions?.length) {
-    parts.push(`建議你：${interpretation.suggested_actions.join('，')}。`)
-  }
-  if (interpretation?.warnings?.length) {
-    parts.push(`要留意的是：${interpretation.warnings.join('，')}。`)
-  }
-  return parts.join(' ').trim()
-}
-
-/* 通用招呼語已經搬進 live2dCompanionStore（小夥伴變全站元件後不再是籤詩頁專屬）。
-   這裡只負責：小夥伴已經打過招呼、且這輪籤詩解籤資料到齊時，把內容悄悄寫進角色記憶——
-   不管使用者是先開小夥伴才抽完籤，還是抽完籤才開小夥伴，兩種順序都會觸發到一次。 */
+/* 籤詩一出來（解籤晚到時再補一次）就交給小夥伴當上下文，見 utils/fortuneContext。 */
 watch(
-  () => [companionStore.hasGreeted, interpretation.value] as const,
-  ([greeted]) => {
-    if (!greeted) return
-    const context = buildFortuneContext(fortune.value, interpretation.value)
-    if (context) sendWhenReady({ type: 'remember-context', text: context })
+  () => [fortune.value, interpretation.value] as const,
+  ([currentFortune, currentInterpretation]) => {
+    if (!currentFortune) return
+    companionStore.setFortuneContext(
+      buildFortuneContext({
+        question: askedQuestion.value,
+        number: currentFortune.no,
+        poem: currentFortune.poem,
+        interpretation: currentInterpretation
+      })
+    )
   }
 )
 

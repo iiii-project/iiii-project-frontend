@@ -19,7 +19,10 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
     hasGreeted: false,
     isRitualActive: false,
     // 每次 resetConversation() 遞增；Live2DCompanion.vue 看到就關掉聊天室、清掉草稿
-    conversationToken: 0
+    conversationToken: 0,
+    // 目前這一場的求籤資料（見 utils/fortuneContext）。後端每開一段新對話
+    // （含斷線重連）都會清掉它，所以這裡留一份，收到 new-history-created 就補送。
+    fortuneContext: ''
   }),
   actions: {
     open() {
@@ -63,6 +66,15 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
        - 前端：停掉正在播的語音、清空聊天泡泡與字幕、重新打招呼
        - 後端：create-new-history 會建立新的紀錄檔、清空角色記憶與求籤資料
          （見後端 consumers.py 的 _handle_create_history） */
+    /* 求籤／查籤結果頁有了籤詩（或解籤補回來）時呼叫：角色之後的回答都會接著這支籤。
+       不必等使用者先點開角色——資料放在後端 system prompt 的資料區塊，不會被開場白蓋掉。 */
+    setFortuneContext(text: string) {
+      this.fortuneContext = text
+      if (text) wsService.sendMessage({ type: 'remember-context', text })
+    },
+    resendFortuneContext() {
+      if (this.fortuneContext) wsService.sendMessage({ type: 'remember-context', text: this.fortuneContext })
+    },
     resetConversation() {
       const aiState = useAiStateStore()
       const chat = useLive2DChatStore()
@@ -75,6 +87,7 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
       aiState.setAiState('idle')
       chat.$reset()
       this.hasGreeted = false
+      this.fortuneContext = ''
       this.conversationToken += 1
       // 連線沒開也沒關係：重新連上時 initializeConnection() 本來就會送 create-new-history，
       // 而且新連線在後端是全新的 context。
