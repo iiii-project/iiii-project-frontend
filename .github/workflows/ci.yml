@@ -1,0 +1,33 @@
+# CI：每次 push 到 main 或開 PR 時，自動安裝套件並建置（含 vue-tsc 型別檢查）。
+# 建置失敗會在 commit / PR 上顯示紅色叉叉，避免壞掉的程式碼上線。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一個分支連續 push 時，取消還在跑的舊任務，只檢查最新的 commit
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # 與 Dockerfile 的 node:22-alpine 一致
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check & build
+        run: npm run build
