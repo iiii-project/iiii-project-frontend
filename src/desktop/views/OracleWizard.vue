@@ -133,11 +133,16 @@ onMounted(() => {
   mistTimer = window.setTimeout(() => (showEnterMist.value = false), 900)
 })
 
+/* 這一頁有沒有真的完成一場求籤（進到結果頁）。完成後離開（回首頁等），
+   就把小夥伴的對話換成新的 session，下一位信眾不會看到上一位的對話與籤詩。 */
+let hasCompletedFortune = false
+
 onBeforeUnmount(() => {
   if (mistTimer) window.clearTimeout(mistTimer)
   setBodyLock(false)
   unbindAr()
   companionStore.endRitual()
+  if (hasCompletedFortune) companionStore.resetConversation()
   companionStore.open()
 })
 
@@ -293,6 +298,7 @@ function onArComplete(event: Event) {
   unbindAr()
   setBodyLock(false)
   companionStore.showResult()
+  hasCompletedFortune = true
   step.value = 5
   void buildShareQr(detail?.sessionId ?? '')
 

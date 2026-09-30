@@ -97,6 +97,15 @@ function closeChat() {
   isChatOpen.value = false
 }
 
+/* 換 session（一場求籤結束回首頁）：聊天室關掉、未送出的語音草稿也清掉。 */
+watch(
+  () => companion.conversationToken,
+  () => {
+    closeChat()
+    chatDraft.value = ''
+  }
+)
+
 onMounted(async () => {
   await loadCubismCore()
   ws.connect()

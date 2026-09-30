@@ -1,5 +1,9 @@
 import { defineStore } from 'pinia'
-import { sendWhenReady } from '@/live2d/websocketService'
+import { sendWhenReady, wsService } from '@/live2d/websocketService'
+import { audioManager } from '@/live2d/audioManager'
+import { audioTaskQueue } from '@/live2d/taskQueue'
+import { useAiStateStore } from '@/stores/aiStateStore'
+import { useLive2DChatStore } from '@/stores/live2dChatStore'
 
 const GREETING_TEXT = '我是你的解籤助手金鶴，有任何問題都可以問我喔！'
 
@@ -13,7 +17,9 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
     isVisible: false,
     hasOpenedOnce: false,
     hasGreeted: false,
-    isRitualActive: false
+    isRitualActive: false,
+    // 每次 resetConversation() 遞增；Live2DCompanion.vue 看到就關掉聊天室、清掉草稿
+    conversationToken: 0
   }),
   actions: {
     open() {
@@ -51,6 +57,28 @@ export const useLive2DCompanionStore = defineStore('live2dCompanion', {
       if (this.hasGreeted) return
       this.hasGreeted = true
       sendWhenReady({ type: 'speak-text', text: GREETING_TEXT })
+    },
+    /* 一場求籤結束、回到首頁時呼叫：換成全新的對話 session，
+       下一位信眾看不到上一位的對話，角色也不會記得上一位的問題與籤詩。
+       - 前端：停掉正在播的語音、清空聊天泡泡與字幕、重新打招呼
+       - 後端：create-new-history 會建立新的紀錄檔、清空角色記憶與求籤資料
+         （見後端 consumers.py 的 _handle_create_history） */
+    resetConversation() {
+      const aiState = useAiStateStore()
+      const chat = useLive2DChatStore()
+      if (aiState.aiState === 'thinking-speaking') {
+        // 讓後端取消還在產生的回覆，免得舊的回覆在新對話裡冒出來
+        wsService.sendMessage({ type: 'interrupt-signal', text: '' })
+      }
+      audioManager.stopCurrentAudioAndLipSync()
+      audioTaskQueue.clearQueue()
+      aiState.setAiState('idle')
+      chat.$reset()
+      this.hasGreeted = false
+      this.conversationToken += 1
+      // 連線沒開也沒關係：重新連上時 initializeConnection() 本來就會送 create-new-history，
+      // 而且新連線在後端是全新的 context。
+      wsService.sendMessage({ type: 'create-new-history' })
     }
   }
 })

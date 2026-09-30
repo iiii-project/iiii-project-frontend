@@ -107,7 +107,6 @@ export function useLive2DWebSocket(options: UseLive2DWebSocketOptions) {
         break
       case 'new-history-created':
         aiState.setAiState('idle')
-        chat.setSubtitleText('已建立新對話')
         if (message.history_uid) {
           chat.setCurrentHistoryUid(message.history_uid)
           chat.setMessages([])
@@ -115,10 +114,9 @@ export function useLive2DWebSocket(options: UseLive2DWebSocketOptions) {
         }
         break
       case 'history-list':
-        if (message.histories) {
-          chat.setHistoryList(message.histories)
-          if (message.histories.length > 0) chat.setCurrentHistoryUid(message.histories[0].uid)
-        }
+        // 不自動套用清單第一筆：那可能是上一場（或別人）的對話，
+        // 目前這條連線的對話一律由 new-history-created 指定。
+        if (message.histories) chat.setHistoryList(message.histories)
         break
       case 'user-input-transcription':
         if (message.text) chat.appendHumanMessage(message.text)
