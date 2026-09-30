@@ -41,7 +41,7 @@ import stylesText from './styles.css?raw';
 /* 取代 @mediapipe/camera_utils 的 Camera：它把 getUserMedia 參數寫死，沒辦法
    指定 deviceId。這裡改用 openPreferredCamera（外接 USB 鏡頭優先，找不到再退
    下一順位），其餘行為照舊——每個 rAF 檢查影片有沒有新影格，有才呼叫 onFrame。 */
-function createCameraLoop(video, { onFrame, width, height }) {
+function createCameraLoop(video, { onFrame, height }) {
   let stream = null;
   let stopped = false;
   let lastTime = -1;
@@ -61,7 +61,7 @@ function createCameraLoop(video, { onFrame, width, height }) {
   return {
     async start() {
       stopped = false;
-      stream = await openPreferredCamera({ facingMode: 'user', width, height });
+      stream = await openPreferredCamera({ facingMode: 'user', height });
       if (stopped) {
         stream.getTracks().forEach((track) => track.stop());
         stream = null;
@@ -343,12 +343,10 @@ class TempleArOracle extends HTMLElement {
         let inferenceEnabledAt = Number.POSITIVE_INFINITY;
         let hasSegmentationMask = false;
 
-       // Camera Utils 的 width/height 會影響手機實際送進 MediaPipe 的影像方向。
-       // 直式時交換尺寸，避免瀏覽器以橫式影像裁切後再交給模型，造成上下
-       // 搖動在畫面座標裡被壓縮，尤其低階 Android 更明顯。
-       const portrait = window.innerHeight > window.innerWidth;
-       const cameraWidth = portrait ? profile.arCameraHeight : profile.arCameraWidth;
-       const cameraHeight = portrait ? profile.arCameraWidth : profile.arCameraHeight;
+       // 只指定高度、不指定寬度：同時給寬高時，Chrome 會為了湊比例把橫式
+       // USB 鏡頭左右裁掉（例如直式 240×320）。只給高度就保留鏡頭原生比例，
+       // 人物完整呈現，再由 gesture-engine 以 contain 放進人物框。
+       const cameraHeight = profile.arCameraHeight;
        const camera = createCameraLoop(this._els.video, {
            onFrame: async () => {
              // 分類選定時可以先開啟相機串流；真正開始儀式前不跑模型推論。
@@ -376,7 +374,6 @@ class TempleArOracle extends HTMLElement {
               inferenceBusy = false;
             }
          },
-          width: cameraWidth,
           height: cameraHeight,
       });
       this._camera = camera;

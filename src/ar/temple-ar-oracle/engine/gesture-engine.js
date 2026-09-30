@@ -33,25 +33,22 @@ export function createGestureEngine({ els, state, config: CONFIG }) {
     };
   }
 
-  /* 人物顯示框：PERSON_SCALE 控制人物高度，寬度依鏡頭比例；
-     水平置中、底部貼齊畫布。寬度可超出畫布，讓直式畫面的人物維持較大高度。 */
+  /* 人物顯示框：整張鏡頭畫面 contain 進 CONFIG.PERSON_BOX（畫面下方、神明下面），
+     保持原比例、不裁切；水平置中、底部貼齊框底。 */
   function personFrame(width, height, source){
-    const personHeight = height * CONFIG.PERSON_SCALE;
-    const personWidth = personHeight * (source.width / source.height);
+    const box = CONFIG.PERSON_BOX;
+    const boxX = box.left * width;
+    const boxW = (box.right - box.left) * width;
+    const boxH = (box.bottom - box.top) * height;
+    const scale = Math.min(boxW / source.width, boxH / source.height);
+    const personWidth = source.width * scale;
+    const personHeight = source.height * scale;
     return {
-      x: (width - personWidth) / 2,
-      y: height - personHeight,
+      x: boxX + (boxW - personWidth) / 2,
+      y: box.bottom * height - personHeight,
       width: personWidth,
       height: personHeight,
     };
-  }
-
-  /* 把來源影像 contain 到整張畫布（去背模型尚未就緒時使用）。 */
-  function containedFrame(width, height, source){
-    const scale = Math.min(width / source.width, height / source.height);
-    const w = source.width * scale;
-    const h = source.height * scale;
-    return { x: (width - w) / 2, y: (height - h) / 2, width: w, height: h };
   }
 
   function ensurePersonLayer(width, height){
@@ -95,7 +92,7 @@ export function createGestureEngine({ els, state, config: CONFIG }) {
       drawMirrored(personLayerCanvas, personFrame(cw, ch, source));
     } else if (state.useSelfieSegmentation === false) {
       // 停用去背時直接鏡像畫出完整鏡頭畫面。
-      drawMirrored(image, containedFrame(cw, ch, source));
+      drawMirrored(image, personFrame(cw, ch, source));
     }
     // 去背遮罩尚未準備好時不畫原始畫面，避免先閃出全身再突然切成摳像。
   }
