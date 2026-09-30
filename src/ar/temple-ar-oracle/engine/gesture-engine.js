@@ -74,14 +74,9 @@
       let personHeight = height * scale;
       let personWidth = personHeight * sourceRatio;
 
-      // 以高度作為主要縮放基準；來源比例過寬時才限制在畫面內。
-      if (personWidth > width){
-        personWidth = width;
-        personHeight = personWidth / sourceRatio;
-      }
-
-      return {
-        // 人物顯示框獨立於 camera frame；PERSON_SCALE 只影響最後顯示大小。
+       return {
+         // 人物顯示框獨立於 camera frame；PERSON_SCALE 直接控制人物高度。
+         // 寬度可超出畫布，避免直式來源比例把人物高度再次壓縮。
         x: (width - personWidth) / 2,
         // 人物底部固定貼齊完整輸出畫布。
         y: height - personHeight,
