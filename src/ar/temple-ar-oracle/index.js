@@ -7,7 +7,7 @@
    【外部依賴】
    本檔案假設執行環境有 bundler（Vite/webpack/esbuild 皆可，專案本身用 Vite）
    能解析以下 npm 套件（package.json 裡都已經有）：
-      three, @mediapipe/camera_utils
+      three, @mediapipe/selfie_segmentation
    如果新專案完全不用 bundler，需要改用 import map 或把這幾行 import 換成
    CDN ESM 版本，詳見 README.md「零建置環境」章節。
 
@@ -22,6 +22,7 @@ import { CONFIG } from './engine/config.js';
 import { createArState } from './engine/state.js';
 import { AudioEngine } from './engine/audio-engine.js';
 import { createGestureEngine } from './engine/gesture-engine.js';
+import { createPresenceDetector } from './engine/presence-detector.js';
 import { createDivinationApi } from './engine/divination-api.js';
 import {
   createFlowController,
@@ -44,13 +45,18 @@ function createCameraLoop(video, { onFrame, width, height }) {
   let stream = null;
   let stopped = false;
   let lastTime = -1;
+  // 不用 requestVideoFrameCallback：#input_video 是 display:none，
+  // 部分 Chrome/WebView 對不顯示的 video 不會觸發它。
+  const schedule = () => {
+    if (!stopped) requestAnimationFrame(tick);
+  };
   const tick = async () => {
     if (stopped) return;
     if (!video.paused && video.currentTime !== lastTime) {
       lastTime = video.currentTime;
       try { await onFrame(); } catch (error) { console.warn('[temple-ar-oracle] onFrame 失敗', error); }
     }
-    if (!stopped) requestAnimationFrame(tick);
+    schedule();
   };
   return {
     async start() {
@@ -63,7 +69,7 @@ function createCameraLoop(video, { onFrame, width, height }) {
       }
       video.srcObject = stream;
       await video.play();
-      requestAnimationFrame(tick);
+      schedule();
     },
     stop() {
       stopped = true;
@@ -211,22 +217,14 @@ class TempleArOracle extends HTMLElement {
     // 並透過這個 callback 通知宿主頁面（讓外面有機會顯示「目前離線」的提示）。
     this._api = this._makeApi(this.getAttribute('api-base'));
 
-    // 注意建立順序：gestureEngine 要先建立，flow-controller 才能拿到「真正的」
-    // gestureEngine 實例。gestureEngine 建立時雖然也需要「呼叫 flow-controller
-    // 的方法」（completeIncense/completeDraw/tossBwa），但這裡用箭頭函式包起來，
-    // 實際讀取 this._flow 是「被呼叫的當下」才發生（那時 _build() 早已跑完），
-    // 不是建立的當下，所以兩者不會真的互相卡住，不需要額外的回填/patch機制。
+    // gestureEngine 只負責繪製相機／去背畫面；presence 讀去背遮罩判斷
+    // 「有人進到主要位置」，當作各階段動畫的觸發開關。
     this._gestureEngine = createGestureEngine({
       els: this._els,
       state: this._state,
       config: CONFIG,
-      rootEl: root,
-      callbacks: {
-        completeIncense: () => this._flow.completeIncense(),
-        completeDraw: () => this._flow.completeDraw(),
-        tossBwa: (sx, sy, vx, vy) => this._flow.tossBwa(sx, sy, vx, vy),
-      },
     });
+    this._presence = createPresenceDetector({ config: CONFIG });
 
     /* 領籤過場影片來源：預設吃 public/videos/oracle-transition.mp4，
        宿主頁面仍可用 transition-src attribute 覆蓋。
@@ -252,6 +250,7 @@ class TempleArOracle extends HTMLElement {
       state: this._state,
       api: this._api,
       gestureEngine: this._gestureEngine,
+      presence: this._presence,
       bwaScene: this._bwaScene,
       audioEngine: AudioEngine,
       emit: (name, detail) => this._emit(name, detail),
@@ -321,6 +320,7 @@ class TempleArOracle extends HTMLElement {
          selfieSegmentation.setOptions({ modelSelection: 1 });
          selfieSegmentation.onResults((results) => {
            this._state.segmentationMask = results.segmentationMask;
+           this._presence.update(results.segmentationMask);
            // 預熱可能在 flow.start() 之前完成；若場景已經顯示，遮罩一到就
            // 立即揭露人物，不再等待固定的 ritual veil 計時器。
            if (this._state.resolvedMode === 'camera' && this._state.current !== 'creating' && this._state.current !== 'transition') {
@@ -358,7 +358,7 @@ class TempleArOracle extends HTMLElement {
             // MediaPipe 去背 WASM，避免使用者按下開始後立刻被模型編譯卡住。
             if (now < inferenceEnabledAt) return;
             if (now - lastRenderTime >= CAMERA_RENDER_INTERVAL_MS) {
-               this._gestureEngine.onResults({ image: this._els.video, multiHandLandmarks: [] });
+               this._gestureEngine.onResults({ image: this._els.video });
               lastRenderTime = now;
             }
             if (inferenceBusy || now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
@@ -408,7 +408,7 @@ class TempleArOracle extends HTMLElement {
       if (this._selfieSegmentation) {
         await this._selfieSegmentation.send({ image: video });
       }
-      this._gestureEngine.onResults({ image: video, multiHandLandmarks: [] });
+      this._gestureEngine.onResults({ image: video });
       this._modelsWarmed = true;
     })().catch((error) => {
       this._modelWarmupPromise = null;
@@ -505,6 +505,7 @@ class TempleArOracle extends HTMLElement {
     } catch (e) {}
     this._bwaScene?.destroy?.();
     this._gestureEngine?.destroy?.();
+    this._presence?.destroy?.();
     try {
       const transitionVideo = this._els?.transitionVideo;
       transitionVideo?.pause?.();

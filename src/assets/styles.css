@@ -1942,3 +1942,22 @@ dd {
   background-size: 100% 100%;
   background-repeat: no-repeat;
 }
+
+/* ===================== JJ5（Android／WebView）渲染預算 =====================
+   App.vue 在低效能裝置掛上 html.constrained-android。
+   backdrop-filter 每次底下內容變動都要重新模糊整塊區域，在 JJ5 上是
+   1080×1920 滿版最貴的效果；全站關掉，改把玻璃底色加深維持可讀性。
+   求籤頁的大片雲霧（70~90vw、blur 14px、無限飄移）也一併停用濾鏡與動畫。 */
+html.constrained-android *,
+html.constrained-android *::before,
+html.constrained-android *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.constrained-android {
+  --glass: linear-gradient(180deg, rgba(74, 64, 56, 0.72), rgba(20, 16, 14, 0.84));
+}
+html.constrained-android .cloud {
+  filter: none;
+  animation: none;
+}

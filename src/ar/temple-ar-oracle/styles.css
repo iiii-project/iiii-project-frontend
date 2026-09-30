@@ -174,16 +174,6 @@
 @keyframes punchScale{ 0%{ filter:brightness(1);} 40%{ filter:brightness(1.8) drop-shadow(0 0 20px #fff4dc);} 100%{ filter:brightness(1);} }
 
 
-.fingertip-marker{
-  position:absolute; z-index:15; width:14px; height:14px; border-radius:50%;
-  background:radial-gradient(circle, var(--gold-soft), var(--gold)); box-shadow:0 0 10px 3px rgba(255,207,122,0.7);
-  pointer-events:none; transform:translate(-50%,-50%); transition: opacity 0.15s ease;
-}
-.pinch-line{ position:absolute; z-index:14; height:1px; background:var(--gold-soft); box-shadow:0 0 6px rgba(255,207,122,0.8); pointer-events:none; transform-origin:0 0; }
-.fist-indicator{
-  position:absolute; z-index:15; width:34px; height:34px; border-radius:50%; border:2px solid var(--gold-soft);
-  opacity:0; pointer-events:none; transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(255,207,122,0.6); transition: opacity 0.15s ease;
-}
 /* ===================== 畫面二：雙手擲筊與結果動畫（Three.js 3D 渲染）===================== */
 #bwa-three-container{ position:fixed; inset:0; z-index:11; pointer-events:none; }
 /* 手動模式：改成直接點筊杯擲出，這時容器才需要收事件 */

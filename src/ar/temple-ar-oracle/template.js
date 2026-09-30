@@ -81,7 +81,7 @@ export function renderTemplate() {
     <div class="glass-card ritual-card text-center fade-in">
       <h1 class="ritual-title">祈　願　抽　籤</h1>
       <div class="hairline mt-4"></div>
-       <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請讓雙手同時進入畫面，開始搖籤</p>
+       <p id="draw-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請站到畫面中央，開始搖籤</p>
       <button id="btn-manual-draw" class="btn-line mt-4 hidden" type="button">點 擊 抽 籤</button>
     </div>
 
@@ -132,7 +132,7 @@ export function renderTemplate() {
     <div class="glass-card ritual-card absolute ar-top-7vh text-center fade-in">
       <h2 class="ritual-title">擲　筊　請　示</h2>
       <div class="hairline mt-4"></div>
-      <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請讓雙手同時進入畫面即可擲筊</p>
+      <p id="bwa-hint" class="text-13px-md-sm mt-4 opacity-80 tracking-015em font-light">請站到畫面中央即可擲筊</p>
       <button id="btn-click-bwa" class="btn-line mt-4 hidden" type="button">擲　筊</button>
     </div>
 

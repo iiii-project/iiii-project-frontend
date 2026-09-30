@@ -30,6 +30,8 @@
         不再使用 DeviceMotion 搖手機模式。
    ========================================================================= */
 
+import { CONFIG } from "./config.js";
+
 /* 領籤過場：播放自製的 5.12 秒動畫（龍銜籤送到眼前）。
    影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
    載入失敗、解碼失敗、或播放卡住超過預期時間，都走 fallback。
@@ -286,6 +288,7 @@ export function createFlowController({
   state,
   api,
   gestureEngine,
+  presence,
   bwaScene,
   audioEngine,
    emit,
@@ -336,20 +339,24 @@ export function createFlowController({
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
   let pendingPrayer = null; // 拜拜 API 與墨染轉場並行，抽籤時再確認已完成
 
-  // 暫停手勢偵測期間，三個需要動作的階段改成「進場偵測感 → 動畫進度 → 自動前進」。
-  // 相機與人像去背仍持續運作，只有 Hands/WASM 手勢推論被移除。
+  // 三個需要動作的階段：「進場 → 等有人進到主要位置 → 播放動畫進度 → 自動前進」。
+  // 鏡頭模式由 presence（讀去背遮罩）觸發；手動模式或沒有 presence 時退回固定延遲。
+  // 觸發只是動畫的開關，開始之後人離開也不會中斷。
   const AUTO_ADVANCE = true;
   const AUTO_ENTRY_DELAY_MS = 1500;
   const AUTO_DRAW_ENTRY_DELAY_MS = 2500;
   const AUTO_BWA_ENTRY_DELAY_MS = 2000;
-  const AUTO_INCENSE_MS = 10000;
-  const AUTO_DRAW_MS = 5000;
+  const AUTO_INCENSE_MS = 5000;
+  const AUTO_DRAW_MS = 3000;
   let autoAdvanceTimer = null;
   let autoAdvanceInterval = null;
   let autoAdvanceGeneration = 0;
+  let cancelPresenceWait = null;
 
   function cancelAutoAdvance() {
     autoAdvanceGeneration += 1;
+    cancelPresenceWait?.();
+    cancelPresenceWait = null;
     if (autoAdvanceTimer !== null) {
       clearTimeout(autoAdvanceTimer);
       autoAdvanceTimer = null;
@@ -363,7 +370,7 @@ export function createFlowController({
   function startAutoStage(
     sceneName,
     durationMs,
-    { entryDelayMs = AUTO_ENTRY_DELAY_MS, onEnter, onStart, onProgress, onComplete },
+    { entryDelayMs = AUTO_ENTRY_DELAY_MS, onEnter, onWaiting, onStart, onProgress, onComplete },
   ) {
     if (!AUTO_ADVANCE) return;
     cancelAutoAdvance();
@@ -373,9 +380,8 @@ export function createFlowController({
 
     onEnter?.();
 
-    autoAdvanceTimer = setTimeout(() => {
+    const begin = () => {
       if (!isActive()) return;
-      autoAdvanceTimer = null;
       if (durationMs <= 0) {
         onComplete();
         return;
@@ -393,15 +399,41 @@ export function createFlowController({
         }
       };
       tick();
+      // 進度環只需要看起來連續；每 100ms 更新一次，不必綁 rAF。
       autoAdvanceInterval = setInterval(tick, 100);
-    }, entryDelayMs);
+    };
+
+    const usePresence = presence && state.resolvedMode === "camera";
+    autoAdvanceTimer = setTimeout(() => {
+      autoAdvanceTimer = null;
+      if (!isActive()) return;
+      if (!usePresence) {
+        begin();
+        return;
+      }
+      onWaiting?.();
+      cancelPresenceWait = presence.waitForPresence(() => {
+        cancelPresenceWait = null;
+        begin();
+      });
+    }, usePresence ? CONFIG.PRESENCE_MIN_DELAY_MS : entryDelayMs);
   }
 
+  const PRESENCE_HINT = "請站到畫面中央";
+
+  const AUTO_BWA_MS = 2000; // 偵測到人後等這麼久才擲出
+
   function startAutoBwaStage() {
-    startAutoStage("bwa", 0, {
+    startAutoStage("bwa", AUTO_BWA_MS, {
       entryDelayMs: AUTO_BWA_ENTRY_DELAY_MS,
       onEnter: () => {
         els.bwaHint.textContent = "筊杯準備中…";
+      },
+      onWaiting: () => {
+        els.bwaHint.textContent = `${PRESENCE_HINT}即可擲筊`;
+      },
+      onStart: () => {
+        els.bwaHint.textContent = "準備擲筊…";
       },
       onComplete: () => tossBwa(window.innerWidth / 2, window.innerHeight / 2, 0, 0),
     });
@@ -579,7 +611,7 @@ export function createFlowController({
        els.drawHint.textContent =
          state.resolvedMode === "manual"
            ? "準備好後，點擊籤筒即可自動抽籤。"
-           : "請讓雙手同時進入畫面，開始搖籤";
+           : "請專心準備抽籤…";
       els.btnManualDraw.classList.toggle(
         "hidden",
         state.resolvedMode !== "manual",
@@ -601,11 +633,8 @@ export function createFlowController({
       els.bwaThreeContainer.classList.toggle("tossable", isClickBwaMode);
       els.bwaHint.textContent = isClickBwaMode
         ? "點擊筊杯，向神明請示此籤"
-        : "請讓雙手同時進入畫面即可擲筊";
-      if (!isClickBwaMode) {
-        resetBwaVisual();
-        gestureEngine.resetBwaTracking();
-      }
+        : "筊杯準備中…";
+      if (!isClickBwaMode) resetBwaVisual();
       state.bwaTossing = false;
       /* 一進擲筊場景就把這一次的結果要回來放著，等使用者真的擲了就直接演，
          不必在那一刻等網路（見 prefetchCast）。 */
@@ -616,7 +645,11 @@ export function createFlowController({
 
     if (name === "incense") {
       startAutoStage("incense", AUTO_INCENSE_MS, {
-        onEnter: () => {
+        onWaiting: () => {
+          // 保留原本「默念：問題」的提示，只在前面加上站位指引。
+          els.incenseHint.textContent = `${PRESENCE_HINT}。${els.incenseHint.textContent}`;
+        },
+        onStart: () => {
           els.incenseRing.classList.add("on");
           els.incenseRing.style.setProperty("--p", 0);
           els.incenseStick.classList.add("sensing");
@@ -635,6 +668,9 @@ export function createFlowController({
         entryDelayMs: AUTO_DRAW_ENTRY_DELAY_MS,
         onEnter: () => {
           els.drawHint.textContent = "請專心準備抽籤…";
+        },
+        onWaiting: () => {
+          els.drawHint.textContent = `${PRESENCE_HINT}，開始搖籤`;
         },
         onStart: () => {
           els.shakeRing.classList.add("on");
@@ -824,8 +860,10 @@ export function createFlowController({
       );
     } catch (error) {
       state.bwaTossing = false;
-      els.bwaHint.textContent = "請讓雙手同時進入畫面即可擲筊";
       emit("toast", { message: error.message || "無法完成擲筊，請再試一次" });
+      // 鏡頭模式沒有按鈕可以重擲，重新進入「等有人 → 擲筊」。
+      if (!state.clickBwaMode) startAutoBwaStage();
+      else els.bwaHint.textContent = "點擊筊杯，向神明請示此籤";
     }
   }
 
@@ -942,7 +980,6 @@ export function createFlowController({
       setTimeout(() => {
         els.bwaResultPanel.classList.add("hidden");
         resetBwaVisual();
-        gestureEngine.lockBwaUntilHandsLeave();
         state.bwaTossing = false;
         startAutoBwaStage();
       }, 2200);
@@ -1003,7 +1040,6 @@ export function createFlowController({
     gestureEngine.resetIncenseProgress();
     gestureEngine.resetShakeProgress();
     gestureEngine.resetDrawReveal();
-    gestureEngine.resetBwaTracking();
     // 離開儀式：預取的擲筊結果與解籤請求都不再屬於任何一場
     resetCastPrefetch();
   }

@@ -30,8 +30,7 @@
 本模組假設宿主專案有 bundler（Vite/webpack/esbuild 皆可）能解析：
 ```
 three
-@mediapipe/hands
-@mediapipe/camera_utils
+@mediapipe/selfie_segmentation
 ```
 以及 Vite 的 `?raw` CSS 字串 import 語法（`index.js` 裡的 `import stylesText from './styles.css?raw'`）。
 如果宿主專案不是 Vite，請把這行改成該 bundler 對應的「把檔案內容當字串匯入」語法
