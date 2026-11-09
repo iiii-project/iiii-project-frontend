@@ -16,6 +16,8 @@ import '@/ar/temple-ar-oracle/index.js'
 import { preloadBwaModel } from '@/ar/temple-ar-oracle/engine/bwa-scene.js'
 // @ts-ignore -- JavaScript AR 模組沒有另外維護 declaration file
 import { preloadVideoAsset } from '@/ar/temple-ar-oracle/engine/flow-controller.js'
+// @ts-ignore 純 JS 模組，沒有型別宣告
+import { isMobileDevice } from '@/ar/temple-ar-oracle/engine/mobile-shake.js'
 import { sendWhenReady } from '@/live2d/websocketService'
 import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 
@@ -80,6 +82,8 @@ interface TempleArOracleEl extends HTMLElement {
 const arEl = ref<TempleArOracleEl | null>(null)
 const cameraWarmup = ref(false)
 const cameraWarmupStarted = ref(false)
+// 手機預設用搖手機抽籤，全程不開鏡頭；桌機維持鏡頭手勢流程。
+const isPhone = isMobileDevice()
 const arNotice = ref('')
 const isOffline = ref(false)
 const fortune = ref<ArFortune | null>(null)
@@ -162,6 +166,8 @@ function warmupCamera() {
   if (cameraWarmupStarted.value) return
   cameraWarmupStarted.value = true
   cameraWarmup.value = true
+  // 手機只掛載 AR 元件（之後要顯示搖籤畫面），不預熱鏡頭，避免跳出鏡頭權限。
+  if (isPhone) return
   void nextTick().then(async () => {
     const el = arEl.value
     if (!el) {
@@ -411,6 +417,8 @@ async function submit(requestedMode: RequestedInputMode = 'camera') {
     /* 注意：不能在這裡設 loadingLabel。等待動畫是 v-if="isBusy" 的獨立區塊，
        一旦 isBusy 為真，step 4 的面板整個不會被渲染，arEl 就拿不到元素。 */
     step.value = 4
+    // 離開儀式後再送出時 AR 元件已被卸載，這裡確保它重新掛載。
+    cameraWarmup.value = true
     await nextTick()
     const el = arEl.value
     if (!el) {
@@ -640,10 +648,13 @@ function restart() {
         </dl>
         <div class="row">
           <button class="btn ghost" type="button" @click="goStep(2)">回去修改</button>
-          <button class="btn ghost motion-choice" type="button" @click="submit('motion')">
-            啟 用 搖 手 機 模 式
-          </button>
-          <button class="btn primary" type="button" @click="submit('camera')">誠 心 送 出</button>
+          <button v-if="isPhone" class="btn primary" type="button" @click="submit('motion')">誠 心 送 出</button>
+          <template v-else>
+            <button class="btn ghost motion-choice" type="button" @click="submit('motion')">
+              啟 用 搖 手 機 模 式
+            </button>
+            <button class="btn primary" type="button" @click="submit('camera')">誠 心 送 出</button>
+          </template>
         </div>
       </section>
 
