@@ -4,6 +4,7 @@
    改成籤詩之下一排分頁，想看哪段點哪段，內容都在同一個位置出現。 */
 import { computed, ref, watch } from 'vue'
 import MarkdownText from '@/components/MarkdownText.vue'
+import FortuneChat from '@/desktop/components/FortuneChat.vue'
 
 interface ReadingInterpretation {
   overall_meaning?: string
@@ -25,6 +26,10 @@ const props = defineProps<{
   qrDataUrl?: string | null
   /** 沒有可分享的連結時（例如離線籤）要給的交代，有值就仍然顯示這一頁 */
   offlineHint?: string | null
+  /* 「問金鶴」對話頁：有傳（含空字串）才顯示。內容是給 LLM 記住的籤詩上下文，
+     空字串代表資料還沒到齊，先開對話、等資料到了再送。 */
+  chatContext?: string | null
+  chatSuggestions?: string[]
 }>()
 
 interface Tab {
@@ -39,12 +44,19 @@ const tabs = computed<Tab[]>(() => {
     list.push({ key: 'reading', label: '神明指點' })
   }
   if (props.interpretation?.suggested_actions?.length) list.push({ key: 'actions', label: '可以這樣做' })
+  if (props.chatContext != null) list.push({ key: 'ask', label: '問金鶴' })
   // 「帶走」放在最後：先讀懂籤，再談怎麼帶回家
   if (props.shareUrl || props.offlineHint) list.push({ key: 'takeaway', label: '帶 走' })
   return list
 })
 
 const active = ref('')
+
+/* 對話頁第一次點開才掛載（才連線），之後切到別頁只是隱藏，對話紀錄與連線都保留。 */
+const chatMounted = ref(false)
+watch(active, (key) => {
+  if (key === 'ask') chatMounted.value = true
+})
 
 /* 分頁是跟著資料長出來的（解籤晚 20 秒才回來），所以每次資料變動都要確認
    目前這一頁還在；不在了才換到第一頁，避免把使用者正在讀的段落抽掉。 */
@@ -78,7 +90,11 @@ watch(
       </button>
     </div>
 
-    <div class="pane" role="tabpanel">
+    <div v-if="chatMounted" v-show="active === 'ask'" class="pane pane-chat" role="tabpanel">
+      <FortuneChat :context="chatContext ?? ''" :suggestions="chatSuggestions" />
+    </div>
+
+    <div v-if="active !== 'ask'" class="pane" role="tabpanel">
       <template v-if="active === 'plain'">
         <MarkdownText v-if="translation" :value="translation" />
         <MarkdownText v-if="explanation" class="soft" :value="explanation" />
@@ -180,6 +196,8 @@ watch(
    「可以這樣做」那頁用的是 <MarkdownText as="span" inline>，渲染成 span，
    所以下面 :deep(p) 的深褐色覆寫不到它。這裡讓它一律繼承容器顏色。 */
 .pane :deep(.markdown-text) { color: inherit; }
+.pane-chat { padding-top: 12px; }
+.pane-chat :deep(.fortune-chat) { margin-top: 0; }
 
 .pane p,
 .pane :deep(p),

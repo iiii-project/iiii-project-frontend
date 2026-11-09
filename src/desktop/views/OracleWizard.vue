@@ -9,7 +9,6 @@ import AmuletButton from '@/desktop/components/AmuletButton.vue'
 import FontScaleControl from '@/desktop/components/FontScaleControl.vue'
 import FortunePoem from '@/desktop/components/FortunePoem.vue'
 import FortuneReading from '@/desktop/components/FortuneReading.vue'
-import FortuneChat from '@/desktop/components/FortuneChat.vue'
 // 註冊 <temple-ar-oracle>（插香 → 搖籤 → 擲筊 的 AR 引擎）
 import '@/ar/temple-ar-oracle/index.js'
 // AR 引擎目前維持 JavaScript 模組，這兩個匯出只負責啟動資源預載入。
@@ -707,9 +706,9 @@ function restart() {
               :explanation="fortune?.modern"
               :interpretation="interpretation"
               :pending="waitingInterpretation"
+              :chat-context="chatContext"
+              :chat-suggestions="chatSuggestions"
             />
-
-            <FortuneChat :context="chatContext" :suggestions="chatSuggestions" />
 
             <div v-if="canShare" class="take-away">
               <div class="qr-frame">
