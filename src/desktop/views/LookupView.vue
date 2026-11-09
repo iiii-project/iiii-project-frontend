@@ -1,18 +1,18 @@
 <script setup lang="ts">
 /* 查籤：/lookup
    跟求籤同一套精靈流程，只是抽籤那一段換成「你手上已經有籤號了」：
-     第一步 籤號
+     第一步 籤號（或掃我們自己產的籤 QR）
      第二步 選方向
      第三步 說心事（可留白）→ 誠心送出
      過場   龍銜籤（與求籤同一段動畫）
-     結果   籤紙 + 白話 + AI 解籤 + 可帶走的 QR
+     結果   籤紙 + 籤書解釋 + AI 解籤 + 可帶走的 QR
 
    送出時建立場次並帶上 fortune_number：後端會把這支籤釘在場次上、狀態直接是
    confirmed，所以不必走祈求→抽籤→擲筊就能解籤，也因此一定有 session id，
-   QR 一律拿得到。AI 解籤是盡力而為——它慢（實測 ~21 秒）就先把籤詩與白話
+   QR 一律拿得到。AI 解籤是盡力而為——它慢（實測 ~21 秒）就先把籤詩與籤書解釋
    顯示出來，解籤回來再補進「神明指點」那一頁；真的失敗也只是少了那一段，
-   籤詩、白話與 QR 都還在。 */
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+   籤詩、籤書解釋與 QR 都還在。 */
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { toUserMessage } from '@/api/client'
 import {
@@ -23,9 +23,6 @@ import {
 } from '@/api/divinationApi'
 import type { Category, Fortune, FortuneSet, Interpretation } from '@/types/divination'
 import { useFontScale } from '@/utils/fontScale'
-import { buildFortuneContext } from '@/utils/fortuneContext'
-import { sendWhenReady } from '@/live2d/websocketService'
-import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 import { OFFLINE_MAX_NUMBER, offlineFortuneByNumber } from '@/utils/offlineFortunes'
 import { fortuneShareUrl, makeQrDataUrl } from '@/utils/qr'
 import { useSpeechInput } from '@/utils/speech'
@@ -34,10 +31,10 @@ import FontScaleControl from '@/desktop/components/FontScaleControl.vue'
 import FortunePoem from '@/desktop/components/FortunePoem.vue'
 import FortuneReading from '@/desktop/components/FortuneReading.vue'
 import OracleTransition from '@/desktop/components/OracleTransition.vue'
+import QrScanner from '@/desktop/components/QrScanner.vue'
 
 const router = useRouter()
 const { scaleStyle } = useFontScale()
-const companionStore = useLive2DCompanionStore()
 
 const healthyIcon = new URL('../../assets/images/healthy.webp', import.meta.url).href
 const homeIcon = new URL('../../assets/images/home.webp', import.meta.url).href
@@ -195,7 +192,7 @@ async function submit() {
   if (!f || !picked) return
   errorMessage.value = ''
   aiNote.value = ''
-  /* 離線：籤詩與白話都在本地，直接掀結果頁。
+  /* 離線：籤詩與籤書解釋都在本地，直接掀結果頁。
      AI 解籤與 QR 都要伺服器，這裡明白講一句，不要讓人以為壞了。 */
   if (isOffline.value) {
     aiNote.value = '目前離線，AI 解籤與 QR 暫時無法提供。'
@@ -223,7 +220,7 @@ async function submit() {
     /* 送出的這一刻才斷線：籤詩已經查到了，還是把結果頁給他，
        只是少了 AI 解籤與 QR。 */
     isOffline.value = true
-    aiNote.value = `${toUserMessage(error)} 以下先為你顯示籤詩與白話說明。`
+    aiNote.value = `${toUserMessage(error)} 以下先為你顯示籤詩與籤書上的解釋。`
     await revealWithTransition()
   } finally {
     isLoading.value = false
@@ -235,34 +232,7 @@ async function submit() {
 async function revealWithTransition() {
   await transitionEl.value?.play()
   step.value = 4
-  hasCompletedFortune = true
-  // 跟求籤結果頁一樣：一掀開就請小夥伴先唸籤詩原文，解籤晚到也不用等
-  if (fortune.value?.poem) sendWhenReady({ type: 'speak-text', text: fortune.value.poem })
 }
-
-/* 小夥伴的上下文：結果頁出現（解籤晚到時再補一次）就把問題、籤詩與解籤交給它，
-   信眾追問時才答得出這支籤。與求籤結果頁共用 utils/fortuneContext。 */
-watch(
-  () => [step.value, fortune.value, interpretation.value] as const,
-  ([currentStep, currentFortune, currentInterpretation]) => {
-    if (currentStep !== 4 || !currentFortune) return
-    companionStore.setFortuneContext(
-      buildFortuneContext({
-        question: askedQuestion.value,
-        number: currentFortune.number,
-        poem: currentFortune.poem,
-        interpretation: currentInterpretation
-      })
-    )
-  }
-)
-
-/* 查完一支籤再離開（回首頁等），就把小夥伴換成新的對話 session，
-   下一位不會看到上一位的對話與籤詩。 */
-let hasCompletedFortune = false
-onBeforeUnmount(() => {
-  if (hasCompletedFortune) companionStore.resetConversation()
-})
 
 async function buildShareQr(sessionId: string) {
   shareUrl.value = fortuneShareUrl(sessionId)
@@ -274,24 +244,22 @@ async function buildShareQr(sessionId: string) {
 }
 
 /* 有 AI 就問 AI。沒有（本機沒開模型、服務暫時掛掉）就明講一句，
-   籤詩與白話照樣看得到。 */
+   籤詩與籤書解釋照樣看得到。 */
 async function askAi(sessionId: string) {
   waitingInterpretation.value = true
   try {
     const result = await interpretFortune(sessionId)
     interpretation.value = result.interpretation ?? null
     if (result.fortune && fortune.value) fortune.value = { ...fortune.value, ...result.fortune }
-    if (!interpretation.value) aiNote.value = 'AI 解籤這次沒有回內容，以下先為你顯示籤詩與白話說明。'
+    if (!interpretation.value) aiNote.value = 'AI 解籤這次沒有回內容，以下是籤書上的解釋。'
   } catch {
-    aiNote.value = 'AI 解籤暫時無法使用，以下先為你顯示籤詩與白話說明；這支籤的紀錄已經留著，稍後掃 QR 再看就會補上。'
+    aiNote.value = 'AI 解籤暫時無法使用，以下先為你顯示籤詩與籤書上的解釋；這支籤的紀錄已經留著，稍後掃 QR 再看就會補上。'
   } finally {
     waitingInterpretation.value = false
   }
 }
 
 function restart() {
-  if (hasCompletedFortune) companionStore.resetConversation()
-  hasCompletedFortune = false
   step.value = 1
   numberInput.value = ''
   fortune.value = null
@@ -305,6 +273,82 @@ function restart() {
   errorMessage.value = ''
 }
 
+/* ── 籤書上的解釋 ──
+   這是籤書資料（跟 AI 解籤是兩回事），依所選方向排在最前面。 */
+const MEANING_LABELS: { key: keyof Fortune; label: string; category?: Category }[] = [
+  { key: 'general_meaning', label: '一般' },
+  { key: 'health_meaning', label: '身體健康', category: 'health' },
+  { key: 'family_meaning', label: '家庭平安', category: 'family' },
+  { key: 'career_meaning', label: '工作錢財', category: 'career' },
+  { key: 'love_meaning', label: '感情姻緣', category: 'love' },
+  { key: 'study_meaning', label: '功名學業', category: 'study' },
+  { key: 'wealth_meaning', label: '財運投資', category: 'wealth' },
+  { key: 'relationship_meaning', label: '人際關係', category: 'relationship' },
+  { key: 'travel_meaning', label: '出行遠遊', category: 'travel' }
+]
+
+const bookMeanings = computed(() => {
+  const f = fortune.value
+  if (!f) return []
+  const list = MEANING_LABELS.map((item) => ({
+    label: item.label,
+    text: String(f[item.key] ?? '').trim(),
+    mine: item.category !== undefined && item.category === category.value
+  })).filter((item) => item.text)
+  // 自己問的那個方向排前面
+  return [...list.filter((item) => item.mine), ...list.filter((item) => !item.mine)]
+})
+const openMeaning = ref('')
+const shownMeaning = computed(
+  () => bookMeanings.value.find((item) => item.label === openMeaning.value) ?? bookMeanings.value[0] ?? null
+)
+
+/* ── 掃 QR（第一步的另一個入口）── */
+const scanOpen = ref(false)
+const scannerEl = ref<InstanceType<typeof QrScanner> | null>(null)
+const scanNote = ref('')
+
+async function openScanner() {
+  scanOpen.value = true
+  scanNote.value = ''
+  errorMessage.value = ''
+  await Promise.resolve() // 等元件掛上再開相機
+  scannerEl.value?.start({ facingMode: 'environment' })
+}
+
+function closeScanner() {
+  scannerEl.value?.stop()
+  scanOpen.value = false
+}
+
+/* 從 QR 內容裡認出「本站的籤」。
+   接受三種寫法：完整網址（任何網域，只看路徑）、/fortune/<id> 這樣的路徑、
+   以及只有一組 UUID 的裸字串——實體籤上若只印 id，掃了照樣認得。 */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+
+function sessionIdFromQr(text: string): string | null {
+  const trimmed = text.trim()
+  const pathMatch = trimmed.match(/\/fortune\/([^/?#\s]+)/i)
+  if (pathMatch) return pathMatch[1]
+  if (UUID.test(trimmed) && trimmed.replace(UUID, '').trim() === '') return trimmed
+  return null
+}
+
+function onDecoded(text: string) {
+  const sessionId = sessionIdFromQr(text)
+  if (!sessionId) {
+    scanNote.value = '這張 QR 不是本站的籤，請掃籤詩頁上那一張，或直接輸入籤號。'
+    scannerEl.value?.start({ facingMode: 'environment' }) // 讓人可以馬上再掃
+    return
+  }
+  router.push(`/fortune/${sessionId}`)
+}
+
+function onScanError(message: string) {
+  scanNote.value = message
+}
+
+onBeforeUnmount(() => scannerEl.value?.stop())
 </script>
 
 <template>
@@ -335,26 +379,39 @@ function restart() {
         <h1>手上這支籤是第幾號？</h1>
         <p class="lede">
           輸入籤號就能查籤詩，接著可以請神明依你的處境解這支籤。
+          <span class="note">如果拿到的是我們的籤詩 QR，直接掃更快。</span>
         </p>
 
-        <label class="field">
-          <span class="field-label">籤 號</span>
-          <input
-            v-model="numberInput"
-            class="no-input"
-            type="number"
-            inputmode="numeric"
-            :min="1"
-            :max="MAX_NUMBER"
-            :placeholder="`1 - ${MAX_NUMBER}`"
-            @keyup.enter="confirmNumber"
-          />
-        </label>
-        <div class="row">
-          <button class="btn primary" type="button" :disabled="isLoading || parsedNumber === null" @click="confirmNumber">
-            {{ isLoading ? '查 籤 中…' : '下 一 步' }}
-          </button>
-        </div>
+        <template v-if="!scanOpen">
+          <label class="field">
+            <span class="field-label">籤 號</span>
+            <input
+              v-model="numberInput"
+              class="no-input"
+              type="number"
+              inputmode="numeric"
+              :min="1"
+              :max="MAX_NUMBER"
+              :placeholder="`1 - ${MAX_NUMBER}`"
+              @keyup.enter="confirmNumber"
+            />
+          </label>
+          <div class="row">
+            <button class="btn ghost" type="button" @click="openScanner">掃 QR 取 籤</button>
+            <button class="btn primary" type="button" :disabled="isLoading || parsedNumber === null" @click="confirmNumber">
+              {{ isLoading ? '查 籤 中…' : '下 一 步' }}
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <QrScanner ref="scannerEl" @decoded="onDecoded" @error="onScanError" />
+          <p v-if="scanNote" class="scan-note">{{ scanNote }}</p>
+          <p class="scan-help">籤詩頁上那張「把這支籤帶走」的 QR 就是。掃到會直接打開那一支籤。</p>
+          <div class="row">
+            <button class="btn ghost" type="button" @click="closeScanner">改 用 輸 入 籤 號</button>
+          </div>
+        </template>
       </section>
 
       <!-- 第二步：選方向 -->
@@ -469,7 +526,7 @@ function restart() {
           <span v-else class="toggle-hint">收 起 籤 詩 ▲</span>
         </button>
 
-        <!-- 中段：解籤、摘要。只有這一區會捲，籤詩與動作按鈕固定不動 -->
+        <!-- 中段：解籤、籤書、摘要。只有這一區會捲，籤詩與動作按鈕固定不動 -->
         <div class="result-scroll">
           <p v-if="aiNote" class="ai-note">{{ aiNote }}</p>
 
@@ -483,6 +540,24 @@ function restart() {
             :offline-hint="shareUrl ? null : '離線查詢沒有留下紀錄，無法用 QR 帶走。'"
             :pending="waitingInterpretation"
           />
+
+          <!-- 籤書的各方向解釋：自己問的那個方向排最前面 -->
+          <div v-if="bookMeanings.length" class="book">
+            <p class="book-title">籤 書 解 釋</p>
+            <div class="book-list">
+              <button
+                v-for="item in bookMeanings"
+                :key="item.label"
+                class="book-item"
+                :class="{ on: shownMeaning?.label === item.label }"
+                type="button"
+                @click="openMeaning = item.label"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+            <p v-if="shownMeaning" class="book-text">{{ shownMeaning.text }}</p>
+          </div>
 
           <dl class="summary">
             <div>
@@ -669,6 +744,23 @@ function restart() {
   color: var(--jiang-hong-deep);
 }
 .no-input:focus { outline: 2px solid rgba(212, 175, 55, 0.5); outline-offset: 1px; }
+
+.scan-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(166, 58, 58, 0.08);
+  border: 1px solid rgba(166, 58, 58, 0.24);
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--jiang-hong-deep);
+}
+.scan-help {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: rgba(91, 70, 53, 0.65);
+}
 
 /* 第二步：方向（沿用求籤流程的大圖示清單） */
 .choice-list { display: grid; gap: 10px; }
@@ -889,6 +981,38 @@ function restart() {
   text-indent: 0.24em;
 }
 
+.book { margin-top: 22px; }
+.book-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: var(--jiang-hong);
+}
+.book-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.book-item {
+  appearance: none;
+  cursor: pointer;
+  padding: 8px 13px;
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+  font-size: calc(12.5px * var(--fs, 1));
+  color: var(--ink-soft);
+}
+.book-item.on {
+  background: rgba(212, 175, 55, 0.2);
+  border-color: var(--gold);
+  color: var(--jiang-hong-deep);
+}
+.book-text {
+  margin: 12px 2px 0;
+  font-size: calc(14px * var(--fs, 1));
+  line-height: 2;
+  color: var(--ink-soft);
+}
+
 .take-away {
   display: flex;
   align-items: center;
@@ -1035,7 +1159,7 @@ function restart() {
   /* 籤詩那一頁例外：內容本來就可能很長（放大字級更長），
      整頁不捲的話會直接裁掉籤文，所以讓卡片自己內部捲。 */
   /* 籤詩永遠在最上面：卡片自己不捲，改成直排三段——
-     上段（籤詩＋收合列）固定、中段（解籤／摘要）自己捲、下段（動作按鈕）固定。
+     上段（籤詩＋收合列）固定、中段（解籤／籤書／摘要）自己捲、下段（動作按鈕）固定。
      與掃碼分享頁同一套作法（見 FortuneShare.vue 的 .sheet / .reading-block）。 */
   .panel.result {
     flex: 1;

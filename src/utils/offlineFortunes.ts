@@ -13,7 +13,6 @@ interface OfflineFortune {
   poem: string
   explain: string
   modern: string
-  story: string
 }
 
 const TABLE = OFFLINE_FORTUNES as OfflineFortune[]
@@ -21,20 +20,18 @@ const TABLE = OFFLINE_FORTUNES as OfflineFortune[]
 /** 離線表裡最大的籤號，用來擋明顯的誤輸入 */
 export const OFFLINE_MAX_NUMBER = TABLE.reduce((max, item) => Math.max(max, item.no), 0)
 
- /* 欄位對照（跟 divination-api.js 的 mapFortune() 相反方向）：
-    explain（白話翻譯）→ translation
-    modern（一般解釋）→ general_meaning
-    story（典故）→ story */
+ /* 欄位對照：
+    modern（白話說明）→ translation
+    explain（籤書式解釋）→ general_meaning，這樣它會出現在「籤書解釋」那一區 */
 export function offlineFortuneByNumber(number: number): Fortune | null {
   const found = TABLE.find((item) => item.no === number)
   if (!found) return null
   return {
     number: found.no,
-    title: `第${found.no}籤 ${found.ganzhi}`,
+    title: '',
     ganzhi: found.ganzhi,
     poem: found.poem,
-    translation: found.explain,
-    general_meaning: found.modern,
-    story: found.story
+    translation: found.modern,
+    general_meaning: found.explain
   }
 }

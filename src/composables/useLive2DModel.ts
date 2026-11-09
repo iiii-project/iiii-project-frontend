@@ -3,8 +3,7 @@ import type { ModelInfo } from '@/live2d/websocketService'
 import { updateModelConfig } from '@/live2d/webSDK/engine/lappdefine'
 import { LAppDelegate } from '@/live2d/webSDK/engine/lappdelegate'
 import { LAppLive2DManager } from '@/live2d/webSDK/engine/lapplive2dmanager'
-import { initializeLive2D, releaseLive2D } from '@/live2d/webSDK/engine/entry'
-import { loadCubismCore } from '@/live2d/loadCubismCore'
+import { initializeLive2D } from '@/live2d/webSDK/engine/entry'
 
 // 移植自 use-live2d-model.ts。修正原始碼裡兩個死路徑：window.LAppDefine / window.LAppLive2DManager
 // 從未真的被賦值到 window，原本靠它們判斷的分支永遠不會執行——這裡改成直接 import class 呼叫。
@@ -55,8 +54,6 @@ export function useLive2DModel(
   const dragStartPos = { x: 0, y: 0 }
   const modelStartPos = { x: 0, y: 0 }
   let prevModelUrl: string | null = null
-  let initializeTimer: number | null = null
-  let disposed = false
 
   const mouseDownTime = { current: 0 }
   const mouseDownPos = { x: 0, y: 0 }
@@ -74,23 +71,6 @@ export function useLive2DModel(
     return { x: 0, y: 0 }
   }
 
-  function scheduleInitialize() {
-    void loadCubismCore().then(() => {
-      if (disposed) return
-      if (initializeTimer !== null) window.clearTimeout(initializeTimer)
-      initializeTimer = window.setTimeout(() => {
-        initializeTimer = null
-        if (disposed || !canvasRef.value?.isConnected) return
-        initializeLive2D()
-        window.setTimeout(() => {
-          if (!disposed) position.value = getModelPosition()
-        }, 500)
-      }, 150)
-    }).catch((error) => {
-      console.error('Live2D Cubism Core 載入失敗:', error)
-    })
-  }
-
   watch(
     () => [modelInfo.value?.url, modelInfo.value?.kScale],
     () => {
@@ -103,10 +83,15 @@ export function useLive2DModel(
         const { baseUrl, modelDir, modelFileName } = parseModelUrl(currentUrl!)
         if (baseUrl && modelDir) {
           updateModelConfig(baseUrl, modelDir, modelFileName, Number(modelInfo.value?.kScale))
-          // 結果頁重新掛載時，modelInfo 可能已存在；確保 Cubism Core
-          // 先載入完成，避免 watcher 比 Live2DCompanion.vue 的 onMounted 更早
-          // 執行 initializeLive2D，導致角色只有容器沒有畫面。
-          scheduleInitialize()
+          setTimeout(() => {
+            if (LAppLive2DManager.getInstance()) {
+              LAppLive2DManager.releaseInstance()
+            }
+            initializeLive2D()
+            setTimeout(() => {
+              position.value = getModelPosition()
+            }, 500)
+          }, 500)
         }
       } catch (error) {
         console.error('Error processing model URL:', error)
@@ -120,7 +105,7 @@ export function useLive2DModel(
     if (!adapter || !canvasRef.value) return
 
     const model = adapter.getModel()
-    const view = LAppDelegate.getExistingInstance()?.getView()
+    const view = LAppDelegate.getInstance()?.getView()
     if (!view || !model) return
 
     const canvas = canvasRef.value
@@ -152,7 +137,7 @@ export function useLive2DModel(
 
   function handleMouseMove(e: MouseEvent) {
     const adapter = (window as any).getLAppAdapter?.()
-    const view = LAppDelegate.getExistingInstance()?.getView()
+    const view = LAppDelegate.getInstance()?.getView()
     const model = adapter?.getModel()
 
     if (isPotentialTap && adapter && view && model && canvasRef.value) {
@@ -202,7 +187,7 @@ export function useLive2DModel(
   function handleMouseUp(e: MouseEvent | null) {
     const adapter = (window as any).getLAppAdapter?.()
     const model = adapter?.getModel()
-    const view = LAppDelegate.getExistingInstance()?.getView()
+    const view = LAppDelegate.getInstance()?.getView()
 
     if (isDragging.value) {
       isDragging.value = false
@@ -256,7 +241,7 @@ export function useLive2DModel(
   function computeHitOnCanvas(clientX: number, clientY: number): boolean {
     const adapter = (window as any).getLAppAdapter?.()
     const canvas = canvasRef.value
-    const view = LAppDelegate.getExistingInstance()?.getView()
+    const view = LAppDelegate.getInstance()?.getView()
     const model = adapter?.getModel()
     if (!canvas || !view || !model) return false
 
@@ -341,22 +326,13 @@ export function useLive2DModel(
   onMounted(() => {
     exposeDebugHelpers()
     window.addEventListener('mousemove', handleWindowMouseMove)
-    // modelInfo 可能在元件掛載前就已存在；watcher 的第一次計時若遇到
-    // 尚未連接的 canvas 會安全退出，掛載完成後再補一次初始化。
-    if (modelInfo.value?.url) scheduleInitialize()
   })
   onBeforeUnmount(() => {
-    disposed = true
-    if (initializeTimer !== null) {
-      window.clearTimeout(initializeTimer)
-      initializeTimer = null
-    }
     delete (window as any).Live2DDebug
     window.removeEventListener('mousemove', handleWindowMouseMove)
     if (hoverFrame !== null) cancelAnimationFrame(hoverFrame)
     hoverFrame = null
     pendingHoverPoint = null
-    releaseLive2D()
   })
 
   return {

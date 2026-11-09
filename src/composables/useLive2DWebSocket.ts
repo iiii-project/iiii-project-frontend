@@ -3,7 +3,6 @@ import { wsService, type MessageEvent as WsMessageEvent } from '@/live2d/websock
 import { useAiStateStore, type AiState } from '@/stores/aiStateStore'
 import { useLive2DConfigStore } from '@/stores/live2dConfigStore'
 import { useLive2DChatStore } from '@/stores/live2dChatStore'
-import { useLive2DCompanionStore } from '@/stores/live2dCompanionStore'
 import { audioTaskQueue } from '@/live2d/taskQueue'
 
 /**
@@ -37,7 +36,6 @@ export function useLive2DWebSocket(options: UseLive2DWebSocketOptions) {
   const aiState = useAiStateStore()
   const config = useLive2DConfigStore()
   const chat = useLive2DChatStore()
-  const companion = useLive2DCompanionStore()
 
   const wsState = ref(wsService.getCurrentState())
   const baseUrl = DEFAULT_BASE_URL
@@ -109,8 +107,7 @@ export function useLive2DWebSocket(options: UseLive2DWebSocketOptions) {
         break
       case 'new-history-created':
         aiState.setAiState('idle')
-        // 新對話會清掉後端的求籤資料（包括斷線重連後的那一段），這裡補送回去
-        companion.resendFortuneContext()
+        chat.setSubtitleText('已建立新對話')
         if (message.history_uid) {
           chat.setCurrentHistoryUid(message.history_uid)
           chat.setMessages([])
@@ -118,9 +115,10 @@ export function useLive2DWebSocket(options: UseLive2DWebSocketOptions) {
         }
         break
       case 'history-list':
-        // 不自動套用清單第一筆：那可能是上一場（或別人）的對話，
-        // 目前這條連線的對話一律由 new-history-created 指定。
-        if (message.histories) chat.setHistoryList(message.histories)
+        if (message.histories) {
+          chat.setHistoryList(message.histories)
+          if (message.histories.length > 0) chat.setCurrentHistoryUid(message.histories[0].uid)
+        }
         break
       case 'user-input-transcription':
         if (message.text) chat.appendHumanMessage(message.text)

@@ -92,7 +92,7 @@ export class LAppAdapter {
   // repositioning in use-live2d-model.ts.
   public screenToModel(clientX: number, clientY: number): { x: number, y: number } | null {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement | null;
-    const view = LAppDelegate.getExistingInstance()?.getView();
+    const view = LAppDelegate.getInstance().getView();
     if (!canvas || !view) return null;
 
     const rect = canvas.getBoundingClientRect();

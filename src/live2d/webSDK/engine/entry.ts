@@ -13,29 +13,6 @@ import { LAppGlManager } from "./lappglmanager";
 import { LAppLive2DManager } from "./lapplive2dmanager";
 import { LAppAdapter } from "./lappadapter";
 
-let live2dPaused = false;
-
-/**
- * 釋放目前的 Live2D 執行個體與 WebGL manager。
- * Live2DCompanion 會全站保留；儀式期間只暫停 rAF，避免舊 canvas
- * 繼續和 AR 的 MediaPipe/Three.js 佔用主執行緒。
- */
-export function releaseLive2D(): void {
-  LAppDelegate.releaseInstance();
-  LAppLive2DManager.releaseInstance();
-  LAppGlManager.releaseInstance();
-}
-
-export function pauseLive2D(): void {
-  live2dPaused = true;
-  LAppDelegate.getExistingInstance()?.pause();
-}
-
-export function resumeLive2D(): void {
-  live2dPaused = false;
-  LAppDelegate.getExistingInstance()?.run();
-}
-
 /**
  * Initialize the Live2D application
  */
@@ -46,19 +23,21 @@ export function initializeLive2D(): void {
   );
   console.log("Model directories:", LAppDefine.ModelDir);
 
-  // 初始化前完整釋放舊 singleton，讓 LAppGlManager 的 constructor 重新抓取
-  // 目前 DOM 裡的 #canvas。正常求籤流程不會卸載這個 canvas，因此不會在結果頁
-  // 再次觸發初始化。
-  releaseLive2D();
+  // Clean up any existing instances first
+  if (LAppDelegate.getInstance()) {
+    // Release existing model resources
+    LAppLive2DManager.releaseInstance();
+  }
 
-  const glManager = LAppGlManager.getInstance();
-  const delegate = LAppDelegate.getInstance();
-  if (!glManager || !delegate.initialize()) {
+  if (
+    !LAppGlManager.getInstance() ||
+    !LAppDelegate.getInstance().initialize()
+  ) {
     console.error("Failed to initialize Live2D");
     return;
   }
 
-  if (!live2dPaused) delegate.run();
+  LAppDelegate.getInstance().run();
 
   (window as any).getLive2DManager = () => LAppLive2DManager.getInstance();
 
@@ -73,7 +52,7 @@ export function initializeLive2D(): void {
 
     parent?.addEventListener("pointermove", (e) => {
       const model = LAppLive2DManager.getInstance().getModel(0);
-      const view = LAppDelegate.getExistingInstance()?.getView();
+      const view = LAppDelegate.getInstance().getView();
 
       // Transform screen coordinates to Live2D canvas coordinates
       const x = view?._deviceToScreen.transformX(e.x);
@@ -86,7 +65,7 @@ export function initializeLive2D(): void {
     // Add pointerdown event listener
     parent?.addEventListener("pointerdown", (e) => {
       const model = LAppLive2DManager.getInstance().getModel(0);
-      const view = LAppDelegate.getExistingInstance()?.getView();
+      const view = LAppDelegate.getInstance().getView();
 
       // Transform screen coordinates to Live2D canvas coordinates
       const x = view?._deviceToScreen.transformX(e.x);
@@ -131,7 +110,7 @@ window.addEventListener(
   "resize",
   () => {
     if (LAppDefine.CanvasSize === "auto") {
-      LAppDelegate.getExistingInstance()?.onResize();
+      LAppDelegate.getInstance().onResize();
     }
   },
   { passive: true }

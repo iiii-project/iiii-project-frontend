@@ -44,17 +44,16 @@ function loadJiaoTemplates() {
   return jiaoTemplatesPromise;
 }
 
-// 選定分類後先下載並解析筊杯模型，正式進入擲筊畫面時直接使用快取。
-export function preloadBwaModel() {
-  return loadJiaoTemplates();
-}
-
 const IDLE_SPREAD = 0.5;       // 閒置時兩杯的中心間距（半距）
 
 // 筊杯落地後的最終高度：跟鏡頭視線焦點（camera.lookAt 的 y）對齊，
 // 這樣擲出的結果會停在畫面正中間，而不是偏向畫面下方。
 // 地板（陰影承接面）跟著往上移，維持跟原本一樣「杯底貼地」的相對距離（0.1）。
 const REST_Y = -0.2;
+
+ export function preloadBwaModel() {
+   return loadJiaoTemplates();
+ }
 
  export function createBwaScene(state) {
   let renderer, scene, camera, cupA, cupB, ground, light;
@@ -70,8 +69,6 @@ const REST_Y = -0.2;
   let loopRafId = null;
   let lastRenderTime = 0;
   let modelLoadStarted = false;
-  let modelReadyPromise = null;
-  let initialized = false;
   let tossAnimation = null;
 
   // 把模型節點複製成一顆獨立的筊杯：重置成原始網格座標（見上方註解），
@@ -106,8 +103,6 @@ const REST_Y = -0.2;
   }
 
   function init(el) {
-    if (initialized) return;
-    initialized = true;
     container = el;
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
@@ -151,40 +146,26 @@ const REST_Y = -0.2;
     }
 
     // 場景建立時就開始準備模型，不等到抽籤完成、第一次進入擲筊畫面才載入。
-    return ensureModelLoaded();
+    ensureModelLoaded();
 
   }
 
   function ensureModelLoaded() {
-    if (modelReadyPromise) return modelReadyPromise;
+    if (modelLoadStarted) return;
     modelLoadStarted = true;
     // 模型通常已在 AR 場景初始化時開始下載；這裡只負責在 Three.js 場景
     // 已經存在後建立筊杯實例。
-    modelReadyPromise = loadJiaoTemplates().then(({ jiaoOne, jiaoTwo }) => {
+    loadJiaoTemplates().then(({ jiaoOne, jiaoTwo }) => {
       if (destroyed) return;
       cupA = makeCup(jiaoOne);
       cupB = makeCup(jiaoTwo);
       resetIdle();
       scene.add(cupA);
       scene.add(cupB);
-      // GLB 下載／解析完成不代表 GPU 已完成材質 shader 編譯；Three.js
-      // 通常會把這個成本延到第一次 render，剛切到擲筊場景時就會看到卡頓。
-      // 在分類選擇後的預載階段先編譯並繪製一格，正式切場景只需顯示既有畫布。
-      try {
-        renderer.compile(scene, camera);
-        renderer.render(scene, camera);
-      } catch (error) {
-        // 部分舊 WebView 不支援 compile，正式 render 時仍可自動編譯，
-        // 因此預熱失敗不阻擋後續流程。
-        console.warn('[BwaScene] shader 預熱失敗，將於正式渲染時編譯', error);
-      }
     }).catch((error) => {
       modelLoadStarted = false;
-      modelReadyPromise = null;
       console.error('[BwaScene] 筊杯模型載入失敗', error);
-      throw error;
     });
-    return modelReadyPromise;
   }
 
   function loop(now) {
@@ -348,8 +329,6 @@ const REST_Y = -0.2;
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }
     }
-    // GLTFLoader 的模組級快取也要清掉；下一輪儀式會重新載入模型與 shader。
-    jiaoTemplatesPromise = null;
   }
 
   /* 點擊命中測試：把畫面座標轉成 NDC 後對兩只筊杯發射線。

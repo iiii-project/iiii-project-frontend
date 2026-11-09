@@ -7,7 +7,7 @@
    【外部依賴】
    本檔案假設執行環境有 bundler（Vite/webpack/esbuild 皆可，專案本身用 Vite）
    能解析以下 npm 套件（package.json 裡都已經有）：
-      three, @mediapipe/selfie_segmentation
+     three, @mediapipe/hands, @mediapipe/camera_utils
    如果新專案完全不用 bundler，需要改用 import map 或把這幾行 import 換成
    CDN ESM 版本，詳見 README.md「零建置環境」章節。
 
@@ -17,124 +17,25 @@
      事件：input-mode-resolved, incense-complete, draw-complete, bwa-result,
            sequence-complete, toast
    ========================================================================= */
+import { Hands } from '@mediapipe/hands';
+import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
+import { Camera } from '@mediapipe/camera_utils';
 
 import { CONFIG } from './engine/config.js';
 import { createArState } from './engine/state.js';
 import { AudioEngine } from './engine/audio-engine.js';
+import { createBwaScene } from './engine/bwa-scene.js';
 import { createGestureEngine } from './engine/gesture-engine.js';
-import { createPresenceDetector } from './engine/presence-detector.js';
+import { createMobileShake } from './engine/mobile-shake.js';
 import { createDivinationApi } from './engine/divination-api.js';
-import {
-  createFlowController,
-  preloadOracleTransition,
-  releasePreloadedVideoAssets,
-} from './engine/flow-controller.js';
+import { createFlowController , preloadOracleTransition } from './engine/flow-controller.js';
 import { renderTemplate } from './template.js';
 import { getPerformanceProfile } from '@/utils/performance';
-import { openPreferredCamera } from '@/utils/camera';
 
 // styles.css 內容以字串方式內嵌，避免額外一次網路請求，且確保 Shadow DOM
 // 一定拿得到樣式（無論宿主專案的建置工具是否支援 CSS 檔案 import）。
 // 開發時仍是獨立的 styles.css 檔案，建置腳本可自行選擇要 inline 還是額外複製。
 import stylesText from './styles.css?raw';
-
-/* 取代 @mediapipe/camera_utils 的 Camera：它把 getUserMedia 參數寫死，沒辦法
-   指定 deviceId。這裡改用 openPreferredCamera（外接 USB 鏡頭優先，找不到再退
-   下一順位），其餘行為照舊——每個 rAF 檢查影片有沒有新影格，有才呼叫 onFrame。 */
-function createCameraLoop(video, { onFrame, height }) {
-  let stream = null;
-  let stopped = false;
-  let lastTime = -1;
-  // 不用 requestVideoFrameCallback：#input_video 是 display:none，
-  // 部分 Chrome/WebView 對不顯示的 video 不會觸發它。
-  const schedule = () => {
-    if (!stopped) requestAnimationFrame(tick);
-  };
-  const tick = async () => {
-    if (stopped) return;
-    if (!video.paused && video.currentTime !== lastTime) {
-      lastTime = video.currentTime;
-      try { await onFrame(); } catch (error) { console.warn('[temple-ar-oracle] onFrame 失敗', error); }
-    }
-    schedule();
-  };
-  return {
-    async start() {
-      stopped = false;
-      stream = await openPreferredCamera({ facingMode: 'user', height });
-      if (stopped) {
-        stream.getTracks().forEach((track) => track.stop());
-        stream = null;
-        return;
-      }
-      video.srcObject = stream;
-      await video.play();
-      schedule();
-    },
-    stop() {
-      stopped = true;
-      stream?.getTracks().forEach((track) => track.stop());
-      stream = null;
-    },
-  };
-}
-
-/* Three.js 與筊杯 GLB 只在真正進入擲筊階段才需要。這個代理保留 flow-controller
-   原本的同步介面，但把 Three.js chunk 延後到 prepare 第一次被呼叫時才下載、解析。
-   動作偵測暫停後，攝影機仍保留給人像去背與 AR 畫面使用。 */
-function createLazyBwaScene(state) {
-  let scene = null;
-  let loading = null;
-  let container = null;
-  let destroyed = false;
-
-  function ensure() {
-    if (scene) return Promise.resolve(scene);
-    if (!loading) {
-      loading = import('./engine/bwa-scene.js').then(({ createBwaScene }) => {
-        if (destroyed) return null;
-        scene = createBwaScene(state);
-        return Promise.resolve(container ? scene.init(container) : undefined).then(() => scene);
-      });
-    }
-    return loading;
-  }
-
-  return {
-    init(el) {
-      container = el;
-      return ensure();
-    },
-    prepare(el) {
-      container = el;
-      return ensure();
-    },
-    pause() {
-      scene?.pause?.();
-    },
-    resume() {
-      void ensure().then((value) => value?.resume?.());
-    },
-    resetIdle() {
-      if (scene) scene.resetIdle();
-      else void ensure().then((value) => value?.resetIdle?.());
-    },
-    toss(...args) {
-      void ensure().then((value) => value?.toss?.(...args));
-    },
-    getScreenPos() {
-      return scene?.getScreenPos?.() || { x: window.innerWidth / 2, y: window.innerHeight * 0.55 };
-    },
-    destroy() {
-      destroyed = true;
-      scene?.destroy?.();
-      scene = null;
-    },
-    hitTest(...args) {
-      return scene?.hitTest?.(...args) || false;
-    },
-  };
-}
 
 class TempleArOracle extends HTMLElement {
   static get observedAttributes(){ return ['question', 'category', 'api-base', 'input-mode']; }
@@ -145,9 +46,6 @@ class TempleArOracle extends HTMLElement {
     this._destroyed = false;
     this._started = false;
     this._cameraPromise = null;
-    this._cameraInferenceEnabled = false;
-    this._modelsWarmed = false;
-    this._modelWarmupPromise = null;
   }
 
   connectedCallback(){
@@ -171,7 +69,6 @@ class TempleArOracle extends HTMLElement {
 
     const root = document.createElement('div');
     root.className = 'ar-oracle-root';
-    if (getPerformanceProfile().isLowEnd) root.classList.add('ar-low-end');
     root.innerHTML = renderTemplate();
     this.shadowRoot.appendChild(root);
     this._root = root;
@@ -207,39 +104,57 @@ class TempleArOracle extends HTMLElement {
       bwaResultPanel: $('bwa-result-panel'),
       bwaResultTitle: $('bwa-result-title'),
       bwaResultDesc: $('bwa-result-desc'),
-      stageGuide: $('stage-guide'),
-      stageGuideTitle: $('stage-guide-title'),
-      stageGuideFigure: $('stage-guide-figure'),
-      stageGuideSteps: $('stage-guide-steps'),
-      stageGuideConfirm: $('stage-guide-confirm'),
     };
     // 前面已經直接取得模板產生的 <video id="input_video"> 節點，不需要額外處理。
 
     this._state = createArState();
-    this._state.useSelfieSegmentation = getPerformanceProfile().useSelfieSegmentation;
-    this._bwaScene = createLazyBwaScene(this._state);
+    this._bwaScene = createBwaScene(this._state);
     // 後端連不上時，divination-api 會自動切到本地備援資料把儀式跑完，
     // 並透過這個 callback 通知宿主頁面（讓外面有機會顯示「目前離線」的提示）。
     this._api = this._makeApi(this.getAttribute('api-base'));
 
-    // gestureEngine 只負責繪製相機／去背畫面；presence 讀去背遮罩判斷
-    // 「有人進到主要位置」，當作各階段動畫的觸發開關。
+    // 注意建立順序：gestureEngine 要先建立，flow-controller 才能拿到「真正的」
+    // gestureEngine 實例。gestureEngine 建立時雖然也需要「呼叫 flow-controller
+    // 的方法」（completeIncense/completeDraw/tossBwa），但這裡用箭頭函式包起來，
+    // 實際讀取 this._flow 是「被呼叫的當下」才發生（那時 _build() 早已跑完），
+    // 不是建立的當下，所以兩者不會真的互相卡住，不需要額外的回填/patch機制。
     this._gestureEngine = createGestureEngine({
       els: this._els,
       state: this._state,
       config: CONFIG,
+      rootEl: root,
+      callbacks: {
+        completeIncense: () => this._flow.completeIncense(),
+        completeDraw: () => this._flow.completeDraw(),
+        tossBwa: (sx, sy, vx, vy) => this._flow.tossBwa(sx, sy, vx, vy),
+      },
     });
-    this._presence = createPresenceDetector({ config: CONFIG });
 
-    /* 領籤過場影片來源：預設吃 public/videos/oracle-transition.mp4，
-       宿主頁面仍可用 transition-src attribute 覆蓋。
+    this._mobileShake = createMobileShake({
+      els: this._els,
+      state: this._state,
+      callbacks: {
+        completeDraw: () => this._flow.completeDraw(),
+        // 裝置拿得到權限但實際上沒有加速度計時，把「直接抽籤」按鈕放出來
+        onMotionUnavailable: () => {
+          this._els.btnManualDraw.classList.remove('hidden');
+          this._els.btnManualDraw.textContent = '直 接 抽 籤';
+          this._els.drawHint.textContent = '沒有偵測到搖動，可直接抽籤。';
+          this._emit('toast', { message: '沒有偵測到搖動，已提供直接抽籤。' });
+        },
+      },
+    });
+
+    /* 領籤過場影片來源：預設吃引擎內建的 oracle-transition.mov，
+       宿主頁面可用 transition-src attribute 覆蓋（例如桌機版換成 dragon.mp4）。
        只在建立當下讀一次，過場開始播放後才換片沒有意義，不需要做成響應式的。 */
     const transitionSrc = this.getAttribute('transition-src') || undefined;
-     /* oracle-transition.mp4 是直式 720x1280，桌機用 cover 會裁掉龍與籤枝
+    /* 預設的 oracle-transition.mov 是直式 720x1280，桌機用 cover 會裁掉龍與籤枝
        （見 styles.css 內的說明），所以預設保留 contain、兩側留白。
-        若宿主指定其他影片，交由 data-fill 讓 CSS 改用 cover 鋪滿。 */
+       換過影片（如 dragon.mp4）不受這個限制，交由 data-fill 讓 CSS 改用 cover 鋪滿。 */
     if (transitionSrc) this._els.transitionVideo.dataset.fill = '1';
-    // 使用實際播放用的 video 元素提前載入與解碼，避免切到擲筊時才初始化影片。
+
+    // 過場影片先預載，播放時才不會頓一下
     preloadOracleTransition(this._els, { src: transitionSrc });
 
     /* 攝影機畫布的後備緩衝區要在這裡就校正好。
@@ -255,12 +170,14 @@ class TempleArOracle extends HTMLElement {
       state: this._state,
       api: this._api,
       gestureEngine: this._gestureEngine,
-      presence: this._presence,
       bwaScene: this._bwaScene,
       audioEngine: AudioEngine,
+      mobileShake: this._mobileShake,
       emit: (name, detail) => this._emit(name, detail),
       transitionSrc,
     });
+
+    this._bwaScene.init(this._els.bwaThreeContainer);
 
     this._els.btnManualDraw.addEventListener('click', () => this._flow.completeDraw());
     this._els.btnClickBwa.addEventListener('click', () => this._flow.castClickBwa());
@@ -301,84 +218,88 @@ class TempleArOracle extends HTMLElement {
     if (name === 'api-base') this._api = this._makeApi(newVal);
   }
 
-  // Camera 啟動。動作偵測暫停，不再載入 MediaPipe Hands；攝影機仍持續提供
-  // 人像去背與 AR 畫面，這裡包成一個 Promise 供 flow-controller.start() 呼叫。
+  // MediaPipe Hands + Camera 啟動（對應原始碼檔案尾端 4108–4126 行的 bootstrap，
+  // 這裡包成一個 Promise 回傳的函式，供 flow-controller.start() 呼叫）
   _startCamera(){
     if (this._cameraPromise) return this._cameraPromise;
 
-    const profile = getPerformanceProfile();
-    // JJ5 直接跳過 Selfie Segmentation；其他裝置也只在真的啟用去背時
-    // 動態下載該模型，避免 AR 啟動就多載入一個大型 WASM/JS chunk。
-    const segmentationClassPromise = profile.useSelfieSegmentation
-      ? import('@mediapipe/selfie_segmentation').then((module) => module.SelfieSegmentation)
-      : Promise.resolve(null);
+    this._cameraPromise = new Promise((resolve, reject) => {
+      const profile = getPerformanceProfile();
+       // 中低階 Android 上手勢/去背推論多半落在 wasm/CPU 路徑；開鏡先用單手模式，
+       // 進入搖籤／擲筊場景時才切換兩手，避免把不必要的負載集中在開鏡瞬間。
+      const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+      const handOptions = { modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 };
+      let activeMaxHands = 1;
+      hands.setOptions({ ...handOptions, maxNumHands: activeMaxHands });
+      hands.onResults(this._gestureEngine.onResults);
+      this._hands = hands;
 
-    this._cameraPromise = segmentationClassPromise.then((SelfieSegmentationClass) => new Promise((resolve, reject) => {
-       /* 人像去背：把最新的分割遮罩存進共用的 state，讓 gesture-engine 畫
-          #output_canvas 時可以只畫出人像、其餘鏤空，讓底下的神明實景疊加層透出來。
-          攝影機畫面與去背模型彼此獨立，不依賴手部結果回呼。 */
-       let selfieSegmentation = null;
-       if (SelfieSegmentationClass) {
-         selfieSegmentation = new SelfieSegmentationClass({
-           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
-         });
-         selfieSegmentation.setOptions({ modelSelection: 1 });
-         selfieSegmentation.onResults((results) => {
-           this._state.segmentationMask = results.segmentationMask;
-           this._presence.update(results.segmentationMask);
-           // 預熱可能在 flow.start() 之前完成；若場景已經顯示，遮罩一到就
-           // 立即揭露人物，不再等待固定的 ritual veil 計時器。
-           if (this._state.resolvedMode === 'camera' && this._state.current !== 'creating' && this._state.current !== 'transition') {
-             this._els.ritualOverlay?.classList.add('blended');
-             this._els.outputCanvas?.classList.add('blended');
-           }
-         });
-         this._selfieSegmentation = selfieSegmentation;
-       }
+      /* 人像去背：把最新的分割遮罩存進共用的 state，讓 gesture-engine 畫
+         #output_canvas 時可以只畫出人像、其餘鏤空，讓底下的神明實景疊加層透出來。
+         跟 Hands 各自獨立送同一格畫面，彼此不互相依賴、也不用等對方。 */
+      const selfieSegmentation = new SelfieSegmentation({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+      });
+      selfieSegmentation.setOptions({ modelSelection: 1 });
+       selfieSegmentation.onResults((results) => {
+         this._state.segmentationMask = results.segmentationMask;
+         // 預熱可能在 flow.start() 之前完成；若場景已經顯示，遮罩一到就
+         // 立即揭露人物，不再等待固定的 ritual veil 計時器。
+         if (this._state.resolvedMode === 'camera' && this._state.current !== 'creating' && this._state.current !== 'transition') {
+           this._els.ritualOverlay?.classList.add('blended');
+           this._els.outputCanvas?.classList.add('blended');
+         }
+       });
+      this._selfieSegmentation = selfieSegmentation;
 
-        // 去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
-       // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把去背推論
-       // 依裝置 profile 夾在 8~12 FPS，人物畫布則限制在 15~24 FPS。
+      // 手勢/去背判斷不需要跟到攝影機全速——Camera utils 的 onFrame 是綁 rAF 觸發，
+      // 沒有節流的話在高刷新率裝置上會逼近顯示器更新率去做推論。這裡把實際送進
+       // MediaPipe 的頻率依裝置 profile 夾在 8~12 FPS，畫面本身（video/UI）仍照攝影機原生幀率顯示。
         const INFERENCE_INTERVAL_MS = 1000 / profile.arInferenceFps;
-        const CAMERA_RENDER_INTERVAL_MS = 1000 / (profile.isLowEnd ? 15 : 24);
         let lastInferenceTime = 0;
-        let lastRenderTime = 0;
         let inferenceBusy = false;
-         let lastSegmentationTime = 0;
+        let inferenceCount = 0;
         let inferenceEnabledAt = Number.POSITIVE_INFINITY;
         let hasSegmentationMask = false;
 
-       // 只指定高度、不指定寬度：同時給寬高時，Chrome 會為了湊比例把橫式
-       // USB 鏡頭左右裁掉（例如直式 240×320）。只給高度就保留鏡頭原生比例，
-       // 人物完整呈現，再由 gesture-engine 以 contain 放進人物框。
-       const cameraHeight = profile.arCameraHeight;
-       const camera = createCameraLoop(this._els.video, {
-           onFrame: async () => {
-             // 分類選定時可以先開啟相機串流；真正開始儀式前不跑模型推論。
-              if (!this._cameraInferenceEnabled || this._state.current === 'transition') return;
-             const now = performance.now();
-            // 先讓 camera/video、AR 畫面與頁面完成第一輪繪製，再啟動
-            // MediaPipe 去背 WASM，避免使用者按下開始後立刻被模型編譯卡住。
+       // Camera Utils 的 width/height 會影響手機實際送進 MediaPipe 的影像方向。
+       // 直式時交換尺寸，避免瀏覽器以橫式影像裁切後再交給模型，造成上下
+       // 搖動在畫面座標裡被壓縮，尤其低階 Android 更明顯。
+       const portrait = window.innerHeight > window.innerWidth;
+       const cameraWidth = portrait ? profile.arCameraHeight : profile.arCameraWidth;
+       const cameraHeight = portrait ? profile.arCameraWidth : profile.arCameraHeight;
+       const camera = new Camera(this._els.video, {
+          onFrame: async () => {
+            const now = performance.now();
+            // 先讓 camera/video、AR 畫面與頁面完成第一輪繪製，再啟動兩個
+            // MediaPipe WASM 模型，避免使用者按下開始後立刻被模型編譯卡住。
             if (now < inferenceEnabledAt) return;
-            if (now - lastRenderTime >= CAMERA_RENDER_INTERVAL_MS) {
-               this._gestureEngine.onResults({ image: this._els.video });
-              lastRenderTime = now;
-            }
             if (inferenceBusy || now - lastInferenceTime < INFERENCE_INTERVAL_MS) return;
             lastInferenceTime = now;
             inferenceBusy = true;
             try {
-                // 遮罩變化比畫面慢：依 profile 限制去背頻率，避免每幀執行 WASM。
-               const segmentationInterval = 1000 / profile.arSegmentationFps;
-               if (selfieSegmentation && (!hasSegmentationMask || now - lastSegmentationTime >= segmentationInterval)) {
-                 lastSegmentationTime = now;
-                  await selfieSegmentation.send({ image: this._els.video });
-                  hasSegmentationMask = true;
-                }
+               const wantedMaxHands = this._state.current === 'draw' || this._state.current === 'bwa' ? 2 : 1;
+              if (wantedMaxHands !== activeMaxHands) {
+                activeMaxHands = wantedMaxHands;
+                hands.setOptions({ ...handOptions, maxNumHands: activeMaxHands });
+                inferenceCount = 0;
+              }
+
+              // 先做 Hands；去背模型延後到第二輪，避免開鏡第一幀同時初始化兩個模型。
+              await hands.send({ image: this._els.video });
+
+              // 遮罩變化比手勢慢：首次取得後每三輪更新一次，低階裝置不必每輪
+              // 同時執行兩個模型。沒有遮罩時第二輪一定補做一次，仍不會閃出原始畫面。
+              if (!hasSegmentationMask || inferenceCount % 3 === 0) {
+                await selfieSegmentation.send({ image: this._els.video });
+                hasSegmentationMask = true;
+              }
+              inferenceCount += 1;
             } finally {
               inferenceBusy = false;
             }
          },
+          width: cameraWidth,
           height: cameraHeight,
       });
       this._camera = camera;
@@ -392,83 +313,27 @@ class TempleArOracle extends HTMLElement {
          this._cameraPromise = null;
          reject(error);
        });
-    }));
+    });
     // 預熱呼叫可能早於 flow.start()，但仍共用同一個 Promise，避免重複開鏡。
     this._cameraPromise.catch(() => undefined);
     return this._cameraPromise;
   }
 
-  async _warmupInferenceModels() {
-    if (this._modelsWarmed) return;
-    if (this._modelWarmupPromise) return this._modelWarmupPromise;
-
-    this._modelWarmupPromise = (async () => {
-      const video = this._els?.video;
-      if (!video) return;
-
-      // 只送一格影像讓去背 WASM/model 完成下載與編譯；此時不開啟流程判定。
-      if (this._selfieSegmentation) {
-        await this._selfieSegmentation.send({ image: video });
-      }
-      this._gestureEngine.onResults({ image: video });
-      this._modelsWarmed = true;
-    })().catch((error) => {
-      this._modelWarmupPromise = null;
-      throw error;
-    });
-
-    return this._modelWarmupPromise;
-  }
-
-  /** 在開始求籤的使用者手勢中先開啟鏡頭並預熱去背模型；真正顯示場景仍由 start() 控制。 */
-  async prepareCamera(){
-    await this._startCamera();
-    try {
-      await this._warmupInferenceModels();
-    } catch (error) {
-      // 相機已經成功時，模型預熱失敗不阻擋正式流程；開始儀式後會再嘗試。
-      console.warn('[temple-ar-oracle] 模型預熱失敗，將在儀式開始後重試', error);
-    }
-  }
-
-  /** 選分類時建立 Three.js renderer、shader 與筊杯 mesh，切換場景時不再臨時初始化。 */
-  prepareBwa(){
-    return this._bwaScene.prepare?.(this._els.bwaThreeContainer);
-  }
-
-  /**
-   * Reset the reusable ritual without releasing the warmed WebGL/MediaPipe
-   * resources.  The host page keeps this element alive between route changes,
-   * so the next ritual can start with the already compiled renderer and models.
-   */
-  reset(){
-    if (this._destroyed) return;
-    this._cameraInferenceEnabled = false;
-    this._started = false;
-    this._flow?.reset?.();
-    if (this._state) {
-      this._state.sessionId = null;
-      this._state.shareToken = null;
-      this._state.currentFortune = null;
-      this._state.interpretation = null;
-      this._state.pendingBwaResult = null;
-      this._state.resolvedMode = null;
-      this._state.clickBwaMode = false;
-      this._state.transitionActive = false;
-    }
+  /** 在開始求籤的使用者手勢中先開啟鏡頭並預熱模型；真正顯示場景仍由 start() 控制。 */
+  prepareCamera(){
+    return this._startCamera();
   }
 
   /**
    * 啟動整個插香→搖籤→擲筊儀式。
-   * @param {{question?: string, category?: string, inputMode?: 'camera'|'manual'}} [options]
+   * @param {{question?: string, category?: string, inputMode?: 'auto'|'camera'|'motion'|'manual'}} [options]
    */
   async start(options = {}){
     if (this._started) return;
     this._started = true;
     const question = options.question ?? this.getAttribute('question') ?? '';
     const category = options.category ?? this.getAttribute('category') ?? '綜合運勢';
-    const requestedMode = options.inputMode ?? this.getAttribute('input-mode') ?? 'camera';
-    this._cameraInferenceEnabled = requestedMode === 'camera';
+    const requestedMode = options.inputMode ?? this.getAttribute('input-mode') ?? 'auto';
 
     try {
       await this._flow.start({
@@ -476,9 +341,9 @@ class TempleArOracle extends HTMLElement {
         category,
         requestedMode,
         startCamera: () => this._startCamera(),
+        motionAccessGranted: options.motionAccessGranted,
       });
     } catch (error) {
-      this._cameraInferenceEnabled = false;
       this._started = false;
       this._emit('toast', { message: error?.message || '無法開始求籤，請稍後再試' });
       throw error;
@@ -489,10 +354,6 @@ class TempleArOracle extends HTMLElement {
   destroy(){
     if (this._destroyed) return;
     this._destroyed = true;
-    this._cameraInferenceEnabled = false;
-    // 流程完成後不只隱藏 host，而是先取消影片／倒數／AR 場景，
-    // 再釋放 camera、去背模型、Three.js 與 detached preload video。
-    try { this._flow?.reset?.(); } catch (e) {}
     if (this._onViewportResize){
       window.removeEventListener('resize', this._onViewportResize);
       window.removeEventListener('orientationchange', this._onViewportResize);
@@ -500,6 +361,7 @@ class TempleArOracle extends HTMLElement {
     }
     try { this._camera?.stop?.(); } catch (e) {}
     this._cameraPromise = null;
+    try { this._hands?.close?.(); } catch (e) {}
     try { this._selfieSegmentation?.close?.(); } catch (e) {}
     try {
       const stream = this._els?.video?.srcObject;
@@ -507,47 +369,12 @@ class TempleArOracle extends HTMLElement {
     } catch (e) {}
     this._bwaScene?.destroy?.();
     this._gestureEngine?.destroy?.();
-    this._presence?.destroy?.();
-    try {
-      const transitionVideo = this._els?.transitionVideo;
-      transitionVideo?.pause?.();
-      transitionVideo?.removeAttribute('src');
-      transitionVideo?.load?.();
-    } catch (e) {}
-    this._camera = null;
-    this._selfieSegmentation = null;
-    this._modelWarmupPromise = null;
-    this._modelsWarmed = false;
-    releasePreloadedVideoAssets();
-    if (persistentOracle === this) persistentOracle = null;
-    if (this.parentNode) this.parentNode.removeChild(this);
+    this._mobileShake?.stop?.();
   }
 }
 
 if (!customElements.get('temple-ar-oracle')) {
   customElements.define('temple-ar-oracle', TempleArOracle);
-}
-
-/*
- * AR host is kept outside Vue's route tree while one ritual is active, so route
- * rendering does not interrupt the flow.  It is destroyed after sequence-complete
- * and recreated for the next ritual to release camera/WebGL/video resources.
- */
-let persistentOracle = null;
-
-export function getPersistentTempleArOracle({ apiBase = '/api/v1', transitionSrc } = {}) {
-  if (!persistentOracle) {
-    persistentOracle = document.createElement('temple-ar-oracle');
-    persistentOracle.setAttribute('api-base', apiBase);
-    if (transitionSrc) persistentOracle.setAttribute('transition-src', transitionSrc);
-    persistentOracle.style.display = 'none';
-    persistentOracle.style.visibility = 'hidden';
-    persistentOracle.style.pointerEvents = 'none';
-    persistentOracle.style.zIndex = '-1';
-    persistentOracle.style.background = '#120d0a';
-    document.body.appendChild(persistentOracle);
-  }
-  return persistentOracle;
 }
 
 export { TempleArOracle };

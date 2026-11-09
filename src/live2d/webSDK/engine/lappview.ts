@@ -98,14 +98,10 @@ export class LAppView {
     // this._gear.release();
     // this._gear = null;
 
-    if (this._back) {
-      this._back.release();
-      this._back = null;
-    }
+    this._back.release();
+    this._back = null;
 
-    if (gl && this._programId) {
-      gl.deleteProgram(this._programId);
-    }
+    gl.deleteProgram(this._programId);
     this._programId = null;
   }
 

@@ -26,81 +26,40 @@
    【行為調整（不是原封不動，這裡明確列出）】
      - 原始 goHome() 會一併關掉 profile/vow/history/chat 等周邊 modal，
        這裡的 reset() 只保留AR核心場景相關的重置，周邊 modal 由新前端自己管理。
-      - start() 只接受 camera/manual；鏡頭失敗時由同一元件降級為手動點擊，
-        不再使用 DeviceMotion 搖手機模式。
+     - 原本用 `window.location.search` 的 mode（manual/lookup/interpret）與
+       `isMobileDevice` 全域變數做流程分支，這裡改成呼叫 start() 時由外部明確
+       傳入 requestedMode（'auto' | 'camera' | 'motion' | 'manual'），內部再依
+       裝置能力/鏡頭權限解析出最終 resolvedMode，透過 'input-mode-resolved'
+       事件回報給宿主頁面（取代原本壞掉的 window.parent.location.assign 寫法，
+       這一段在前面討論就已經先跟你確認過）。
    ========================================================================= */
-
-import { CONFIG } from "./config.js";
-import { createStageGuide } from "./stage-guide.js";
+import { isMobileDevice } from "./mobile-shake.js";
 
 /* 領籤過場：播放自製的 5.12 秒動畫（龍銜籤送到眼前）。
    影片沒進版控（.gitignore），所以一定要能在缺檔時自動退回墨染過場——
    載入失敗、解碼失敗、或播放卡住超過預期時間，都走 fallback。
    預設值是這支影片；呼叫端可透過 options.src / hooks.src 覆蓋，未帶入時
-   就走這個預設值。<temple-ar-oracle> 仍可用 transition-src attribute 覆蓋。 */
- export const ORACLE_TRANSITION_SRC = "/videos/oracle-transition.mp4";
+   就走這個預設值。<temple-ar-oracle> 把這個覆蓋參數接到 transition-src
+   attribute，例如桌機版 OracleWizard.vue 就是靠這個 attribute 換成 dragon.mp4，
+   手機版沒帶這個 attribute，維持這支預設影片。 */
+export const ORACLE_TRANSITION_SRC = "/videos/oracle-transition.mov";
 const ORACLE_TRANSITION_MS = 5120; // 素材長度（拿不到 metadata 時的備用值）
 const REVEAL_LEAD_MS = 350; // 影片剩這麼久時才揭曉籤詩，讓最後一格溶進結果頁
 const HARD_CAP_EXTRA_MS = 2500; // 影片真的卡死時的保險
 const preloadedVideos = new Map();
-const activeVideoTransitionCancels = new WeakMap();
-const activeInkTransitionCancels = new WeakMap();
 
-export function cancelOracleTransition(video) {
-  activeVideoTransitionCancels.get(video)?.();
-  if (!video) return;
-  // Hide before pausing/seeking. Seeking an ended video to 0 can make the
-  // browser compositor present its first frame for one paint.
-  video.style.visibility = "hidden";
-  video.pause?.();
-  video.classList.remove("show", "fade-out");
-  try { video.currentTime = 0; } catch (_) {}
-}
-
-export function cancelInkTransition(overlay) {
-  activeInkTransitionCancels.get(overlay)?.();
-  overlay?.classList.remove("play");
-}
-
-/* 選定分類後預載入流程會用到的影片；正式播放時直接使用瀏覽器快取。
-   失敗只代表播放時走既有 fallback，不阻擋求籤流程。 */
+/* 在儀式頁一載入就建立隱藏的 video loader，讓瀏覽器先把影片放進 HTTP
+   cache／解碼管線；真正播放時仍使用模板裡的 video 元素。 */
 export function preloadVideoAsset(src) {
-  if (typeof document === "undefined" || !src) return Promise.resolve();
-  const existing = preloadedVideos.get(src);
-  if (existing) return existing.promise;
-
+  if (typeof document === "undefined" || !src || preloadedVideos.has(src)) return;
   const video = document.createElement("video");
   video.preload = "auto";
   video.muted = true;
   video.playsInline = true;
   video.setAttribute("aria-hidden", "true");
-  const promise = new Promise((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-    video.addEventListener("loadeddata", finish, { once: true });
-    video.addEventListener("error", finish, { once: true });
-    setTimeout(finish, 10000);
-  });
   video.src = src;
   video.load();
-  preloadedVideos.set(src, { video, promise });
-  return promise;
-}
-
-/** 完成一輪儀式後釋放 detached video 的來源與 preload cache。 */
-export function releasePreloadedVideoAssets() {
-  for (const { video } of preloadedVideos.values()) {
-    try {
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-    } catch (_) {}
-  }
-  preloadedVideos.clear();
+  preloadedVideos.set(src, video);
 }
 
 export function preloadOracleTransition(els, options = {}) {
@@ -136,23 +95,9 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
     return;
   }
 
-  cancelOracleTransition(video);
-
   let settled = false;
   let revealed = false;
   let capTimer = 0;
-
-  const cancel = () => {
-    if (settled) return;
-    settled = true;
-    // Hide before cleanup resumes AR rendering, so cleanup cannot expose a
-    // frame produced by the seek below.
-    video.style.visibility = "hidden";
-    video.pause();
-    video.classList.remove("show", "fade-out");
-    cleanup();
-    try { video.currentTime = 0; } catch (_) {}
-  };
 
   const reveal = () => {
     if (revealed) return;
@@ -163,11 +108,7 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
   const cleanup = () => {
     video.removeEventListener("timeupdate", onTimeUpdate);
     video.removeEventListener("ended", onEnded);
-    video.removeEventListener("error", bail);
     if (capTimer) clearTimeout(capTimer);
-    if (activeVideoTransitionCancels.get(video) === cancel) {
-      activeVideoTransitionCancels.delete(video);
-    }
     // 過場結束，把 AR 的繪圖負載放回去
     if (hooks.onEnd) hooks.onEnd();
   };
@@ -175,27 +116,24 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
   const finish = () => {
     if (settled) return;
     settled = true;
-    // Keep the final frame off-screen. Resetting currentTime here can make
-    // Chromium/WebView briefly paint frame 0 after `ended`; the next play
-    // resets it while the video is already hidden instead.
-    video.style.visibility = "hidden";
-    video.pause();
-    video.classList.remove("show", "fade-out");
-    cleanup();
     reveal();
+    cleanup();
+    video.classList.remove("show");
+    video.classList.add("fade-out");
+    setTimeout(() => {
+      video.classList.remove("fade-out");
+      video.pause();
+      video.currentTime = 0;
+    }, 720);
   };
 
   const bail = () => {
     if (settled) return;
     settled = true;
-    video.style.visibility = "hidden";
-    video.pause();
-    video.classList.remove("show", "fade-out");
     cleanup();
+    video.classList.remove("show", "fade-out");
     playInkTransition(els, onCovered);
   };
-
-  activeVideoTransitionCancels.set(video, cancel);
 
   /* 揭曉時機改用影片自己的 currentTime，而不是 setTimeout。
      牆上時鐘與影片時鐘會分岔——畫面掉格時影片會落後，
@@ -243,7 +181,6 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
      改用強制重排（與 playInkTransition 同一個手法）同步把樣式沖出去，
      淡入照樣有，但不再依賴 rAF 會不會被呼叫。 */
   video.classList.remove("fade-out");
-  video.style.visibility = "visible";
   void video.offsetWidth;
   video.classList.add("show");
 
@@ -255,32 +192,14 @@ export function playOracleTransition(els, onCovered, hooks = {}) {
 }
 
 export function playInkTransition(els, onCovered) {
-  const overlay = els.transitionOverlay;
-  cancelInkTransition(overlay);
-  let coveredTimer = 0;
-  let clearTimer = 0;
-  let cancelled = false;
-  const cancel = () => {
-    cancelled = true;
-    if (coveredTimer) clearTimeout(coveredTimer);
-    if (clearTimer) clearTimeout(clearTimer);
-    overlay.classList.remove("play");
-    if (activeInkTransitionCancels.get(overlay) === cancel) {
-      activeInkTransitionCancels.delete(overlay);
-    }
-  };
-  activeInkTransitionCancels.set(overlay, cancel);
-  overlay.classList.remove("play");
-  void overlay.offsetWidth;
-  overlay.classList.add("play");
-  coveredTimer = setTimeout(() => {
-    if (!cancelled && onCovered) onCovered();
+  els.transitionOverlay.classList.remove("play");
+  void els.transitionOverlay.offsetWidth;
+  els.transitionOverlay.classList.add("play");
+  setTimeout(() => {
+    if (onCovered) onCovered();
   }, 320);
-  clearTimer = setTimeout(() => {
-    overlay.classList.remove("play");
-    if (activeInkTransitionCancels.get(overlay) === cancel) {
-      activeInkTransitionCancels.delete(overlay);
-    }
+  setTimeout(() => {
+    els.transitionOverlay.classList.remove("play");
   }, 950);
 }
 
@@ -289,9 +208,9 @@ export function createFlowController({
   state,
   api,
   gestureEngine,
-  presence,
   bwaScene,
-  audioEngine,
+   audioEngine,
+  mobileShake,
    emit,
   transitionSrc,
 }) {
@@ -338,121 +257,6 @@ export function createFlowController({
      這時候一起發出去，比使用者擲完再發又早了整段擲筊動作的時間。 */
   let pendingCast = null; // 這一輪擲筊結果（Promise）
   let pendingInterpret = null; // 這一輪的解籤請求（Promise），只發一次
-  let pendingPrayer = null; // 拜拜 API 與墨染轉場並行，抽籤時再確認已完成
-
-  // 三個需要動作的階段：「進場 → 等有人進到主要位置 → 播放動畫進度 → 自動前進」。
-  // 鏡頭模式由 presence（讀去背遮罩）觸發；手動模式或沒有 presence 時退回固定延遲。
-  // 觸發只是動畫的開關，開始之後人離開也不會中斷。
-  const AUTO_ENTRY_DELAY_MS = 1500;
-  const AUTO_DRAW_ENTRY_DELAY_MS = 2500;
-  const AUTO_BWA_ENTRY_DELAY_MS = 2000;
-  const AUTO_INCENSE_MS = 5000;
-  const AUTO_DRAW_MS = 3000;
-  let autoAdvanceTimer = null;
-  let autoAdvanceInterval = null;
-  let autoAdvanceGeneration = 0;
-  let cancelPresenceWait = null;
-
-  /* 每個階段開始前先跳出教學框，按確認才開始。同一場求籤每個階段只教一次
-     （非聖筊重抽、連續擲筊時不再重複跳出）；新的一場會重新顯示。 */
-  const stageGuide = createStageGuide(els);
-  const guidedStages = new Set();
-
-  function cancelAutoAdvance() {
-    autoAdvanceGeneration += 1;
-    stageGuide.hide();
-    cancelPresenceWait?.();
-    cancelPresenceWait = null;
-    if (autoAdvanceTimer !== null) {
-      clearTimeout(autoAdvanceTimer);
-      autoAdvanceTimer = null;
-    }
-    if (autoAdvanceInterval !== null) {
-      clearInterval(autoAdvanceInterval);
-      autoAdvanceInterval = null;
-    }
-  }
-
-  function startAutoStage(
-    sceneName,
-    durationMs,
-    { entryDelayMs = AUTO_ENTRY_DELAY_MS, onEnter, onWaiting, onStart, onProgress, onComplete },
-  ) {
-    cancelAutoAdvance();
-    const generation = autoAdvanceGeneration;
-    const isActive = () =>
-      generation === autoAdvanceGeneration && state.current === sceneName;
-
-    onEnter?.();
-
-    const begin = () => {
-      if (!isActive()) return;
-      if (durationMs <= 0) {
-        onComplete();
-        return;
-      }
-      onStart?.();
-      const startedAt = performance.now();
-      const tick = () => {
-        if (!isActive()) return;
-        const progress = Math.min(1, (performance.now() - startedAt) / durationMs);
-        onProgress?.(progress);
-        if (progress >= 1) {
-          clearInterval(autoAdvanceInterval);
-          autoAdvanceInterval = null;
-          onComplete();
-        }
-      };
-      tick();
-      // 進度環只需要看起來連續；每 100ms 更新一次，不必綁 rAF。
-      autoAdvanceInterval = setInterval(tick, 100);
-    };
-
-    const usePresence = presence && state.resolvedMode === "camera";
-    autoAdvanceTimer = setTimeout(() => {
-      autoAdvanceTimer = null;
-      if (!isActive()) return;
-      if (!usePresence) {
-        begin();
-        return;
-      }
-      onWaiting?.();
-      cancelPresenceWait = presence.waitForPresence(() => {
-        cancelPresenceWait = null;
-        begin();
-      });
-    }, usePresence ? CONFIG.PRESENCE_MIN_DELAY_MS : entryDelayMs);
-  }
-
-  const PRESENCE_HINT = "請站到畫面中央";
-
-  const AUTO_BWA_MS = 2000; // 偵測到人後等這麼久才擲出
-
-  function startAutoBwaStage() {
-    startAutoStage("bwa", AUTO_BWA_MS, {
-      entryDelayMs: AUTO_BWA_ENTRY_DELAY_MS,
-      onEnter: () => {
-        els.bwaHint.textContent = "筊杯準備中…";
-      },
-      onWaiting: () => {
-        els.bwaHint.textContent = `${PRESENCE_HINT}即可擲筊`;
-      },
-      onStart: () => {
-        els.bwaHint.textContent = "準備擲筊…";
-      },
-      onComplete: () => tossBwa(window.innerWidth / 2, window.innerHeight / 2, 0, 0),
-    });
-  }
-
-  function stopAutoVisualStage() {
-    els.incenseRing.classList.remove("on");
-    els.incenseStick.classList.remove("sensing");
-    els.shakeRing.classList.remove("on");
-    els.qianTongZone.classList.remove("shaking");
-    els.sticksGroup.classList.remove("is-shaking");
-  }
-
-  let transitionGeneration = 0;
 
   /* 神明實景疊加：鏡頭模式等第一張去背遮罩完成就顯示人物，
      不再用固定秒數讓使用者等待；手動／手機模式則立即顯示場景。 */
@@ -522,7 +326,6 @@ export function createFlowController({
 
   function finishAfter(pending) {
     const startedAt = Date.now(); // 呼叫點就是過場開始的時間
-    const generation = transitionGeneration;
     return async () => {
       const grace = new Promise((resolve) =>
         setTimeout(resolve, REVEAL_GRACE_MS),
@@ -531,7 +334,6 @@ export function createFlowController({
       await Promise.race([pending || grace, grace]);
       const left = MIN_TRANSITION_MS - (Date.now() - startedAt);
       if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
-      if (generation !== transitionGeneration) return;
       /* 聖筊分支（resolveBwaResult/castClickBwa）呼叫這裡之前都還維持
          bwaTossing=true，就是要撐到這一刻——在這之前手勢/點擊引擎都還可能
          判定成「可以再擲一次」，對同一個 session 重複送出 blocks/interpret。
@@ -560,18 +362,14 @@ export function createFlowController({
   };
 
   function showScene(name) {
-    cancelAutoAdvance();
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach((s) =>
       s.classList.add("hidden"),
     );
     // 筊杯場景在整個儀式建立時就已初始化，但只有真正顯示時才需要
     // 讓 Three.js 佔用 GPU；上香與抽籤期間完全停止渲染。
-    if (name === "bwa") {
-      // Three.js 與筊杯 GLB 延後到真正進入擲筊階段，避免在上香／抽籤時
-      // 先建立第二個 WebGL context 並與 MediaPipe 爭用 GPU/記憶體。
-      bwaScene.init?.(els.bwaThreeContainer);
-      bwaScene.resume();
-    } else bwaScene.pause();
+    if (name === "bwa") bwaScene.resume();
+    else bwaScene.pause();
+    if (name !== "draw") mobileShake.stop();
     state.current = name;
 
     /* 神明實景疊加：鏡頭模式等去背遮罩完成，人物才淡入；沒有鏡頭的模式直接顯示。 */
@@ -589,7 +387,7 @@ export function createFlowController({
     } else {
       els.ritualOverlay.classList.remove("blended");
       els.outputCanvas.classList.remove("blended");
-      if (state.resolvedMode !== "camera" || state.segmentationMask || state.useSelfieSegmentation === false) {
+      if (state.resolvedMode !== "camera" || state.segmentationMask) {
         els.ritualOverlay.classList.add("blended");
         els.outputCanvas.classList.add("blended");
       }
@@ -613,15 +411,28 @@ export function createFlowController({
       );
       gestureEngine.resetShakeProgress();
        gestureEngine.resetDrawReveal();
+      const useMobileShake =
+        state.resolvedMode === "motion";
        els.drawHint.textContent =
          state.resolvedMode === "manual"
            ? "準備好後，點擊籤筒即可自動抽籤。"
-           : "請專心準備抽籤…";
+           : useMobileShake && state.mobileShakeReady
+             ? "拿起手機，上下搖動三次即可抽籤"
+             : useMobileShake
+               ? "未開啟動作感測，可直接抽籤。"
+               : "請讓雙手同時進入畫面，開始搖籤";
+      // 手機正常流程只透過搖動抽籤；僅在感測器不可用時才顯示直接抽籤備援。
       els.btnManualDraw.classList.toggle(
         "hidden",
-        state.resolvedMode !== "manual",
+        !(
+          state.resolvedMode === "manual" ||
+          (useMobileShake && !state.mobileShakeReady)
+        ),
       );
-      els.btnManualDraw.textContent = "手 動 抽 籤";
+      els.btnManualDraw.textContent = useMobileShake
+        ? "直 接 抽 籤"
+        : "手 動 抽 籤";
+      if (useMobileShake && state.mobileShakeReady) mobileShake.start();
     }
     if (name === "bwa") {
       els.sceneBwa.classList.remove("hidden");
@@ -632,77 +443,22 @@ export function createFlowController({
       /* 手動模式改成「直接點筊杯」：不再另外給一顆擲筊按鈕，
          筊杯容器打開 pointer-events，由 index.js 的 pointerdown 做命中判定。 */
       const isClickBwaMode =
-        state.resolvedMode === "manual";
+        state.resolvedMode === "manual" ||
+        state.resolvedMode === "motion";
       state.clickBwaMode = isClickBwaMode;
       els.btnClickBwa.classList.add("hidden");
       els.bwaThreeContainer.classList.toggle("tossable", isClickBwaMode);
       els.bwaHint.textContent = isClickBwaMode
         ? "點擊筊杯，向神明請示此籤"
-        : "筊杯準備中…";
-      if (!isClickBwaMode) resetBwaVisual();
+        : "請讓雙手同時進入畫面即可擲筊";
+      if (!isClickBwaMode) {
+        resetBwaVisual();
+        gestureEngine.resetBwaTracking();
+      }
       state.bwaTossing = false;
       /* 一進擲筊場景就把這一次的結果要回來放著，等使用者真的擲了就直接演，
          不必在那一刻等網路（見 prefetchCast）。 */
       prefetchCast();
-      // 只在即將需要時載入過場影片，不在 AR 元件建立時偷跑下載。
-      preloadOracleTransition(els, { src: transitionSrc });
-    }
-
-    const startStage = () => {
-      if (state.current !== name) return;
-      if (name === "incense") {
-        startAutoStage("incense", AUTO_INCENSE_MS, {
-          onWaiting: () => {
-            // 保留原本「默念：問題」的提示，只在前面加上站位指引。
-            els.incenseHint.textContent = `${PRESENCE_HINT}。${els.incenseHint.textContent}`;
-          },
-          onStart: () => {
-            els.incenseRing.classList.add("on");
-            els.incenseRing.style.setProperty("--p", 0);
-            els.incenseStick.classList.add("sensing");
-            els.incenseHint.textContent = "誠心默念中…";
-          },
-          onProgress: (progress) => {
-            els.incenseRing.style.setProperty("--p", Math.round(progress * 100));
-          },
-          onComplete: () => {
-            stopAutoVisualStage();
-            completeIncense();
-          },
-        });
-      } else if (name === "draw") {
-        startAutoStage("draw", AUTO_DRAW_MS, {
-          entryDelayMs: AUTO_DRAW_ENTRY_DELAY_MS,
-          onEnter: () => {
-            els.drawHint.textContent = "請專心準備抽籤…";
-          },
-          onWaiting: () => {
-            els.drawHint.textContent = `${PRESENCE_HINT}，開始搖籤`;
-          },
-          onStart: () => {
-            els.shakeRing.classList.add("on");
-            els.shakeRing.style.setProperty("--p", 0);
-            els.qianTongZone.classList.add("shaking");
-            els.sticksGroup.classList.add("is-shaking");
-            els.drawHint.textContent = "搖籤中…";
-          },
-          onProgress: (progress) => {
-            els.shakeRing.style.setProperty("--p", Math.round(progress * 100));
-          },
-          onComplete: () => {
-            stopAutoVisualStage();
-            completeDraw();
-          },
-        });
-      } else if (name === "bwa") {
-        startAutoBwaStage();
-      }
-    };
-    if (guidedStages.has(name)) {
-      startStage();
-    } else {
-      guidedStages.add(name);
-      stageGuide.show(name, state.resolvedMode, startStage);
     }
   }
 
@@ -717,36 +473,19 @@ export function createFlowController({
 
   async function completeIncense() {
     if (state.current !== "incense") return;
-    cancelAutoAdvance();
     state.current = "transition";
-    pendingPrayer = api.prayer(state.sessionId);
-    // 不再先等網路回應才開始畫面轉場；使用者看到抽籤畫面後，
-    // 通常還有足夠時間完成 prayer request。
-    playInkTransition(els, () => showScene("draw"));
     try {
-      await pendingPrayer;
+      await api.prayer(state.sessionId);
       emit("incense-complete");
+      playInkTransition(els, () => showScene("draw"));
     } catch (error) {
       state.current = "incense";
-      showScene("incense");
       emit("toast", { message: error.message || "無法完成祈求，請再試一次" });
     }
   }
 
   async function completeDraw() {
     if (state.current !== "draw") return;
-    cancelAutoAdvance();
-    // 轉場已經先讓使用者進入抽籤畫面；若使用者極快完成抽籤，
-    // 這裡才等待拜拜 API，避免把網路延遲放在「拜拜→抽籤」的切換上。
-    if (pendingPrayer) {
-      // 先鎖住狀態，避免等待 prayer 的短時間內連續觸發兩次抽籤。
-      state.current = "transition";
-      try {
-        await pendingPrayer;
-      } catch {
-        return;
-      }
-    }
     state.current = "transition";
 
     // 手動備援沒有經過手勢引擎的選籤階段，這裡補上同一段自動抽籤動畫。
@@ -773,16 +512,7 @@ export function createFlowController({
     try {
       state.currentFortune = await api.draw(state.sessionId);
       emit("draw-complete", { fortune: state.currentFortune });
-      // 抽籤完成後立刻建立 Three.js renderer 並確認筊杯已可用；
-      // 這段等待發生在抽籤畫面，避免過場後才看到空白／白色畫面。
-      try {
-        await bwaScene.prepare?.(els.bwaThreeContainer);
-      } catch (error) {
-        console.warn("[temple-ar-oracle] 筊杯場景預載失敗，進入擲筊時再試", error);
-      }
-      // 筊杯 renderer、GLB 與 shader 已在分類選擇時預熱完成，這裡直接
-      // 開始轉場，不再額外硬等 700ms。
-      playInkTransition(els, () => showScene("bwa"));
+      setTimeout(() => playInkTransition(els, () => showScene("bwa")), 700);
     } catch (error) {
       state.current = "draw";
       state.drawSubState = "shake";
@@ -838,7 +568,6 @@ export function createFlowController({
   // ============================================================
   async function tossBwa(_sx, _sy, _vx, _vy) {
     if (state.bwaTossing) return;
-    cancelAutoAdvance();
     state.bwaTossing = true;
     els.bwaHint.textContent = "筊杯擲出中…";
     try {
@@ -874,10 +603,8 @@ export function createFlowController({
       );
     } catch (error) {
       state.bwaTossing = false;
+      els.bwaHint.textContent = "請讓雙手同時進入畫面即可擲筊";
       emit("toast", { message: error.message || "無法完成擲筊，請再試一次" });
-      // 鏡頭模式沒有按鈕可以重擲，重新進入「等有人 → 擲筊」。
-      if (!state.clickBwaMode) startAutoBwaStage();
-      else els.bwaHint.textContent = "點擊筊杯，向神明請示此籤";
     }
   }
 
@@ -994,8 +721,9 @@ export function createFlowController({
       setTimeout(() => {
         els.bwaResultPanel.classList.add("hidden");
         resetBwaVisual();
+        gestureEngine.lockBwaUntilHandsLeave();
+        els.bwaHint.textContent = "請讓雙手同時進入畫面即可擲筊";
         state.bwaTossing = false;
-        startAutoBwaStage();
       }, 2200);
     } else {
       els.bwaResultTitle.textContent = `${result?.result_name || "非聖筊"} · 重新抽籤`;
@@ -1035,19 +763,9 @@ export function createFlowController({
 
   // 重置AR核心場景相關狀態（原始 goHome() 的AR部分；周邊 modal 的關閉交還給新前端自己處理）
   function reset() {
-    cancelAutoAdvance();
-    guidedStages.clear();
-    stopAutoVisualStage();
-    transitionGeneration += 1;
-    cancelOracleTransition(els.transitionVideo);
-    cancelInkTransition(els.transitionOverlay);
     [els.sceneIncense, els.sceneDraw, els.sceneBwa].forEach((s) =>
       s.classList.add("hidden"),
     );
-    // The persistent host survives route changes, so explicitly pause the
-    // BWA render loop when a ritual ends instead of relying on destroy().
-    bwaScene.pause?.();
-    els.transitionOverlay?.classList.remove("play");
     state.current = "idle";
     state.bwaTossing = false;
     els.ritualOverlay?.classList.remove("blended");
@@ -1055,6 +773,8 @@ export function createFlowController({
     gestureEngine.resetIncenseProgress();
     gestureEngine.resetShakeProgress();
     gestureEngine.resetDrawReveal();
+    gestureEngine.resetBwaTracking();
+    mobileShake.stop();
     // 離開儀式：預取的擲筊結果與解籤請求都不再屬於任何一場
     resetCastPrefetch();
   }
@@ -1064,24 +784,48 @@ export function createFlowController({
   // 這裡是新增的整合邏輯（原始碼裡這段散落在 btnHomeStart 的點擊事件、
   // 以及檔案最尾端的 Camera/Hands bootstrap 兩處，這裡合併成一個函式，
   // 方便Web Component呼叫），內部判斷順序與原始碼行為一致：
-  //   requestedMode === 'manual' → 一律走純點擊路徑
-  //   requestedMode === 'camera' → 優先走攝影機手勢，失敗時降級到 manual。
+  //   requestedMode === 'manual' → 一律走純點擊路徑，略過插香手勢偵測（優先權最高，
+  //                                 即使同時在手機上也以此為準）
+  //   requestedMode === 'camera' → 所有裝置都走攝影機手勢路徑，若手機鏡頭失敗
+  //                                 再降級到 motion，桌機則降級到 manual。
+  //   手機裝置（且非manual/camera） → 走 devicemotion 搖晃路徑
+  //   其餘（桌機） → 走攝影機手勢路徑（含插香偵測）
   // ============================================================
   async function start({
     question,
     category,
-    requestedMode = "camera",
+    requestedMode = "auto",
     startCamera,
+    motionAccessGranted,
   }) {
     state.userQuery = { question, category };
     state.current = "creating";
-    guidedStages.clear();
 
     const session = await api.create(question, category);
     state.sessionId = session.session_id;
     state.shareToken = session.share_token;
     state.interpretation = null;
     resetCastPrefetch();
+
+    const mobile = isMobileDevice();
+
+    /* 'motion'：不看 User-Agent，強制走搖晃路徑。
+       原始碼只用 UA 判斷裝置、無法覆蓋（README 有記錄這個限制），
+       這裡補上，讓宿主可以依畫面寬度（而非 UA）決定手機版就用搖的。 */
+    if (requestedMode === "motion") {
+      state.resolvedMode = "motion";
+      state.mobileShakeReady = motionAccessGranted ?? await mobileShake.requestAccess();
+      emit("input-mode-resolved", {
+        mode: "motion",
+        motionGranted: state.mobileShakeReady,
+        forced: true,
+      });
+      await api.prayer(state.sessionId);
+      showScene("draw");
+      if (!state.mobileShakeReady)
+        emit("toast", { message: "這個裝置沒有動作感測，已提供直接抽籤。" });
+      return;
+    }
 
     if (requestedMode === "manual") {
       state.resolvedMode = "manual";
@@ -1091,7 +835,52 @@ export function createFlowController({
       return;
     }
 
-    // 攝影機模式啟動失敗時一律改用手動點擊，不再使用 DeviceMotion。
+    if (requestedMode === "camera") {
+      try {
+        await startCamera();
+        state.resolvedMode = "camera";
+        emit("input-mode-resolved", { mode: "camera" });
+        showScene("incense");
+        return;
+      } catch (error) {
+        if (mobile) {
+          // 手機鏡頭被拒絕或不支援時，保留原本的搖手機備援流程。
+          state.resolvedMode = "motion";
+          state.mobileShakeReady = await mobileShake.requestAccess();
+          emit("input-mode-resolved", {
+            mode: "motion",
+            motionGranted: state.mobileShakeReady,
+            fallbackFrom: "camera",
+          });
+          await api.prayer(state.sessionId);
+          showScene("draw");
+          emit("toast", {
+            message: state.mobileShakeReady
+              ? "鏡頭無法啟動，已改用搖動手機抽籤。"
+              : "鏡頭無法啟動，已提供直接抽籤。",
+          });
+          return;
+        }
+        // 桌機繼續走下方的手動備援提示。
+        emit("toast", { message: error?.message || "無法啟動鏡頭，已切換為手動抽籤。" });
+      }
+    }
+
+    if (mobile) {
+      state.resolvedMode = "motion";
+      state.mobileShakeReady = await mobileShake.requestAccess();
+      emit("input-mode-resolved", {
+        mode: "motion",
+        motionGranted: state.mobileShakeReady,
+      });
+      await api.prayer(state.sessionId);
+      showScene("draw");
+      if (!state.mobileShakeReady)
+        emit("toast", { message: "未開啟動作感測，已提供直接抽籤。" });
+      return;
+    }
+
+    // 桌機 auto：嘗試攝影機手勢路徑，交由外部（index.js）啟動 MediaPipe camera
     try {
       await startCamera();
       state.resolvedMode = "camera";

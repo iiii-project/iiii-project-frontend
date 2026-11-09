@@ -4,8 +4,9 @@ import { LAppDelegate } from '@/live2d/webSDK/engine/lappdelegate'
 import { LAppLive2DManager } from '@/live2d/webSDK/engine/lapplive2dmanager'
 import { getCappedDevicePixelRatio } from '@/utils/device'
 
-// 這裡只服務單一浮動角色場景，所以拿掉了原本 React 版 window 模式/側邊欄相關的
-// 尺寸判斷分支，一律以角色容器實際尺寸（containerRef）為準，不再假設容器等於 viewport。
+// 這裡只服務單一使用場景（角色蓋滿全螢幕），所以拿掉了原本 React 版
+// window 模式/側邊欄相關的尺寸判斷分支，一律以容器實際尺寸（containerRef）為準——
+// 容器現在是鋪滿 viewport 的全螢幕層，所以這個尺寸本身就等同 window 尺寸。
 const MIN_SCALE = 0.1
 const MAX_SCALE = 5.0
 const EASING_FACTOR = 0.3
@@ -18,7 +19,7 @@ const DEFAULT_SCALE = 1.0
 // 這是相對於模型原本 kScale 的倍率，不會改動後端模型設定。
 const PORTRAIT_SCALE_FACTOR = 0.55
 
-// 角色預設置中於自己的 canvas。
+// 角色預設站在畫面右下角一帶（畫面寬度 84%、高度 76% 處）。
 // 故意不去用 CubismModelMatrix.right()/bottom()/centerX() 這組 layout 輔助方法直接算——
 // 那組方法是 Cubism SDK 用來讀 model3.json 的 Layout 區塊、在「setupFromLayout 當下
 // 那個獨立座標系」裡定位，跟 modelMatrix 實際參與渲染的座標系不是同一件事，
@@ -26,8 +27,8 @@ const PORTRAIT_SCALE_FACTOR = 0.55
 // 改成借用 view._deviceToScreen（跟 useLive2DModel.ts 拖曳/點擊命中判定同一份轉換，
 // 因為拖曳和點擊角色本來就有在動、可驗證是對的）把「畫面上的某個像素點」換算成
 // modelMatrix 用的座標，再整個指定給模型錨點——只要角色本來的拖曳/點擊是準的，這裡就會準。
-const DEFAULT_POSITION_X_FRACTION = 0.5
-const DEFAULT_POSITION_Y_FRACTION = 0.5
+const DEFAULT_POSITION_X_FRACTION = 0.84
+const DEFAULT_POSITION_Y_FRACTION = 0.76
 // 每次換模型／初次掛載都要等 Cubism 那邊非同步把新的 model instance 建好才能定位，
 // 用 rAF 輪詢等它出現，最多等 ~2 秒（120 frame），逾時就放棄不再重試。
 const MAX_POSITION_RETRY_FRAMES = 120
@@ -49,7 +50,7 @@ export function applyScale(scale: number): boolean {
 function tryApplyDefaultPosition(canvas: HTMLCanvasElement): boolean {
   try {
     const adapter = (window as any).getLAppAdapter?.()
-    const view = LAppDelegate.getExistingInstance()?.getView()
+    const view = LAppDelegate.getInstance()?.getView()
     const model = adapter?.getModel()
     if (!adapter || !view || !model?._modelMatrix || !canvas.height) return false
 
@@ -158,8 +159,9 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
 
     isResizing = true
     try {
-      // 用容器實際尺寸而非直接讀 window 尺寸：角色現在只佔固定浮動區域，
-      // 透過 ResizeObserver 觀察容器比假設 viewport 尺寸更準確可靠。
+      // 用容器實際尺寸而非直接讀 window 尺寸：容器（見 Live2DCompanion.vue）本身
+      // 已經是 fixed inset:0 蓋滿全螢幕的層，兩者數值理論上會一致，但透過
+      // ResizeObserver 觀察容器仍比直接綁 window resize 更準確可靠。
       const bounds = containerRef.value?.getBoundingClientRect()
       const width = bounds?.width || window.innerWidth
       const height = bounds?.height || window.innerHeight
@@ -183,7 +185,7 @@ export function useLive2DResize(containerRef: Ref<HTMLElement | null>, modelInfo
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
 
-      const delegate = LAppDelegate.getExistingInstance()
+      const delegate = LAppDelegate.getInstance()
       if (delegate) {
         delegate.onResize()
       } else {

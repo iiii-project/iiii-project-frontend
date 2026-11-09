@@ -49,14 +49,6 @@ export class LAppDelegate {
   }
 
   /**
-   * Return the current delegate without creating a half-initialized instance.
-   * Resize and hit-test helpers can run before Cubism has been initialized.
-   */
-  public static getExistingInstance(): LAppDelegate | null {
-    return s_instance;
-  }
-
-  /**
    * クラスのインスタンス（シングルトン）を解放する。
    * 
    * 释放类的实例（单例）。
@@ -165,7 +157,6 @@ export class LAppDelegate {
   public release(): void {
     this._isEnd = true;
     this._isRunning = false;
-    this._isPaused = false;
     if (this._animationFrame !== null) {
       cancelAnimationFrame(this._animationFrame);
       this._animationFrame = null;
@@ -189,15 +180,11 @@ export class LAppDelegate {
       this._inputEventsBound = false;
     }
 
-    if (this._textureManager) {
-      this._textureManager.release();
-      this._textureManager = null;
-    }
+    this._textureManager!.release();
+    this._textureManager = null;
 
-    if (this._view) {
-      this._view.release();
-      this._view = null;
-    }
+    this._view!.release();
+    this._view = null;
 
     // リソースを解放
     LAppLive2DManager.releaseInstance();
@@ -212,7 +199,6 @@ export class LAppDelegate {
    */
   public run(): void {
     if (this._isRunning) return;
-    this._isPaused = false;
     this._isRunning = true;
     const targetFrameRate = getPerformanceProfile().live2dFps;
     // メインループ
@@ -221,7 +207,7 @@ export class LAppDelegate {
       this._animationFrame = null;
       // インスタンスの有無の確認
       // 检查实例是否存在
-      if (s_instance == null || this._isPaused || !this._isRunning) {
+      if (s_instance == null) {
         return;
       }
 
@@ -259,26 +245,12 @@ export class LAppDelegate {
           cancelAnimationFrame(this._animationFrame);
           this._animationFrame = null;
         }
-      } else if (this._animationFrame === null && s_instance === this && !this._isEnd && !this._isPaused) {
+      } else if (this._animationFrame === null && s_instance === this && !this._isEnd) {
         this._animationFrame = requestAnimationFrame(loop);
       }
     };
     document.addEventListener('visibilitychange', this._visibilityHandler, { passive: true });
     this._animationFrame = requestAnimationFrame(loop);
-  }
-
-  /** Pause rendering while AR owns the main thread, without releasing assets. */
-  public pause(): void {
-    this._isPaused = true;
-    this._isRunning = false;
-    if (this._animationFrame !== null) {
-      cancelAnimationFrame(this._animationFrame);
-      this._animationFrame = null;
-    }
-    if (this._visibilityHandler) {
-      document.removeEventListener('visibilitychange', this._visibilityHandler);
-      this._visibilityHandler = null;
-    }
   }
 
   /**
@@ -371,7 +343,6 @@ export class LAppDelegate {
     this._animationFrame = null;
     this._visibilityHandler = null;
     this._isRunning = false;
-    this._isPaused = false;
 
     this._cubismOption = new Option();
     this._view = new LAppView();
@@ -425,7 +396,6 @@ export class LAppDelegate {
   _animationFrame: number | null;
   _visibilityHandler: (() => void) | null;
   _isRunning: boolean;
-  _isPaused: boolean;
 }
 
 /**

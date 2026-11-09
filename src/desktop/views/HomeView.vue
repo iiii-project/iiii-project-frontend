@@ -79,7 +79,6 @@ const MUSIC_FADE_MS = 1800
 let templeMusic: HTMLAudioElement | null = null
 let musicFadeRaf = 0
 let musicFadingOut = false
-let musicInteractionHandler: (() => void) | null = null
 
 function fadeAudioVolume(audio: HTMLAudioElement, target: number, duration: number) {
   if (musicFadeRaf) cancelAnimationFrame(musicFadeRaf)
@@ -139,15 +138,6 @@ function startTempleMusic() {
   }
 }
 
-function startMusicAfterInteraction() {
-  startTempleMusic()
-  if (musicInteractionHandler) {
-    window.removeEventListener('pointerdown', musicInteractionHandler)
-    window.removeEventListener('keydown', musicInteractionHandler)
-    musicInteractionHandler = null
-  }
-}
-
 function stopTempleMusic() {
   if (musicFadeRaf) cancelAnimationFrame(musicFadeRaf)
   templeMusic?.pause()
@@ -176,13 +166,7 @@ function openTutorial() {
 }
 
 function closeTutorial() {
-  const video = tutorialVideo.value
-  // Hide before pausing so the browser cannot composite a stale/seeked frame
-  // during the tick in which Vue removes the modal from the DOM.
-  if (video) {
-    video.style.visibility = 'hidden'
-    video.pause()
-  }
+  tutorialVideo.value?.pause()
   showTutorial.value = false
 }
 
@@ -193,10 +177,7 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => {
   document.body.classList.add('celestial-home-open')
   buildMotes()
-  // 不在首頁 mounted 時下載 3.9 MB 音訊；使用者第一次互動後才啟動背景音樂。
-  musicInteractionHandler = startMusicAfterInteraction
-  window.addEventListener('pointerdown', musicInteractionHandler, { passive: true })
-  window.addEventListener('keydown', musicInteractionHandler, { passive: true })
+  startTempleMusic()
   window.addEventListener('keydown', onKeydown)
   if (!prefersReducedMotion()) {
     window.addEventListener('pointermove', onPointerMove, { passive: true })
@@ -207,11 +188,6 @@ onBeforeUnmount(() => {
   document.body.classList.remove('celestial-home-open')
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('keydown', onKeydown)
-  if (musicInteractionHandler) {
-    window.removeEventListener('pointerdown', musicInteractionHandler)
-    window.removeEventListener('keydown', musicInteractionHandler)
-    musicInteractionHandler = null
-  }
   if (raf) cancelAnimationFrame(raf)
   stopTempleMusic()
   const root = document.documentElement
@@ -484,21 +460,6 @@ body.celestial-home-open {
   will-change: transform, opacity;
 }
 
-/* Warpple JJ5：保留靜態主視覺，停用首頁長時間大面積濾鏡與無限動畫，
-   避免尚未進入求籤流程就讓 WebView 持續合成多個全螢幕圖層。 */
-html.constrained-android .halo-glow,
-html.constrained-android .sovereign,
-html.constrained-android .sovereign-float,
-html.constrained-android .mist,
-html.constrained-android .mote {
-  animation: none;
-}
-html.constrained-android .sovereign,
-html.constrained-android .mist {
-  filter: none;
-  will-change: auto;
-}
-
 .vignette {
   background: radial-gradient(120% 90% at 50% 42%, rgba(0, 0, 0, 0) 52%, rgba(90, 64, 32, 0.14) 100%);
 }
@@ -532,6 +493,26 @@ html.constrained-android .mist {
   padding: 0 24px;
   transform: translate3d(calc(var(--px, 0) * 8px), calc(var(--py, 0) * 6px), 0);
 }
+.celestial-eyebrow {
+  margin: 0 0 22px;
+  font-size: 12px;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: var(--ink-soft);
+  opacity: 0;
+  animation: reveal 1.2s 0.2s ease-out forwards;
+}
+.celestial-eyebrow::before,
+.celestial-eyebrow::after {
+  content: '';
+  display: inline-block;
+  width: 40px;
+  height: 1px;
+  vertical-align: middle;
+  background: linear-gradient(90deg, transparent, var(--gold-line));
+  margin: 0 16px 4px;
+}
+.celestial-eyebrow::after { background: linear-gradient(90deg, var(--gold-line), transparent); }
 
 .title {
   margin: 0;
@@ -554,6 +535,16 @@ html.constrained-android .mist {
   color: var(--ink-soft);
   opacity: 0;
   animation: reveal 1.4s 0.55s ease-out forwards;
+}
+.desc {
+  margin: 18px auto 0;
+  max-width: 30em;
+  font-size: 14.5px;
+  line-height: 2.1;
+  letter-spacing: 0.08em;
+  color: rgba(91, 70, 53, 0.82);
+  opacity: 0;
+  animation: reveal 1.4s 0.7s ease-out forwards;
 }
 
 /* 寬度／位移是照 .title 實測反推的比例算出來的，不是寫死的 px：
@@ -800,7 +791,7 @@ html.constrained-android .mist {
 /* .actions 對齊 .title 的 3.8 倍寬公式，是照兩顆按鈕「並排不換行」量出來的；
    視窗窄到一個程度（實測約 950–1000px 之間），公式算出的寬度會小於兩顆按鈕
    本身的最小內容寬度，flex-wrap 就會把它們拆成兩行、右邊那顆整個掉位。
-   桌面版介面在窄視窗仍維持同一套版面，640–1024px 這段
+   桌機版路由只保證視窗 > 640px（見 src/utils/device.ts），640–1024px 這段
    還是有機會出現，所以在還沒真的窄到需要整排改直式（見下面 640px 那段）之前，
    先在這裡放棄跟標題精準對齊，退回單純置中，讓兩顆按鈕至少不會拆行、不會爆版。 */
 @media (max-width: 1024px) {
@@ -823,7 +814,11 @@ html.constrained-android .mist {
   }
 
   .celestial-hero { padding: 0 22px; }
+  .celestial-eyebrow { font-size: 11px; letter-spacing: 0.34em; text-indent: 0.34em; }
+  .celestial-eyebrow::before,
+  .celestial-eyebrow::after { width: 22px; margin: 0 10px 4px; }
   .subtitle { margin-top: 20px; letter-spacing: 0.24em; text-indent: 0.24em; }
+  .desc { margin-top: 14px; font-size: 14px; line-height: 1.95; }
 
   /* 按鈕改成整排，單手好按 */
   .actions {
@@ -850,11 +845,13 @@ html.constrained-android .mist {
 
 /* 直式且螢幕偏矮：把上下留白再收一點 */
 @media (max-width: 640px) and (max-height: 700px) {
+  .desc { display: none; }
   .actions { margin-top: 26px; }
 }
 
 /* 螢幕高度不足（手機橫放、矮視窗）：只留標題與兩顆按鈕 */
 @media (max-height: 560px) {
+  .celestial-eyebrow { display: none; }
   .title { font-size: clamp(38px, 13vh, 72px); }
   .subtitle {
     margin-top: 12px;
@@ -862,6 +859,7 @@ html.constrained-android .mist {
     letter-spacing: 0.22em;
     text-indent: 0.22em;
   }
+  .desc { display: none; }
   .actions {
     margin-top: 20px;
     flex-direction: row;
@@ -879,7 +877,7 @@ html.constrained-android .mist {
     animation: none !important;
   }
   .sovereign { opacity: 0.32; }
-  .title, .subtitle, .actions {
+  .celestial-eyebrow, .title, .subtitle, .desc, .actions {
     opacity: 1;
     animation: none;
   }
