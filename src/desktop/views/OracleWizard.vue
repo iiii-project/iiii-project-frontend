@@ -9,6 +9,7 @@ import AmuletButton from '@/desktop/components/AmuletButton.vue'
 import FontScaleControl from '@/desktop/components/FontScaleControl.vue'
 import FortunePoem from '@/desktop/components/FortunePoem.vue'
 import FortuneReading from '@/desktop/components/FortuneReading.vue'
+import FortuneChat from '@/desktop/components/FortuneChat.vue'
 // 註冊 <temple-ar-oracle>（插香 → 搖籤 → 擲筊 的 AR 引擎）
 import '@/ar/temple-ar-oracle/index.js'
 // AR 引擎目前維持 JavaScript 模組，這兩個匯出只負責啟動資源預載入。
@@ -270,6 +271,7 @@ function buildFortuneContext(fortune: ArFortune | null, interpretation: ArInterp
   parts.push(`使用者剛才求籤時問的是：「${askedQuestion.value}」。`)
   if (fortune) {
     parts.push(`抽到第 ${fortune.no} 籤${fortune.grade ? `，${fortune.grade}` : ''}。`)
+    if (fortune.poem) parts.push(`籤詩原文：${fortune.poem.replace(/\s+/g, ' ').trim()}`)
   }
   if (interpretation?.overall_meaning) parts.push(interpretation.overall_meaning)
   if (interpretation?.relation_to_question) parts.push(interpretation.relation_to_question)
@@ -281,6 +283,16 @@ function buildFortuneContext(fortune: ArFortune | null, interpretation: ArInterp
   }
   return parts.join(' ').trim()
 }
+
+/* 結果頁「問金鶴」對話區用的上下文：籤詩一出來就先送，解籤補進來後再更新一次。 */
+const chatContext = computed(() =>
+  step.value === 5 && fortune.value ? buildFortuneContext(fortune.value, interpretation.value) : ''
+)
+const chatSuggestions = [
+  '這支籤對我問的事有什麼建議？',
+  '籤詩的意思可以再講白話一點嗎？',
+  '接下來我要特別注意什麼？'
+]
 
 /* 通用招呼語已經搬進 live2dCompanionStore（小夥伴變全站元件後不再是籤詩頁專屬）。
    這裡只負責：小夥伴已經打過招呼、且這輪籤詩解籤資料到齊時，把內容悄悄寫進角色記憶——
@@ -307,7 +319,7 @@ function onArComplete(event: Event) {
 
   // 一進解籤頁面就先唸籤詩本身（原文），不是等 AI 解籤——解籤通常還要再等 ~21 秒
   // 才會透過 onArInterpretation 補進來，籤詩原文這時候已經有了，先讓角色唸給使用者聽。
-  if (fortune.value?.poem) {
+  if (fortune.value?.poem && !isPhone) {
     sendWhenReady({ type: 'speak-text', text: fortune.value.poem })
   }
 }
@@ -331,7 +343,8 @@ watch(
 )
 
 function guideRitualStage(text: string) {
-  if (ritualDismissed) return
+  // 手機不顯示 Live2D 角色，沒有人會播這段語音
+  if (ritualDismissed || isPhone) return
   companionStore.open()
   sendWhenReady({ type: 'speak-text', text })
 }
@@ -695,6 +708,8 @@ function restart() {
               :interpretation="interpretation"
               :pending="waitingInterpretation"
             />
+
+            <FortuneChat :context="chatContext" :suggestions="chatSuggestions" />
 
             <div v-if="canShare" class="take-away">
               <div class="qr-frame">
