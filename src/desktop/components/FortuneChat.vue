@@ -45,6 +45,13 @@ const MAX_LENGTH = 300
 const listRef = ref<HTMLDivElement | null>(null)
 
 let ownsSocket = false
+/* 保底：一輪對話 60 秒還沒收到結束訊號，就解除「思考中」，不讓輸入框永遠卡住。 */
+const WAITING_TIMEOUT_MS = 60_000
+let waitingTimer: ReturnType<typeof setTimeout> | null = null
+watch(waiting, (value) => {
+  if (waitingTimer) clearTimeout(waitingTimer)
+  waitingTimer = value ? setTimeout(() => { waiting.value = false }, WAITING_TIMEOUT_MS) : null
+})
 let unsubscribeMessage: (() => void) | null = null
 let unsubscribeState: (() => void) | null = null
 
@@ -81,6 +88,11 @@ function handleMessage(message: WsMessageEvent) {
     case 'force-new-message':
       chat.setForceNewMessage(true)
       break
+    /* 後端合成完會等前端回報「播放完畢」才送 conversation-chain-end、接受下一輪。
+       手機不播語音，收到就立刻回報，否則這一輪永遠不會結束，第二句問不出去。 */
+    case 'backend-synth-complete':
+      wsService.sendMessage({ type: 'frontend-playback-complete' })
+      break
     case 'audio':
       if (message.display_text?.text) {
         chat.appendAIMessage(message.display_text.text, message.display_text.name, message.display_text.avatar)
@@ -114,6 +126,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (isRecording.value) stopRecording()
+  if (waitingTimer) clearTimeout(waitingTimer)
   unsubscribeState?.()
   unsubscribeMessage?.()
   if (ownsSocket) wsService.disconnect()
