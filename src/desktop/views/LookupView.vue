@@ -287,6 +287,26 @@ const MEANING_LABELS: { key: keyof Fortune; label: string; category?: Category }
   { key: 'travel_meaning', label: '出行遠遊', category: 'travel' }
 ]
 
+/* 「問金鶴」分頁用的上下文：問題、籤號、籤詩原文、白話與 AI 解籤，讓追問都接著這支籤回答。 */
+const chatContext = computed(() => {
+  const f = fortune.value
+  if (!f) return ''
+  const parts: string[] = [`使用者查籤時問的是：「${askedQuestion.value}」。`, `查到第 ${f.number} 籤。`]
+  if (f.poem) parts.push(`籤詩原文：${f.poem.replace(/\s+/g, ' ').trim()}`)
+  if (f.translation) parts.push(`白話：${f.translation}`)
+  const i = interpretation.value
+  if (i?.overall_meaning) parts.push(`解籤結果：${i.overall_meaning}`)
+  if (i?.relation_to_question) parts.push(i.relation_to_question)
+  if (i?.suggested_actions?.length) parts.push(`建議：${i.suggested_actions.join('，')}。`)
+  if (i?.warnings?.length) parts.push(`要留意的是：${i.warnings.join('，')}。`)
+  return parts.join('\n')
+})
+const chatSuggestions = [
+  '這支籤對我問的事有什麼建議？',
+  '籤詩的意思可以再講白話一點嗎？',
+  '接下來我要特別注意什麼？'
+]
+
 const bookMeanings = computed(() => {
   const f = fortune.value
   if (!f) return []
@@ -539,6 +559,8 @@ onBeforeUnmount(() => scannerEl.value?.stop())
             :qr-data-url="qrDataUrl"
             :offline-hint="shareUrl ? null : '離線查詢沒有留下紀錄，無法用 QR 帶走。'"
             :pending="waitingInterpretation"
+            :chat-context="chatContext"
+            :chat-suggestions="chatSuggestions"
           />
 
           <!-- 籤書的各方向解釋：自己問的那個方向排最前面 -->

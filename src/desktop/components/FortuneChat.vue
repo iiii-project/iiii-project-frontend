@@ -198,7 +198,7 @@ function onKeydown(event: KeyboardEvent) {
         v-model="draft"
         rows="1"
         :maxlength="MAX_LENGTH"
-        placeholder="輸入想問的事，或按「說話」"
+        aria-label="輸入想問金鶴的事"
         @keydown="onKeydown"
       />
       <button
